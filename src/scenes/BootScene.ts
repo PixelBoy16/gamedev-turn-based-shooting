@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { loadArt, makeArt } from '../art/chibi';
+import { loadLook, prepareLook } from '../art/look';
 import { initSfx } from '../audio/sfx';
 
 export default class BootScene extends Phaser.Scene {
@@ -9,11 +10,15 @@ export default class BootScene extends Phaser.Scene {
 
   preload(): void {
     loadArt(this);
+    loadLook(this);
   }
 
   create(): void {
     makeArt(this); // drawn placeholders, used wherever a generated sprite is missing
+    prepareLook(this);
     initSfx(this.sound);
-    this.scene.start('menu');
+    // dev: ?lab opens the look lab for lining up painted layers
+    const lab = import.meta.env.DEV && new URLSearchParams(location.search).has('lab');
+    this.scene.start(lab ? 'looklab' : 'menu');
   }
 }

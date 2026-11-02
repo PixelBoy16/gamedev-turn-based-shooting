@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ART_SCALE, lookTexture } from '../art/chibi';
+import { ART_SCALE, lookRes, lookTexture } from '../art/chibi';
 import { Difficulty } from '../core/BotAI';
 import { WEAPONS } from '../core/data';
 import { MAPS, MAP_IDS } from '../core/Maps';
@@ -149,7 +149,7 @@ export default class LobbyScene extends Phaser.Scene {
 
     this.add_(label(this, 960, 190, 'ชื่อของคุณ', 32).setOrigin(0.5, 0));
     this.nameInput = this.textBox(960, 290, 520, p.name, 'ใส่ชื่อ', 12);
-    this.add_(this.add.image(1420, 330, lookTexture(this, p.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * 1.6));
+    this.add_(this.add.image(1420, 330, lookTexture(this, p.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * 1.6 * lookRes()));
     this.add_(new Button(this, 1420, 380, 230, 60, 'แต่งตัว', { size: 26, onClick: () => this.toSetup() }));
 
     this.add_(new Button(this, 960, 460, 560, 110, 'สร้างห้องใหม่', {
@@ -209,7 +209,7 @@ export default class LobbyScene extends Phaser.Scene {
           this.add_(label(this, cx, y + 60, `ว่าง: บอท${DIFF_LABEL[room.config.difficulty]}จะเล่นแทน`, 26, '#8899aa').setOrigin(0.5));
           continue;
         }
-        this.add_(this.add.image(cx - 270, y + 130, lookTexture(this, p.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * 1.15).setFlipX(team === 1));
+        this.add_(this.add.image(cx - 270, y + 130, lookTexture(this, p.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * 1.15 * lookRes()).setFlipX(team === 1));
         const tags = [p.id === room.hostId ? 'หัวห้อง' : '', p.id === net.you ? 'คุณ' : '', p.connected ? '' : 'หลุด'].filter(Boolean).join(' · ');
         this.add_(label(this, cx - 180, y + 24, p.name, 38, p.id === net.you ? '#ffd166' : '#ffffff'));
         this.add_(label(this, cx - 180, y + 76, `${WEAPONS[p.loadout.weapon].name}${tags ? `  ·  ${tags}` : ''}`, 24, p.connected ? '#cfd8ff' : '#ff8787'));

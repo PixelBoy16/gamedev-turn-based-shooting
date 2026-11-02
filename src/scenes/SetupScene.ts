@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ART_SCALE, equipTexture, gunLook, iconTexture, lookTexture, pieceTexture } from '../art/chibi';
+import { ART_SCALE, equipTexture, gunLook, iconTexture, lookHand, lookRes, lookTexture, pieceTexture } from '../art/chibi';
 import { ITEMS, ITEMS_PER_MATCH, ITEM_IDS, MAIN_WEAPONS, SKILLS, WEAPONS } from '../core/data';
 import {
   EQUIP_SLOTS, EQUIP_SLOT_NAME, EquipSlot, FASHION_SLOTS, FASHION_SLOT_NAME, FashionSlot, STAT_NAME, Stats,
@@ -83,11 +83,14 @@ export default class SetupScene extends Phaser.Scene {
     bg.fillStyle(INK, 0.85);
     bg.fillRoundedRect(60, 100, 1260, 550, 26);
     this.magicCircle(540, 350);
-    const avatar = this.add.image(540, 470, '__DEFAULT').setOrigin(0.5, 1).setScale(ART_SCALE * 2.6);
+    const zoom = 2.6;
+    const avatar = this.add.image(540, 470, '__DEFAULT').setOrigin(0.5, 1);
     const hand = this.add.image(578, 425, '__DEFAULT');
     this.refreshers.push(() => {
       const l = this.setup.loadout;
-      avatar.setTexture(lookTexture(this, l));
+      avatar.setTexture(lookTexture(this, l)).setScale(ART_SCALE * zoom * lookRes());
+      const fist = lookHand();
+      if (fist) hand.setPosition(540 + fist.x * ART_SCALE * zoom, 470 + fist.y * ART_SCALE * zoom);
       const g = gunLook(this, l.weapon);
       hand.setTexture(g.key).setOrigin(g.ox, g.oy).setScale(g.scale * 1.7).setRotation(-0.3);
     });

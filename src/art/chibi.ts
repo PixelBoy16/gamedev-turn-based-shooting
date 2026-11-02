@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import { WeaponId } from '../core/data';
 import { EquipSlot, FashionSlot, Loadout, equipDef, lookId } from '../core/gear';
+import { LOOK_RES, painted, paintedHand, paintedLook, paintedPiece } from './look';
 
 // Placeholder chibi art drawn with Graphics and baked into textures at 2x
 // (displayed at 0.5 scale). Original designs: big head, thick outline, bright
 // colours. Everyone is the same plain chibi; fashion pieces are drawn in layers
-// (see drawLook) and the whole look is baked into one texture per combination. Swap a layer for painted art later
-// without touching the battle code.
+// (see drawLook) and the whole look is baked into one texture per combination.
+// Once painted layers exist (look.ts) they replace the drawn look entirely.
 
 export const ART_SCALE = 0.5;
 export const CHIBI_W = 128;
@@ -36,10 +37,17 @@ function bake(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: 
 
 /** The texture for a loadout's look, baked the first time it is needed. */
 export function lookTexture(scene: Phaser.Scene, l: Loadout): string {
+  if (painted()) return paintedLook(scene, l);
   const key = `look-${lookId(l)}`;
   bake(scene, key, CHIBI_W, CHIBI_H, (g) => drawLook(g, l));
   return key;
 }
+
+/** Painted looks are baked sharper: multiply a look image's scale by this. */
+export const lookRes = () => (painted() ? 1 / LOOK_RES : 1);
+
+/** Where the weapon is held, relative to the feet in unscaled px facing right; null = the drawn chibi's spot. */
+export const lookHand = () => (painted() ? paintedHand() : null);
 
 /** Back to front: back item, hair behind the head, outfit, head, eyes, face, hair, glasses, hat. */
 function drawLook(g: G, l: Loadout): void {
@@ -62,6 +70,8 @@ function drawLook(g: G, l: Loadout): void {
 /** One fashion piece on its own, for wardrobe tiles. Null for an empty choice. */
 export function pieceTexture(scene: Phaser.Scene, slot: FashionSlot, id: string): string | null {
   if (id === 'none') return null;
+  const art = painted() ? paintedPiece(scene, slot, id) : null;
+  if (art) return art;
   const key = `piece-${slot}-${id}`;
   bake(scene, key, CHIBI_W, CHIBI_H, (g) => {
     const onHead = slot === 'eyes' || slot === 'face' || slot === 'hair' || slot === 'glasses';

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ART_SCALE, Pose, gunLook, hasArt, lookTexture, shellKey } from '../art/chibi';
+import { ART_SCALE, Pose, gunLook, hasArt, lookHand, lookRes, lookTexture, shellKey } from '../art/chibi';
 import { Rng, createRng } from '../core/rng';
 import { TurnManager } from '../core/TurnManager';
 import { BotAction, ShotPlanner, Shot, chooseAttackItem, chooseSupport } from '../core/BotAI';
@@ -1035,7 +1035,7 @@ export default class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------- drawing
 
   private makeView(t: Tank): TankView {
-    const body = this.add.image(t.x, t.y, lookTexture(this, t.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE).setDepth(10);
+    const body = this.add.image(t.x, t.y, lookTexture(this, t.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * lookRes()).setDepth(10);
     const gun = this.add.image(t.x, t.y, gunLook(this, t.loadout.weapon).key).setDepth(11);
     const name = this.add.text(t.x, t.y, t.name, {
       fontFamily: FONT, fontSize: '20px', color: Phaser.Display.Color.IntegerToColor(TEAM_COLORS[t.team]).rgba,
@@ -1142,7 +1142,7 @@ export default class BattleScene extends Phaser.Scene {
     else if (aiming) pose = 'aim';
     v.body.setTexture(lookTexture(this, t.loadout));
     v.body.setPosition(t.x, t.y - hop).setFlipX(t.facing < 0);
-    v.body.setScale(ART_SCALE, ART_SCALE * (deadPose ? 1 : breathe));
+    v.body.setScale(ART_SCALE * lookRes(), ART_SCALE * lookRes() * (deadPose ? 1 : breathe));
     v.body.setRotation(deadPose && !posed ? (Math.PI / 2) * -t.facing : 0).setAlpha(deadPose ? 0.75 : 1);
     // With pose art the weapon is only in hand while aiming or firing; the placeholder always holds it.
     v.gun.setVisible(t.alive && !t.burrowed && (!posed || pose === 'aim' || pose === 'shoot'));
@@ -1156,7 +1156,9 @@ export default class BattleScene extends Phaser.Scene {
 
     const look = gunLook(this, isActive && this.useDrill ? 'drill' : t.loadout.weapon);
     v.gun.setTexture(look.key).setOrigin(look.ox, look.oy);
-    v.gun.setPosition(c.x + (posed ? 6 * t.facing : 0), c.y + (posed ? 6 : 4) - hop);
+    const hand = lookHand();
+    if (hand) v.gun.setPosition(t.x + hand.x * ART_SCALE * t.facing, t.y + hand.y * ART_SCALE - hop);
+    else v.gun.setPosition(c.x + (posed ? 6 * t.facing : 0), c.y + (posed ? 6 : 4) - hop);
     v.gun.setRotation((-t.angle * Math.PI) / 180 * t.facing);
     if (!this.tweens.isTweening(v.gun)) v.gun.setScale(look.scale * t.facing, look.scale);
 

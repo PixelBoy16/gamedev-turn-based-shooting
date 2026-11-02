@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ART_SCALE, lookTexture } from '../art/chibi';
+import { ART_SCALE, lookRes, lookTexture } from '../art/chibi';
 import { DEFAULT_LOADOUT, Loadout } from '../core/gear';
 import { net } from '../net/NetClient';
 import { Button, label } from '../ui/widgets';
@@ -30,7 +30,7 @@ export default class MenuScene extends Phaser.Scene {
       dress({ set: 'bear', eyes: 'star', back: 'backpack' }, 'hammer'),
     ];
     looks.forEach((l, i) => {
-      const img = this.add.image(760 + i * 200, 960, lookTexture(this, l)).setOrigin(0.5, 1).setScale(ART_SCALE * 2.2);
+      const img = this.add.image(760 + i * 200, 960, lookTexture(this, l)).setOrigin(0.5, 1).setScale(ART_SCALE * 2.2 * lookRes());
       if (i === 1) img.setFlipX(true);
       this.tweens.add({ targets: img, scaleY: img.scaleY * 1.04, duration: 700 + i * 90, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     });

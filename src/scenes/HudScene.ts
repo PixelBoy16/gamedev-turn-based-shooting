@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ART_SCALE, gunLook, iconTexture, lookTexture } from '../art/chibi';
+import { ART_SCALE, gunLook, iconTexture, lookRes, lookTexture } from '../art/chibi';
 import { ITEMS, SKILLS, WEAPONS, WeaponId } from '../core/data';
 import { skillOf } from '../core/Actions';
 import { TUNING, tankCentre } from '../core/World';
@@ -88,7 +88,7 @@ export default class HudScene extends Phaser.Scene {
       const i = count[t.team]++;
       const x = right ? 1880 : 40;
       const y = 22 + i * 92;
-      this.add.image(right ? x - 34 : x + 34, y + 76, lookTexture(this, t.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * 1.05).setFlipX(right);
+      this.add.image(right ? x - 34 : x + 34, y + 76, lookTexture(this, t.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * 1.05 * lookRes()).setFlipX(right);
       const name = t.isBot && (this.battle.net || t.team === 1) ? `${t.name} (${DIFF_LABEL[this.battle.setup.difficulty]})` : t.name;
       label(this, right ? x - 80 : x + 80, y, `${name} · ${WEAPONS[t.loadout.weapon].name}`, 22).setOrigin(right ? 1 : 0, 0);
       const hp = label(this, right ? x - 80 : x + 80, y + 52, '', 18).setOrigin(right ? 1 : 0, 0);
