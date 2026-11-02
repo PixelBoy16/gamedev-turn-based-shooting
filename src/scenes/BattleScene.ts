@@ -1,18 +1,28 @@
 import Phaser from 'phaser';
-import { ART_SCALE, Pose, gunLook, hasArt, poseTexture, shellKey } from '../art/chibi';
+import { ART_SCALE, Pose, gunLook, hasArt, lookTexture, shellKey } from '../art/chibi';
 import { Rng, createRng } from '../core/rng';
 import { TurnManager } from '../core/TurnManager';
 import { BotAction, ShotPlanner, Shot, chooseAttackItem, chooseSupport } from '../core/BotAI';
-import { TurnMods, freshMods, useItem, useSkill } from '../core/Actions';
-import { CHARACTERS, CHARACTER_IDS, ITEMS, ITEMS_PER_MATCH, ITEM_IDS, ItemId, SKILLS, WEAPONS, WeaponDef } from '../core/data';
+import { TurnMods, freshMods, skillOf, useItem, useSkill } from '../core/Actions';
+import { ITEMS, ITEMS_PER_MATCH, ITEM_IDS, ItemId, SKILLS, WEAPONS, WeaponDef } from '../core/data';
+import { randomLoadout } from '../core/gear';
 import { MAP_H, MAP_W, MapId, generateMap, spawnX } from '../core/Maps';
-import { Volley, fireVolley, stepVolley, volleyDone } from '../core/Shot';
-import { TUNING, Tank, World, createTank, createWorld, explode, isSettled, muzzle, stepTank, tankCentre, walk } from '../core/World';
+import { ShotEvent, ShotRun, stepTanks } from '../core/Match';
+import { Terrain, decodeMask, terrainHash } from '../core/Terrain';
+import { TUNING, Tank, World, createTank, createWorld, isSettled, muzzle, tankCentre, walk } from '../core/World';
 import { FONT, TEAM_COLORS } from '../ui/widgets';
 import { isMuted, setCharge, setMuted, sfx, stopCharge } from '../audio/sfx';
+import { net } from '../net/NetClient';
+import { MatchView, ServerMsg, TurnInfo } from '../net/protocol';
 import { MatchSetup, loadSetup } from './setup';
 
-export type Phase = 'aim' | 'botThink' | 'botWalk' | 'botAim' | 'flying' | 'settle' | 'over';
+/**
+ * Offline, the scene runs everything. Online, the server decides: the local player's
+ * actions are sent and only applied when the server echoes them back, other players'
+ * turns are watched ('remote'), and after each shot the scene waits ('wait') for the
+ * server's next turn, which carries the true state.
+ */
+export type Phase = 'aim' | 'botThink' | 'botWalk' | 'botAim' | 'remote' | 'wait' | 'flying' | 'settle' | 'over';
 
 /** Written by the HUD's touch buttons, merged with the keyboard every tick. */
 export interface TouchInput {
@@ -63,6 +73,10 @@ export default class BattleScene extends Phaser.Scene {
   touch: TouchInput = { move: 0, aim: 0, fire: false };
   /** Pointer ids currently pressing HUD buttons; they never pan the camera. */
   uiPointers = new Set<number>();
+  /** Online match against other people (see Phase). */
+  net = false;
+  /** Online: the tank this browser controls (-1 = watching). */
+  myTank = 0;
 
   private rng!: Rng;
   private acc = 0;
@@ -70,13 +84,10 @@ export default class BattleScene extends Phaser.Scene {
   private slowMoMs = 0;
 
   // shot in flight
-  private volley: Volley | null = null;
+  private run: ShotRun | null = null;
   private shotWeapon: WeaponDef = WEAPONS.cannon;
-  private shotsLeft = 0;
-  private refireTimer = 0;
   private trail: { x: number; y: number }[] = [];
   private lastTrail = new Map<number, { x: number; y: number }[]>();
-  private volleyHits: { x: number; y: number }[] = [];
   private volleyDamage = 0;
   private settleTime = 0;
   private camProxy = { x: 0, y: 0 };
@@ -91,12 +102,19 @@ export default class BattleScene extends Phaser.Scene {
   private botWalkDir: 1 | -1 = 1;
   private botWalkLeft = 0;
 
+  // online
+  private moveTick = 0;
+  private lastSent = '';
+  private remoteMoveMs = 0;
+  private netHandler = (msg: ServerMsg) => this.onNet(msg);
+
   // camera
   private manualCam = false;
   private camTarget = { x: 0, y: 0 };
 
   // rendering
   private terrainTex!: Phaser.Textures.CanvasTexture;
+  private terrainImgs: Phaser.GameObjects.Image[] = [];
   private dirtPattern: CanvasPattern | null = null;
   private views = new Map<number, TankView>();
   private shellImgs: Phaser.GameObjects.Image[] = [];
@@ -110,9 +128,19 @@ export default class BattleScene extends Phaser.Scene {
     super('battle');
   }
 
-  init(): void {
+  init(data?: { online?: boolean }): void {
     // Reset per-run state here (the scene instance is reused on restart).
+    this.net = !!data?.online && !!net.match;
     this.setup = loadSetup(this.registry);
+    if (this.net) {
+      const { config, you } = net.match!;
+      this.setup = { ...this.setup, map: config.map, format: config.format, difficulty: config.difficulty };
+      this.myTank = you;
+    } else this.myTank = 0;
+    this.moveTick = 0;
+    this.lastSent = '';
+    this.remoteMoveMs = 0;
+    this.terrainImgs = [];
     this.phase = 'aim';
     this.acc = 0;
     this.hitStopMs = 0;
@@ -121,9 +149,7 @@ export default class BattleScene extends Phaser.Scene {
     this.charging = false;
     this.mods = freshMods();
     this.useDrill = false;
-    this.volley = null;
-    this.shotsLeft = 0;
-    this.refireTimer = 0;
+    this.run = null;
     this.trail = [];
     this.lastTrail = new Map();
     this.lastPower = new Map();
@@ -142,8 +168,15 @@ export default class BattleScene extends Phaser.Scene {
 
   create(): void {
     this.rng = createRng((Date.now() ^ 0x5bd1e995) >>> 0);
-    const terrain = generateMap(this.setup.map, this.rng);
-    this.world = createWorld(terrain, this.buildTeams(terrain));
+    const view = this.net ? net.match! : null;
+    if (view) {
+      const terrain = new Terrain(MAP_W, MAP_H);
+      decodeMask(terrain, view.terrain);
+      this.world = createWorld(terrain, view.tanks.map((t) => ({ ...t, items: [...t.items] })));
+    } else {
+      const terrain = generateMap(this.setup.map, this.rng);
+      this.world = createWorld(terrain, this.buildTeams(terrain));
+    }
     for (const t of this.world.tanks) this.stats.set(t.id, { damage: 0, shots: 0, hits: 0 });
     this.turns = new TurnManager(this.world, this.rng);
 
@@ -163,23 +196,27 @@ export default class BattleScene extends Phaser.Scene {
     this.scene.bringToTop('hud');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       stopCharge();
+      net.off('any', this.netHandler);
       this.scene.stop('hud');
     });
-    this.startTurn();
+    if (view) {
+      net.on('any', this.netHandler);
+      this.netTurn(view.turn, view.tanks);
+    } else this.startTurn();
   }
 
   private buildTeams(terrain: World['terrain']): Tank[] {
-    const { format, char, items } = this.setup;
-    const botChar = () => CHARACTER_IDS[Math.floor(this.rng() * CHARACTER_IDS.length)];
+    const { format, loadout, items } = this.setup;
+    const botLook = () => randomLoadout(this.rng);
     const botItems = (): ItemId[] => {
       const pool = [...ITEM_IDS];
       return Array.from({ length: ITEMS_PER_MATCH }, () => pool.splice(Math.floor(this.rng() * pool.length), 1)[0]);
     };
-    const tanks: Tank[] = [createTank(0, 'คุณ', 0, false, spawnX(this.setup.map, 0, 0), terrain, char, items)];
-    if (format === '2v2') tanks.push(createTank(tanks.length, 'เพื่อนบอท', 0, true, spawnX(this.setup.map, 0, 1), terrain, botChar(), botItems()));
+    const tanks: Tank[] = [createTank(0, 'คุณ', 0, false, spawnX(this.setup.map, 0, 0), terrain, loadout, items)];
+    if (format === '2v2') tanks.push(createTank(tanks.length, 'เพื่อนบอท', 0, true, spawnX(this.setup.map, 0, 1), terrain, botLook(), botItems()));
     const enemies = format === '1v1' ? 1 : 2;
     for (let i = 0; i < enemies; i++) {
-      tanks.push(createTank(tanks.length, enemies > 1 ? `บอท ${i + 1}` : 'บอท', 1, true, spawnX(this.setup.map, 1, i), terrain, botChar(), botItems()));
+      tanks.push(createTank(tanks.length, enemies > 1 ? `บอท ${i + 1}` : 'บอท', 1, true, spawnX(this.setup.map, 1, i), terrain, botLook(), botItems()));
     }
     return tanks;
   }
@@ -279,7 +316,7 @@ export default class BattleScene extends Phaser.Scene {
       for (const { x, y } of surfaces) ctx.drawImage(grass, x % grass.width, 0, 1, grass.height, x, y - 14, 1, grass.height);
     }
     this.terrainTex.refresh();
-    this.add.image(0, 0, 'terrain').setOrigin(0, 0).setDepth(1);
+    this.terrainImgs.push(this.add.image(0, 0, 'terrain').setOrigin(0, 0).setDepth(1));
   }
 
   /**
@@ -295,7 +332,7 @@ export default class BattleScene extends Phaser.Scene {
     ctx.fillStyle = 'rgba(30, 16, 10, 0.62)';
     ctx.fillRect(0, 0, MAP_W, MAP_H);
     back.refresh();
-    this.add.image(0, 0, 'terrain-back').setOrigin(0, 0).setDepth(0.5);
+    this.terrainImgs.push(this.add.image(0, 0, 'terrain-back').setOrigin(0, 0).setDepth(0.5));
   }
 
   /** Mirror terrain edits (craters, drill tunnels, walls) onto the canvas. */
@@ -357,7 +394,9 @@ export default class BattleScene extends Phaser.Scene {
     this.keys.FIVE.on('down', () => this.useItemSlot(2));
     this.keys.E.on('down', () => this.useSkillNow());
     this.keys.C.on('down', () => this.recenter());
-    this.keys.R.on('down', () => this.scene.restart());
+    this.keys.R.on('down', () => {
+      if (!this.net) this.scene.restart();
+    });
     this.keys.ESC.on('down', () => this.toMenu());
     this.keys.M.on('down', () => setMuted(!isMuted()));
 
@@ -389,13 +428,23 @@ export default class BattleScene extends Phaser.Scene {
     return this.turns.active;
   }
 
-  /** True while the human may walk, aim, pick weapons and use items. */
+  /** True while the local player may walk, aim, pick weapons and use items. */
   get humanCanAct(): boolean {
-    return this.phase === 'aim' && !this.active.isBot && !this.charging;
+    return this.phase === 'aim' && this.isLocal(this.active) && !this.charging;
+  }
+
+  /** Controlled from this browser. */
+  isLocal(t: Tank): boolean {
+    return this.net ? t.id === this.myTank : !t.isBot;
+  }
+
+  /** The team this browser plays for (wins and losses are from its side). */
+  get myTeam(): number {
+    return this.net ? (this.world.tanks[this.myTank]?.team ?? 0) : 0;
   }
 
   get mainWeapon(): WeaponDef {
-    return WEAPONS[CHARACTERS[this.active.char].weapon];
+    return WEAPONS[this.active.loadout.weapon];
   }
 
   selectWeapon(drill: boolean): void {
@@ -405,12 +454,14 @@ export default class BattleScene extends Phaser.Scene {
 
   useItemSlot(slot: number): void {
     if (!this.humanCanAct) return;
-    this.applyItem(this.active, slot);
+    if (this.net) net.send({ t: 'item', slot });
+    else this.applyItem(this.active, slot);
   }
 
   useSkillNow(): void {
     if (!this.humanCanAct) return;
-    this.applySkill(this.active);
+    if (this.net) net.send({ t: 'skill' });
+    else this.applySkill(this.active);
   }
 
   nudgeAngle(deg: number): void {
@@ -425,7 +476,10 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   toMenu(): void {
-    this.scene.start('menu');
+    if (this.net) {
+      net.send({ t: 'away' });
+      this.scene.start('lobby');
+    } else this.scene.start('menu');
   }
 
   private applyItem(t: Tank, slot: number): ItemId | null {
@@ -456,19 +510,26 @@ export default class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------- turn flow
 
   private startTurn(): void {
-    const t = this.turns.next();
+    this.beginTurn(this.turns.next());
+  }
+
+  private beginTurn(t: Tank): void {
     this.mods = freshMods();
     this.useDrill = false;
     this.power = 0;
     this.charging = false;
     this.manualCam = false;
     this.focusOn(tankCentre(t).x, tankCentre(t).y, 600);
-    const mine = t.team === 0;
-    this.events.emit('banner', t.isBot ? (mine ? 'ตาของเพื่อนบอท' : `ตาของ${t.name}`) : 'ตาของคุณ', TEAM_COLORS[t.team]);
+    const mine = t.team === this.myTeam;
+    const who = this.isLocal(t) ? 'ตาของคุณ' : t.isBot && mine && !this.net ? 'ตาของเพื่อนบอท' : `ตาของ${t.name}`;
+    this.events.emit('banner', who, TEAM_COLORS[t.team]);
     if (this.turns.turnNumber === TUNING.suddenDeathTurn + 1) {
       this.time.delayedCall(900, () => this.events.emit('banner', 'Sudden death! น้ำกำลังขึ้น', 0x8ecae6));
     }
-    if (t.isBot) {
+    if (this.net) {
+      this.phase = this.isLocal(t) ? 'aim' : 'remote';
+      if (this.phase === 'aim') sfx.turn();
+    } else if (t.isBot) {
       this.phase = 'botThink';
       this.botTimer = 0.8;
       this.planner = null;
@@ -482,15 +543,118 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private endTurn(): void {
+    if (this.net) {
+      // the server decides what happens next; tell it we're done watching
+      this.phase = 'wait';
+      net.send({ t: 'settled', turn: this.turns.turnNumber });
+      return;
+    }
     const w = this.turns.winner();
     if (w !== null) {
       this.phase = 'over';
       this.winner = w;
       this.events.emit('over', w);
-      this.time.delayedCall(700, () => (w === 0 ? sfx.win() : sfx.lose()));
+      this.time.delayedCall(700, () => (w === this.myTeam ? sfx.win() : sfx.lose()));
       return;
     }
     this.startTurn();
+  }
+
+  // ---------------------------------------------------------------- online
+
+  private onNet(msg: ServerMsg): void {
+    const tanks = this.world.tanks;
+    switch (msg.t) {
+      case 'turn':
+        this.netTurn(msg.turn, msg.tanks);
+        if (terrainHash(this.world.terrain) !== msg.hash) net.send({ t: 'needTerrain' });
+        break;
+      case 'move': {
+        const t = tanks[msg.id];
+        if (!t || msg.id === this.myTank) break;
+        if (Math.abs(t.x - msg.x) > 0.5) this.remoteMoveMs = 150;
+        Object.assign(t, { x: msg.x, y: msg.y, facing: msg.facing, angle: msg.angle });
+        if (t === this.active) this.power = msg.power;
+        break;
+      }
+      case 'item':
+        if (tanks[msg.id]) this.applyItem(tanks[msg.id], msg.slot);
+        break;
+      case 'skill':
+        if (tanks[msg.id]) this.applySkill(tanks[msg.id]);
+        break;
+      case 'shot': {
+        const t = tanks[msg.id];
+        if (!t) break;
+        // Same start state as the server, then the usual turn-and-charge animation.
+        Object.assign(t, { x: msg.x, y: msg.y, facing: msg.facing });
+        this.useDrill = msg.drill;
+        this.botShot = { angle: msg.angle, power: msg.power, facing: msg.facing };
+        this.charging = false;
+        this.phase = 'botAim';
+        break;
+      }
+      case 'terrain':
+        decodeMask(this.world.terrain, msg.terrain);
+        this.world.terrain.changes.length = 0;
+        for (const img of this.terrainImgs) img.destroy();
+        this.terrainImgs = [];
+        this.paintTerrain();
+        break;
+      case 'over':
+        this.applyTanks(msg.tanks);
+        this.run = null;
+        this.phase = 'over';
+        this.winner = msg.winner;
+        this.events.emit('over', msg.winner);
+        this.time.delayedCall(700, () => (msg.winner === this.myTeam ? sfx.win() : sfx.lose()));
+        break;
+      case 'match':
+        this.scene.restart({ online: true }); // reconnected: rebuild from the server's state
+        break;
+      case 'left':
+        this.scene.start('lobby');
+        break;
+    }
+  }
+
+  /** Server says whose turn it is; its tank states replace ours (fixes any drift). */
+  private netTurn(info: TurnInfo, tanks: MatchView['tanks']): void {
+    this.applyTanks(tanks);
+    this.run = null;
+    const tm = this.turns;
+    tm.current = info.active;
+    tm.turnNumber = info.turnNumber;
+    tm.timeLeft = info.timeLeft;
+    tm.fuel = TUNING.fuelPerTurn * tm.active.move;
+    this.world.wind = info.wind;
+    this.world.waterY = info.waterY ?? Infinity;
+    this.beginTurn(tm.active);
+  }
+
+  private applyTanks(tanks: MatchView['tanks']): void {
+    for (const s of tanks) {
+      const t = this.world.tanks[s.id];
+      if (t) Object.assign(t, s, { items: [...s.items] });
+    }
+  }
+
+  private sendFire(t: Tank): void {
+    net.send({
+      t: 'fire', x: t.x, y: t.y, facing: t.facing, angle: Math.round(t.angle), power: Math.round(this.power), drill: this.useDrill,
+    });
+    this.charging = false;
+    this.phase = 'wait';
+  }
+
+  /** Stream our position and aim ~10 times a second while it changes. */
+  private sendMove(t: Tank): void {
+    if (++this.moveTick % 6 !== 0) return;
+    const m = { x: t.x, y: t.y, facing: t.facing, angle: Math.round(t.angle * 10) / 10, power: Math.round(this.power) };
+    const key = JSON.stringify(m);
+    if (key === this.lastSent) return;
+    this.lastSent = key;
+    net.send({ t: 'move', ...m });
   }
 
   private fire(t: Tank): void {
@@ -498,28 +662,18 @@ export default class BattleScene extends Phaser.Scene {
     this.power = Math.round(this.power);
     this.lastPower.set(t.id, this.power);
     this.lastAngle.set(t.id, t.angle);
-    this.shotWeapon = this.useDrill ? WEAPONS.drill : WEAPONS[CHARACTERS[t.char].weapon];
+    this.shotWeapon = this.useDrill ? WEAPONS.drill : WEAPONS[t.loadout.weapon];
     if (this.useDrill) t.drillLeft--;
-    this.shotsLeft = this.mods.shots;
-    this.volleyHits = [];
-    this.volleyDamage = 0;
     this.charging = false;
     this.stats.get(t.id)!.shots++;
-    this.launchVolley(t);
-  }
-
-  private launchVolley(t: Tank): void {
-    this.shotsLeft--;
-    this.volley = fireVolley(t, this.shotWeapon, this.power, this.mods.noWind);
-    sfx.fire(this.shotWeapon.id === 'hammer');
-    this.trail = [];
+    this.volleyDamage = 0;
+    this.run = new ShotRun(this.world, t, this.shotWeapon, this.power, this.mods);
     this.phase = 'flying';
     this.manualCam = false;
-    const s = this.volley.shells[0];
-    this.camProxy.x = s.x;
-    this.camProxy.y = s.y;
+    const m = muzzle(t);
+    this.camProxy.x = m.x;
+    this.camProxy.y = m.y;
     this.cameras.main.startFollow(this.camProxy, false, 0.12, 0.12);
-    this.recoil(t);
   }
 
   // ---------------------------------------------------------------- loop
@@ -541,7 +695,8 @@ export default class BattleScene extends Phaser.Scene {
     }
     this.drainTerrainChanges();
     this.drawWorld(delta);
-    if ((this.phase === 'aim' && this.charging) || (this.phase === 'botAim' && this.power > 0)) setCharge(this.power);
+    const watchedCharge = (this.phase === 'botAim' || this.phase === 'remote') && this.power > 0;
+    if ((this.phase === 'aim' && this.charging) || watchedCharge) setCharge(this.power);
     else stopCharge();
   }
 
@@ -558,6 +713,15 @@ export default class BattleScene extends Phaser.Scene {
       case 'botThink':
         this.tickTanks();
         this.tickBotThink(active, dt);
+        break;
+
+      case 'remote':
+        this.turns.timeLeft = Math.max(0, this.turns.timeLeft - dt);
+        this.tickTanks();
+        break;
+
+      case 'wait':
+        this.tickTanks();
         break;
 
       case 'botWalk': {
@@ -586,7 +750,7 @@ export default class BattleScene extends Phaser.Scene {
       }
 
       case 'flying':
-        this.tickFlying(active, dt);
+        this.tickFlying(active);
         this.tickTanks();
         break;
 
@@ -607,7 +771,7 @@ export default class BattleScene extends Phaser.Scene {
     const k = this.keys;
     this.turns.timeLeft -= dt;
     if (this.turns.timeLeft <= 0) {
-      if (this.charging) this.fire(t);
+      if (this.charging) this.release(t);
       else {
         this.lastShotText = 'หมดเวลา';
         this.beginSettle();
@@ -629,8 +793,15 @@ export default class BattleScene extends Phaser.Scene {
       this.charging = true;
       this.power = Math.min(100, this.power + (100 / TUNING.chargeSeconds) * dt);
     } else if (this.charging) {
-      this.fire(t);
+      this.release(t);
+      return;
     }
+    if (this.net) this.sendMove(t);
+  }
+
+  private release(t: Tank): void {
+    if (this.net) this.sendFire(t);
+    else this.fire(t);
   }
 
   private tickBotThink(bot: Tank, dt: number): void {
@@ -640,12 +811,12 @@ export default class BattleScene extends Phaser.Scene {
     if (!this.planner) {
       if (!this.botSupportDone) {
         this.botSupportDone = true;
-        for (const a of chooseSupport(this.world, bot, CHARACTERS[bot.char].skill, difficulty)) {
+        for (const a of chooseSupport(this.world, bot, skillOf(bot), difficulty)) {
           this.applyBotAction(bot, a);
           if (this.phase !== 'botThink') return; // burrow ended the turn
         }
       }
-      const opts = { weapon: this.mainWeapon, noWind: this.mods.noWind, dmgScale: this.mods.dmgScale };
+      const opts = { weapon: this.mainWeapon, noWind: this.mods.noWind, dmgScale: this.mods.dmgScale * bot.atk, splitCount: this.mods.splitCount };
       this.planner = new ShotPlanner(this.world, bot, this.rng, opts, SAMPLES[difficulty]);
     }
     // Spread the search over frames so the game never hitches.
@@ -677,51 +848,59 @@ export default class BattleScene extends Phaser.Scene {
     else this.applySkill(bot);
   }
 
-  private tickFlying(shooter: Tank, dt: number): void {
-    if (!this.volley) {
-      // gap between the two shots of "double"
-      this.refireTimer -= dt;
-      if (this.refireTimer <= 0) this.launchVolley(shooter);
-      return;
-    }
-    const v = this.volley;
-    for (const ev of stepVolley(this.world, v)) {
-      if (ev.kind === 'impact') this.onImpact(shooter, ev.x, ev.y, ev.hitTank);
-      else if (ev.kind === 'carve') {
-        this.world.terrain.carve(ev.x, ev.y, ev.r);
-        sfx.drill();
-        if (Math.random() < 0.3) this.debris(ev.x, ev.y, 2); // cosmetic only, not the match rng
-      } else if (ev.kind === 'split') {
-        this.flash(ev.x, ev.y, 18, 0xffd166);
-        sfx.split();
-      }
-    }
-    const lead = v.shells.find((s) => !s.done);
+  private tickFlying(shooter: Tank): void {
+    const run = this.run!;
+    for (const ev of run.step()) this.onShotEvent(shooter, ev);
+    const lead = run.volley?.shells.find((s) => !s.done);
     if (lead) {
       this.trail.push({ x: lead.x, y: lead.y });
       this.camProxy.x = lead.x;
       this.camProxy.y = lead.y;
     }
-    if (!volleyDone(v)) return;
+  }
 
-    this.lastTrail.set(shooter.id, this.trail);
-    this.volley = null;
-    if (this.shotsLeft > 0) {
-      this.refireTimer = 0.45;
-      return;
+  private onShotEvent(shooter: Tank, ev: ShotEvent): void {
+    switch (ev.kind) {
+      case 'launch':
+        sfx.fire(this.shotWeapon.id === 'hammer');
+        this.trail = [];
+        this.recoil(shooter);
+        break;
+      case 'impact':
+        this.onImpact(shooter, ev);
+        break;
+      case 'warp':
+        sfx.powerUp();
+        this.flash(ev.from.x, ev.from.y - 20, 30, 0xb197fc);
+        this.flash(ev.to.x, ev.to.y - 20, 30, 0xb197fc);
+        break;
+      case 'carve':
+        sfx.drill();
+        if (Math.random() < 0.3) this.debris(ev.x, ev.y, 2); // cosmetic only, not the match rng
+        break;
+      case 'split':
+        this.flash(ev.x, ev.y, 18, 0xffd166);
+        sfx.split();
+        break;
+      case 'volleyEnd':
+        this.lastTrail.set(shooter.id, this.trail);
+        break;
+      case 'end':
+        this.summariseShot(shooter);
+        this.beginSettle();
+        break;
     }
-    this.summariseShot(shooter);
-    this.beginSettle();
   }
 
   private summariseShot(shooter: Tank): void {
     const enemies = this.world.tanks.filter((t) => t.team !== shooter.team);
+    const hits = this.run!.hits;
     if (this.mods.warp) this.lastShotText = 'วาร์ป!';
     else if (this.volleyDamage > 0) this.lastShotText = `โดน! ดาเมจรวม ${this.volleyDamage}`;
-    else if (this.volleyHits.length === 0) this.lastShotText = 'หลุดแผนที่';
+    else if (hits.length === 0) this.lastShotText = 'หลุดแผนที่';
     else {
       let d = Infinity;
-      for (const h of this.volleyHits) {
+      for (const h of hits) {
         for (const e of enemies) {
           const c = tankCentre(e);
           if (e.alive) d = Math.min(d, Math.hypot(h.x - c.x, h.y - c.y) - TUNING.tankRadius);
@@ -733,27 +912,14 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private tickTanks(): void {
-    for (const t of this.world.tanks) {
-      const wasAlive = t.alive;
-      const fallDmg = stepTank(this.world, t);
-      if (fallDmg > 0) {
-        this.popNumber(t, fallDmg, '#ffd166');
-        this.hurt(t);
-      }
-      if (wasAlive && !t.alive) {
-        const drowned = t.y < MAP_H;
-        this.ko(drowned ? `${t.name} จมน้ำ!` : `${t.name} ตกขอบ!`);
-      }
+    const ev = stepTanks(this.world);
+    for (const f of ev.falls) {
+      this.popNumber(f.tank, f.amount, '#ffd166');
+      this.hurt(f.tank);
     }
-    this.checkKnockouts();
-  }
-
-  private checkKnockouts(): void {
-    for (const t of this.world.tanks) {
-      if (t.alive && t.hp <= 0) {
-        t.alive = false;
-        this.ko(`KO! ${t.name}`);
-      }
+    for (const o of ev.out) {
+      const name = o.tank.name;
+      this.ko(o.how === 'drown' ? `${name} จมน้ำ!` : o.how === 'fall' ? `${name} ตกขอบ!` : `KO! ${name}`);
     }
   }
 
@@ -764,25 +930,12 @@ export default class BattleScene extends Phaser.Scene {
     this.cameras.main.stopFollow();
   }
 
-  private onImpact(shooter: Tank, x: number, y: number, hitTank: Tank | null): void {
-    this.volleyHits.push({ x, y });
-    if (this.mods.warp) {
-      // Teleport the shooter; no crater, no damage. Remaining fragments fizzle.
-      for (const s of this.volley!.shells) s.done = true;
-      sfx.powerUp();
-      this.flash(shooter.x, shooter.y - 20, 30, 0xb197fc);
-      shooter.x = Phaser.Math.Clamp(x, 10, MAP_W - 10);
-      shooter.y = Math.max(0, Math.floor(y) - 2);
-      shooter.vx = 0;
-      shooter.vy = 0;
-      this.flash(shooter.x, shooter.y - 20, 30, 0xb197fc);
-      return;
-    }
+  private onImpact(shooter: Tank, ev: Extract<ShotEvent, { kind: 'impact' }>): void {
+    const { x, y, damaged } = ev;
     const w = this.shotWeapon;
-    const res = explode(this.world, x, y, w, this.mods.dmgScale);
     const st = this.stats.get(shooter.id)!;
     let enemyDmg = 0;
-    for (const d of res.damaged) {
+    for (const d of damaged) {
       if (d.tank.team !== shooter.team) enemyDmg += d.amount;
       this.popNumber(d.tank, d.amount, d.tank.team === shooter.team ? '#ffb4b4' : '#ffffff');
       this.hurt(d.tank);
@@ -792,13 +945,13 @@ export default class BattleScene extends Phaser.Scene {
     this.volleyDamage += enemyDmg;
 
     // Feedback scaled by importance: ground hit = medium, tank hit = large.
-    const big = hitTank !== null || res.damaged.some((d) => d.amount >= 150);
+    const big = ev.hitTank !== null || damaged.some((d) => d.amount >= 150);
     this.cameras.main.shake(big ? 260 : 160, big ? 0.012 : 0.006);
     sfx.explode(big);
     if (big) this.hitStopMs = 80;
     this.flash(x, y, w.radius, 0xfff1c1, big ? 1.8 : 1.4);
     this.debris(x, y, big ? 18 : 10);
-    this.checkKnockouts();
+    for (const t of ev.ko) this.ko(`KO! ${t.name}`);
   }
 
   // ---------------------------------------------------------------- camera & fx
@@ -882,8 +1035,8 @@ export default class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------- drawing
 
   private makeView(t: Tank): TankView {
-    const body = this.add.image(t.x, t.y, poseTexture(this, t.char, 'idle')).setOrigin(0.5, 1).setScale(ART_SCALE).setDepth(10);
-    const gun = this.add.image(t.x, t.y, gunLook(this, CHARACTERS[t.char].weapon).key).setDepth(11);
+    const body = this.add.image(t.x, t.y, lookTexture(this, t.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE).setDepth(10);
+    const gun = this.add.image(t.x, t.y, gunLook(this, t.loadout.weapon).key).setDepth(11);
     const name = this.add.text(t.x, t.y, t.name, {
       fontFamily: FONT, fontSize: '20px', color: Phaser.Display.Color.IntegerToColor(TEAM_COLORS[t.team]).rgba,
       stroke: '#ffffff', strokeThickness: 5,
@@ -892,10 +1045,11 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   private drawWorld(delta: number): void {
+    this.remoteMoveMs = Math.max(0, this.remoteMoveMs - delta);
     const g = this.overlay;
     g.clear();
     const active = this.active;
-    const aiming = this.phase === 'aim' || this.phase === 'botAim';
+    const aiming = this.phase === 'aim' || this.phase === 'botAim' || this.phase === 'remote';
 
     // last shot's trail for the active tank: the main tool for "adjusting" the next shot
     const prev = this.lastTrail.get(active.id);
@@ -909,7 +1063,7 @@ export default class BattleScene extends Phaser.Scene {
     this.drawAim(active, aiming && active.alive && !active.burrowed);
 
     // shells
-    const shells = this.volley ? this.volley.shells.filter((s) => !s.done) : [];
+    const shells = this.run?.volley ? this.run.volley.shells.filter((s) => !s.done) : [];
     while (this.shellImgs.length < shells.length) this.shellImgs.push(this.add.image(0, 0, shellKey('cannon')).setDepth(14).setScale(ART_SCALE * 1.4));
     this.shellImgs.forEach((img, i) => {
       const s = shells[i];
@@ -942,7 +1096,7 @@ export default class BattleScene extends Phaser.Scene {
       g.strokePath();
     }
 
-    if (this.phase === 'settle' || this.phase === 'botThink' || this.manualCam) return;
+    if (this.phase === 'settle' || this.phase === 'botThink' || this.phase === 'wait' || this.manualCam) return;
     if (aiming) {
       // keep the active tank framed while it walks
       const c = tankCentre(active);
@@ -972,21 +1126,21 @@ export default class BattleScene extends Phaser.Scene {
     }
 
     // body: pose by state, idle breathing, a hop while walking, flipped by facing
-    const posed = hasArt(this, `art-${t.char}-idle`); // generated pose sprites vs the drawn placeholder
-    const moving = isActive && !t.airborne && (this.phase === 'botWalk' || this.phase === 'aim' && (this.touch.move !== 0 || this.keys.LEFT.isDown || this.keys.RIGHT.isDown || this.keys.A.isDown || this.keys.D.isDown)) && this.turns.fuel > 0;
+    const posed = false; // no painted pose sprites for the dress-up chibi yet: poses are body transforms
+    const moving = isActive && !t.airborne && (this.phase === 'botWalk' || this.phase === 'remote' && this.remoteMoveMs > 0 || this.phase === 'aim' && (this.touch.move !== 0 || this.keys.LEFT.isDown || this.keys.RIGHT.isDown || this.keys.A.isDown || this.keys.D.isDown)) && this.turns.fuel > 0;
     v.walkT = moving ? v.walkT + delta : 0;
     const hop = moving ? Math.abs(Math.sin(v.walkT / 90)) * 4 : 0;
     const breathe = 1 + Math.sin(now / 400 + t.id) * 0.025;
     v.hurtMs = Math.max(0, v.hurtMs - delta);
     v.shootMs = Math.max(0, v.shootMs - delta);
-    const aiming = isActive && (this.phase === 'aim' || this.phase === 'botAim' || this.phase === 'botThink');
+    const aiming = isActive && (this.phase === 'aim' || this.phase === 'botAim' || this.phase === 'botThink' || this.phase === 'remote' && this.remoteMoveMs === 0);
     let pose: Pose = 'idle';
     if (deadPose) pose = 'dead';
     else if (v.hurtMs > 0) pose = 'hurt';
     else if (v.shootMs > 0) pose = 'shoot';
     else if (moving) pose = Math.floor(v.walkT / 170) % 2 ? 'walk' : 'idle';
     else if (aiming) pose = 'aim';
-    v.body.setTexture(poseTexture(this, t.char, pose));
+    v.body.setTexture(lookTexture(this, t.loadout));
     v.body.setPosition(t.x, t.y - hop).setFlipX(t.facing < 0);
     v.body.setScale(ART_SCALE, ART_SCALE * (deadPose ? 1 : breathe));
     v.body.setRotation(deadPose && !posed ? (Math.PI / 2) * -t.facing : 0).setAlpha(deadPose ? 0.75 : 1);
@@ -1000,7 +1154,7 @@ export default class BattleScene extends Phaser.Scene {
     }
     if (deadPose) return;
 
-    const look = gunLook(this, isActive && this.useDrill ? 'drill' : CHARACTERS[t.char].weapon);
+    const look = gunLook(this, isActive && this.useDrill ? 'drill' : t.loadout.weapon);
     v.gun.setTexture(look.key).setOrigin(look.ox, look.oy);
     v.gun.setPosition(c.x + (posed ? 6 * t.facing : 0), c.y + (posed ? 6 : 4) - hop);
     v.gun.setRotation((-t.angle * Math.PI) / 180 * t.facing);
@@ -1017,8 +1171,8 @@ export default class BattleScene extends Phaser.Scene {
     const top = t.y - 82 - hop;
     g.fillStyle(0x1b2030, 0.8);
     g.fillRect(t.x - w / 2 - 2, top, w + 4, 10);
-    g.fillStyle(hpColor(t.hp), 1);
-    g.fillRect(t.x - w / 2, top + 2, (w * t.hp) / TUNING.maxHp, 6);
+    g.fillStyle(hpColor(t.hp, t.maxHp), 1);
+    g.fillRect(t.x - w / 2, top + 2, (w * t.hp) / t.maxHp, 6);
     v.name.setPosition(t.x, top - 2);
     if (isActive && this.phase !== 'over') {
       const bob = Math.sin(now / 180) * 4;
@@ -1095,7 +1249,7 @@ export default class BattleScene extends Phaser.Scene {
 
 const AIM_R = 100;
 
-export function hpColor(hp: number): number {
-  const k = hp / TUNING.maxHp;
+export function hpColor(hp: number, max: number): number {
+  const k = hp / max;
   return k > 0.5 ? 0x4ade80 : k > 0.25 ? 0xfacc15 : 0xf87171;
 }

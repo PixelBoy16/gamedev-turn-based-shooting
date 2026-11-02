@@ -1,11 +1,15 @@
-// Game content for the bot-mode MVP. Every number here is a playtest starting point
+// Game content. Every number here is a playtest starting point
 // from the GDD; tweak freely. Kept as typed TS (not JSON) so typos fail the build.
 
-export type WeaponId = 'cannon' | 'hammer' | 'splitter' | 'drill';
+export type WeaponId = 'cannon' | 'hammer' | 'splitter' | 'shovel' | 'drill';
+
+export type SkillId = 'calm' | 'wall' | 'storm' | 'burrow';
 
 export interface WeaponDef {
   id: WeaponId;
   name: string;
+  /** Short description shown in the wardrobe. */
+  desc: string;
   damage: number;
   radius: number;
   knockback: number;
@@ -16,52 +20,51 @@ export interface WeaponDef {
   split?: { count: number; spreadVx: number };
   /** Bores through `length` px of dirt before exploding. */
   drill?: { length: number; carveRadius: number };
+  /** The skill this weapon grants (none for the shared drill). */
+  skill?: SkillId;
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
-  cannon: { id: 'cannon', name: 'ปืนใหญ่ลูกกลม', damage: 300, radius: 40, knockback: 260, windMul: 1, gravityMul: 1 },
-  hammer: { id: 'hammer', name: 'ค้อนหิน', damage: 380, radius: 28, knockback: 420, windMul: 0.5, gravityMul: 1.35, speedMul: 1.12 },
+  cannon: {
+    id: 'cannon', name: 'ปืนใหญ่', desc: 'สมดุล เหมาะมือใหม่',
+    damage: 300, radius: 40, knockback: 260, windMul: 1, gravityMul: 1, skill: 'calm',
+  },
+  hammer: {
+    id: 'hammer', name: 'ค้อนหิน', desc: 'หนัก วิถีต่ำ ลมแทบไม่มีผล กระเด็นแรง',
+    damage: 380, radius: 28, knockback: 420, windMul: 0.5, gravityMul: 1.35, speedMul: 1.12, skill: 'wall',
+  },
   splitter: {
-    id: 'splitter', name: 'จรวดแตก', damage: 140, radius: 24, knockback: 160, windMul: 1.5, gravityMul: 1,
-    split: { count: 3, spreadVx: 70 },
+    id: 'splitter', name: 'จรวดแตก', desc: 'แตก 3 ลูกกลางอากาศ โดนลมแรง',
+    damage: 140, radius: 24, knockback: 160, windMul: 1.5, gravityMul: 1,
+    split: { count: 3, spreadVx: 70 }, skill: 'storm',
+  },
+  shovel: {
+    id: 'shovel', name: 'พลั่วระเบิด', desc: 'ดาเมจเบา แต่ขุดหลุมใหญ่ ทำให้ศัตรูตกได้',
+    damage: 220, radius: 58, knockback: 200, windMul: 1, gravityMul: 1, skill: 'burrow',
   },
   drill: {
-    id: 'drill', name: 'สว่านเจาะ', damage: 120, radius: 18, knockback: 120, windMul: 0, gravityMul: 1,
+    id: 'drill', name: 'สว่านเจาะ', desc: 'เจาะทะลุดิน 240 px แล้วระเบิด',
+    damage: 120, radius: 18, knockback: 120, windMul: 0, gravityMul: 1,
     drill: { length: 240, carveRadius: 13 },
   },
 };
 
-/** The drill is shared by every character but limited per match. */
+/** Weapons you can equip; the drill is shared by everyone but limited per match. */
+export const MAIN_WEAPONS: WeaponId[] = ['cannon', 'hammer', 'splitter', 'shovel'];
 export const DRILL_USES = 2;
-
-export type SkillId = 'burrow' | 'wall' | 'calm';
 
 /** Own turns to wait after using a skill. */
 export const SKILL_COOLDOWN = 3;
 
 export const SKILLS: Record<SkillId, { name: string; desc: string }> = {
-  burrow: { name: 'มุดดิน', desc: 'หลบใต้ดิน ไม่โดนดาเมจจนถึงตาถัดไป (จบเทิร์นทันที)' },
-  wall: { name: 'กำแพงดิน', desc: 'เสกกำแพงดินสูง 80 px ตรงหน้า' },
   calm: { name: 'ไร้ลม', desc: 'นัดนี้ไม่โดนลม' },
+  wall: { name: 'กำแพงดิน', desc: 'เสกกำแพงดินสูง 80 px ตรงหน้า' },
+  storm: { name: 'ห่าฝน', desc: 'นัดนี้แตก 5 ลูกแทน 3' },
+  burrow: { name: 'มุดดิน', desc: 'หลบใต้ดิน ไม่โดนดาเมจจนถึงตาถัดไป (จบเทิร์นทันที)' },
 };
 
-export type CharacterId = 'mole' | 'mason' | 'sparky';
-
-export interface CharacterDef {
-  id: CharacterId;
-  name: string;
-  style: string;
-  weapon: WeaponId;
-  skill: SkillId;
-}
-
-export const CHARACTERS: Record<CharacterId, CharacterDef> = {
-  mole: { id: 'mole', name: 'ตุ่นตุ๊ก', style: 'สมดุล เหมาะมือใหม่', weapon: 'cannon', skill: 'burrow' },
-  mason: { id: 'mason', name: 'เจ้ากำแพง', style: 'ป้องกัน ยิงวิถีต่ำ', weapon: 'hammer', skill: 'wall' },
-  sparky: { id: 'sparky', name: 'พลุไฟ', style: 'บุกหนัก เล็งยาก', weapon: 'splitter', skill: 'calm' },
-};
-
-export const CHARACTER_IDS = Object.keys(CHARACTERS) as CharacterId[];
+/** Fragments of a split rocket while "storm" is active. */
+export const STORM_SPLIT = 5;
 
 export type ItemId = 'double' | 'power' | 'warp' | 'heal' | 'armor';
 

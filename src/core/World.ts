@@ -1,5 +1,6 @@
 import { Terrain } from './Terrain';
-import { CharacterId, DRILL_USES, ITEM_VALUES, ItemId } from './data';
+import { DRILL_USES, ITEM_VALUES, ItemId } from './data';
+import { DEFAULT_LOADOUT, Loadout, tankStats } from './gear';
 
 // Core tunables. Weapon numbers live in data.ts.
 export const TUNING = {
@@ -15,12 +16,12 @@ export const TUNING = {
   tankCentreOffset: 22, // centre is this far above the feet
   muzzleLength: 30,
   walkSpeed: 70, // px/s
-  fuelPerTurn: 150, // px of walking per turn
+  fuelPerTurn: 150, // px of walking per turn, before gear
   maxClimb: 8, // px step-up while walking
   safeFall: 120, // px fallen before fall damage starts
   fallDamagePerPx: 1.5,
 
-  maxHp: 1000,
+  maxHp: 1000, // before gear
   turnSeconds: 20,
   chargeSeconds: 1.5,
 
@@ -34,7 +35,12 @@ export interface Tank {
   name: string;
   team: number;
   isBot: boolean;
-  char: CharacterId;
+  loadout: Loadout;
+  // from the loadout (see gear.ts)
+  maxHp: number;
+  atk: number; // damage dealt multiplier
+  def: number; // damage taken multiplier
+  move: number; // walking fuel multiplier
   x: number;
   y: number; // feet: the first pixel below the character
   vx: number;
@@ -72,13 +78,14 @@ export function createWorld(terrain: Terrain, tanks: Tank[] = []): World {
 
 export function createTank(
   id: number, name: string, team: number, isBot: boolean, x: number, terrain: Terrain,
-  char: CharacterId = 'mole', items: ItemId[] = [],
+  loadout: Loadout = DEFAULT_LOADOUT, items: ItemId[] = [],
 ): Tank {
   const y = terrain.standY(x) ?? terrain.height;
+  const stats = tankStats(loadout);
   return {
-    id, name, team, isBot, char, x, y,
+    id, name, team, isBot, loadout: { ...loadout }, ...stats, x, y,
     vx: 0, vy: 0, airborne: false, fallStartY: y,
-    hp: TUNING.maxHp,
+    hp: stats.maxHp,
     facing: x < terrain.width / 2 ? 1 : -1,
     angle: 45,
     alive: true,
@@ -112,7 +119,7 @@ export interface ExplosionResult {
   damaged: { tank: Tank; amount: number }[];
 }
 
-/** Carve the crater, then damage and knock back every tank in range. */
+/** Carve the crater, then damage and knock back every tank in range. `dmgScale` includes the shooter's attack. */
 export function explode(world: World, x: number, y: number, spec: BlastSpec, dmgScale = 1): ExplosionResult {
   world.terrain.carve(x, y, spec.radius);
   const damaged: ExplosionResult['damaged'] = [];
@@ -120,7 +127,7 @@ export function explode(world: World, x: number, y: number, spec: BlastSpec, dmg
     if (!t.alive || t.burrowed) continue;
     const raw = blastDamage(t, x, y, spec);
     if (raw <= 0) continue;
-    const amount = Math.round(raw * dmgScale * (t.armored ? ITEM_VALUES.armorScale : 1));
+    const amount = Math.round(raw * dmgScale * t.def * (t.armored ? ITEM_VALUES.armorScale : 1));
     t.hp = Math.max(0, t.hp - amount);
     damaged.push({ tank: t, amount });
     // Knock away from the blast, always with some lift so tanks hop instead of sliding.

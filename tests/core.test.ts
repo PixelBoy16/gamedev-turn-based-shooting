@@ -5,7 +5,8 @@ import { TUNING, World, createTank, createWorld, explode, isSettled, stepTank, t
 import { TurnManager } from '../src/core/TurnManager';
 import { ShotPlanner, chooseShot, scoreImpacts, simulateShot } from '../src/core/BotAI';
 import { VolleyEvent, fireVolley, stepVolley, volleyDone } from '../src/core/Shot';
-import { WEAPONS, WeaponDef } from '../src/core/data';
+import { MAIN_WEAPONS, STORM_SPLIT, WEAPONS, WeaponDef } from '../src/core/data';
+import { DEFAULT_LOADOUT, EQUIPMENT, FASHION, STAT_POINT, Stats, cleanLoadout, copyLoadout, lookId, tankStats } from '../src/core/gear';
 import { freshMods, useItem, useSkill } from '../src/core/Actions';
 import { MAP_IDS, generateMap, spawnX } from '../src/core/Maps';
 
@@ -68,7 +69,7 @@ describe('Maps', () => {
     });
 
     it(`${id}: every main weapon can reach the far spawn in any wind`, () => {
-      for (const weapon of [WEAPONS.cannon, WEAPONS.hammer, WEAPONS.splitter]) for (const wind of [-5, 0, 5]) {
+      for (const weapon of MAIN_WEAPONS.map((w) => WEAPONS[w])) for (const wind of [-5, 0, 5]) {
         const terrain = generateMap(id, createRng(11));
         const world = createWorld(terrain, [
           createTank(0, 'P', 0, false, spawnX(id, 0, 0), terrain),
@@ -210,10 +211,10 @@ describe('items and skills', () => {
     expect(next.dmgScale).toBeCloseTo(0.6);
   });
 
-  it('mason wall blocks a flat shot; skill then cools down for 3 own turns', () => {
+  it('the hammer\'s wall blocks a flat shot; skill then cools down for 3 own turns', () => {
     const world = flatWorld();
     const a = world.tanks[0];
-    a.char = 'mason';
+    a.loadout = { ...a.loadout, weapon: 'hammer' };
     a.facing = 1;
     const mods = freshMods();
     const res = useSkill(world, a, mods);
@@ -226,6 +227,69 @@ describe('items and skills', () => {
       if (t === a) cds.push(a.skillCooldown);
     }
     expect(cds).toEqual([2, 1, 0]);
+  });
+});
+
+describe('gear', () => {
+  it('every equipment piece is a sidegrade: gains and costs cancel out', () => {
+    for (const g of EQUIPMENT) {
+      const points = (Object.keys(g.stats) as (keyof Stats)[]).reduce((p, k) => p + g.stats[k]! / STAT_POINT[k], 0);
+      expect(points, g.id).toBeCloseTo(0);
+    }
+  });
+
+  it('fashion only changes the look, never the stats', () => {
+    for (const f of FASHION) {
+      const l = copyLoadout(DEFAULT_LOADOUT);
+      l.look[f.slot] = f.id;
+      expect(tankStats(l), f.id).toEqual(tankStats(DEFAULT_LOADOUT));
+      if (f.id !== DEFAULT_LOADOUT.look[f.slot]) expect(lookId(l)).not.toBe(lookId(DEFAULT_LOADOUT));
+    }
+  });
+
+  it('gear changes HP, damage dealt and taken, and walking fuel', () => {
+    const terrain = Terrain.flat(2000, 800, 600);
+    const tough = createTank(0, 'A', 0, false, 300, terrain, {
+      ...DEFAULT_LOADOUT, equip: { ...DEFAULT_LOADOUT.equip, bracelet: 'iron', ring: 'stone' },
+    });
+    expect(tough.maxHp).toBe(TUNING.maxHp + 100);
+    expect(tough.hp).toBe(tough.maxHp);
+    expect(tough.def).toBeCloseTo(0.95);
+    const plain = createTank(1, 'B', 1, false, 1500, terrain);
+    const world = createWorld(terrain, [tough, plain]);
+    explode(world, tankCentre(tough).x, tankCentre(tough).y, CANNON);
+    explode(world, tankCentre(plain).x, tankCentre(plain).y, CANNON);
+    expect(tough.maxHp - tough.hp).toBe(Math.round(CANNON.damage * 0.95));
+    expect(plain.maxHp - plain.hp).toBe(CANNON.damage);
+    const tm = new TurnManager(world, createRng(1));
+    tm.next();
+    expect(tm.fuel).toBeCloseTo(TUNING.fuelPerTurn * 0.7); // iron bracelet −15% and stone ring −15%
+  });
+
+  it('cleans unknown or misplaced ids from saves and the network', () => {
+    const dirty = { weapon: 'drill', look: { hat: 'tee', cloth: 'robe' }, equip: { ring: 'ruby', charm: 'nope' }, hide: { hat: 1 } };
+    expect(cleanLoadout(dirty)).toEqual({
+      weapon: 'cannon',
+      look: { ...DEFAULT_LOADOUT.look, cloth: 'robe' },
+      equip: { ...DEFAULT_LOADOUT.equip, ring: 'ruby' },
+      hide: { hat: true, glasses: false },
+    });
+    expect(cleanLoadout(undefined)).toEqual(DEFAULT_LOADOUT);
+  });
+
+  it('each main weapon has its own skill; storm splits the rocket into 5', () => {
+    expect(new Set(MAIN_WEAPONS.map((w) => WEAPONS[w].skill)).size).toBe(MAIN_WEAPONS.length);
+    const world = flatWorld();
+    const a = world.tanks[0];
+    a.loadout = { ...a.loadout, weapon: 'splitter' };
+    const mods = freshMods();
+    expect(useSkill(world, a, mods)?.skill).toBe('storm');
+    a.angle = 60;
+    a.facing = 1;
+    const v = fireVolley(a, WEAPONS.splitter, 70, false, mods.splitCount);
+    for (let f = 0; f < 3000 && !volleyDone(v); f++) stepVolley(world, v);
+    expect(v.shells).toHaveLength(STORM_SPLIT);
+    expect(tankStats(a.loadout).maxHp).toBe(TUNING.maxHp);
   });
 });
 

@@ -1,5 +1,5 @@
-import { CHARACTERS, ITEM_VALUES, ItemId, SKILL_COOLDOWN, SkillId } from './data';
-import { TUNING, Tank, World, raiseWall } from './World';
+import { ITEM_VALUES, ItemId, SKILL_COOLDOWN, STORM_SPLIT, SkillId, WEAPONS } from './data';
+import { Tank, World, raiseWall } from './World';
 
 // Item and skill rules, shared by the human controls and the bot.
 
@@ -9,6 +9,8 @@ export interface TurnMods {
   shots: number; // 2 with "double"
   warp: boolean;
   noWind: boolean;
+  /** Split-rocket fragments this turn ("storm"); undefined = the weapon's own count. */
+  splitCount?: number;
   itemUsed: boolean;
   skillUsed: boolean;
 }
@@ -35,7 +37,7 @@ export function useItem(t: Tank, slot: number, mods: TurnMods): ItemId | null {
       mods.warp = true;
       break;
     case 'heal':
-      t.hp = Math.min(TUNING.maxHp, t.hp + ITEM_VALUES.heal);
+      t.hp = Math.min(t.maxHp, t.hp + ITEM_VALUES.heal);
       break;
     case 'armor':
       t.armored = true;
@@ -50,10 +52,14 @@ export interface SkillResult {
   wall?: { x: number; y: number; w: number; h: number };
 }
 
-/** Use the character's skill if it is off cooldown. */
+export function skillOf(t: Tank): SkillId | null {
+  return WEAPONS[t.loadout.weapon].skill ?? null;
+}
+
+/** Use the equipped weapon's skill if it is off cooldown. */
 export function useSkill(world: World, t: Tank, mods: TurnMods): SkillResult | null {
-  if (t.skillCooldown > 0 || mods.skillUsed || !t.alive || t.airborne) return null;
-  const skill = CHARACTERS[t.char].skill;
+  const skill = skillOf(t);
+  if (!skill || t.skillCooldown > 0 || mods.skillUsed || !t.alive || t.airborne) return null;
   mods.skillUsed = true;
   // Ticks down at the start of each own turn, so it is ready again 3 own turns later.
   t.skillCooldown = SKILL_COOLDOWN;
@@ -65,6 +71,9 @@ export function useSkill(world: World, t: Tank, mods: TurnMods): SkillResult | n
       return { skill, endsTurn: false, wall: raiseWall(world, t) };
     case 'calm':
       mods.noWind = true;
+      return { skill, endsTurn: false };
+    case 'storm':
+      mods.splitCount = STORM_SPLIT;
       return { skill, endsTurn: false };
   }
 }

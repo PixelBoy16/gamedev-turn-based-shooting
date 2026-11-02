@@ -72,3 +72,37 @@ export class Terrain {
     this.changes.push({ kind: 'carve', x: cx, y: cy, r });
   }
 }
+
+/** FNV-1a over the mask: a cheap "are our maps the same?" check between client and server. */
+export function terrainHash(t: Terrain): number {
+  let h = 0x811c9dc5;
+  const m = t.mask;
+  for (let i = 0; i < m.length; i++) h = Math.imul(h ^ m[i], 0x01000193);
+  return h >>> 0;
+}
+
+/** Run-length encode the mask as alternating air/dirt run lengths, starting with air. */
+export function encodeMask(t: Terrain): number[] {
+  const runs: number[] = [];
+  const m = t.mask;
+  let cur = 0;
+  let n = 0;
+  for (let i = 0; i < m.length; i++) {
+    if (m[i] === cur) n++;
+    else {
+      runs.push(n);
+      cur = m[i];
+      n = 1;
+    }
+  }
+  runs.push(n);
+  return runs;
+}
+
+export function decodeMask(t: Terrain, runs: number[]): void {
+  let i = 0;
+  runs.forEach((n, k) => {
+    t.mask.fill(k % 2, i, i + n);
+    i += n;
+  });
+}

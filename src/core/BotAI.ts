@@ -20,7 +20,9 @@ export interface Shot {
 export interface ShotOptions {
   weapon: WeaponDef;
   noWind?: boolean;
+  /** Includes the shooter's attack multiplier. */
   dmgScale?: number;
+  splitCount?: number;
 }
 
 /**
@@ -32,7 +34,7 @@ export function simulateShot(world: World, shooter: Tank, shot: Shot, opts: Shot
   const saved = { angle: shooter.angle, facing: shooter.facing };
   shooter.angle = shot.angle;
   shooter.facing = shot.facing;
-  const v = fireVolley(shooter, opts.weapon, shot.power, opts.noWind);
+  const v = fireVolley(shooter, opts.weapon, shot.power, opts.noWind, opts.splitCount);
   shooter.angle = saved.angle;
   shooter.facing = saved.facing;
   const hits: { x: number; y: number }[] = [];
@@ -54,7 +56,7 @@ export function scoreImpacts(world: World, bot: Tank, hits: { x: number; y: numb
   for (const h of hits) {
     for (const t of world.tanks) {
       if (!t.alive || t.burrowed) continue;
-      const dmg = blastDamage(t, h.x, h.y, spec) * scale * (t.armored ? ITEM_VALUES.armorScale : 1);
+      const dmg = blastDamage(t, h.x, h.y, spec) * scale * t.def * (t.armored ? ITEM_VALUES.armorScale : 1);
       if (dmg > 0) taken.set(t, (taken.get(t) ?? 0) + dmg);
     }
   }
@@ -142,7 +144,7 @@ export type BotAction = { kind: 'item'; slot: number; item: ItemId } | { kind: '
  * Pre-shot decisions (FSM "think" state). Easy bots never use items or skills;
  * normal bots use them when clearly useful; hard bots use them freely.
  */
-export function chooseSupport(world: World, bot: Tank, skill: SkillId, difficulty: Difficulty): BotAction[] {
+export function chooseSupport(world: World, bot: Tank, skill: SkillId | null, difficulty: Difficulty): BotAction[] {
   if (difficulty === 'easy') return [];
   const actions: BotAction[] = [];
   const has = (id: ItemId) => bot.items.indexOf(id);
@@ -152,6 +154,7 @@ export function chooseSupport(world: World, bot: Tank, skill: SkillId, difficult
     if (skill === 'burrow' && hard && bot.hp < 300) return [{ kind: 'skill', skill }];
     if (skill === 'calm' && Math.abs(world.wind) >= (hard ? 2 : 4)) actions.push({ kind: 'skill', skill });
     if (skill === 'wall' && bot.hp < (hard ? 700 : 450)) actions.push({ kind: 'skill', skill });
+    if (skill === 'storm') actions.push({ kind: 'skill', skill }); // more fragments is never worse
   }
   const heal = has('heal');
   const armor = has('armor');

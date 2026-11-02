@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
-import { ART_SCALE, IconId, gunLook, iconTexture, poseTexture } from '../art/chibi';
-import { CHARACTERS, ITEMS, SKILLS, WEAPONS, WeaponId } from '../core/data';
+import { ART_SCALE, gunLook, iconTexture, lookTexture } from '../art/chibi';
+import { ITEMS, SKILLS, WEAPONS, WeaponId } from '../core/data';
+import { skillOf } from '../core/Actions';
 import { TUNING, tankCentre } from '../core/World';
 import { Button, FONT, INK, TEAM_COLORS, label } from '../ui/widgets';
 import BattleScene, { hpColor } from './BattleScene';
 import { isMuted, setMuted } from '../audio/sfx';
+import { net } from '../net/NetClient';
 import { DIFF_LABEL, FORMAT_LABEL } from './setup';
 
 // Screen-space HUD, run in parallel with BattleScene so it never moves with the camera.
@@ -13,7 +15,7 @@ import { DIFF_LABEL, FORMAT_LABEL } from './setup';
 const POWER = { x: 560, y: 1000, w: 800, h: 34 };
 const WIND = { x: 960, y: 88, r: 36 };
 const DIAL = { x: 430, y: 1002, r: 64 };
-const SLOT_NAME: Record<WeaponId, string> = { cannon: 'ปืนใหญ่', hammer: 'ค้อนหิน', splitter: 'จรวดแตก', drill: 'สว่าน' };
+const SLOT_NAME: Record<WeaponId, string> = { cannon: 'ปืนใหญ่', hammer: 'ค้อนหิน', splitter: 'จรวดแตก', shovel: 'พลั่ว', drill: 'สว่าน' };
 
 interface Panel {
   hp: Phaser.GameObjects.Text;
@@ -26,7 +28,7 @@ export default class HudScene extends Phaser.Scene {
   private battle!: BattleScene;
   private g!: Phaser.GameObjects.Graphics;
   private panels = new Map<number, Panel>();
-  private t!: Record<'turn' | 'wind' | 'windTag' | 'timer' | 'angle' | 'power' | 'shot' | 'help' | 'banner', Phaser.GameObjects.Text>;
+  private t!: Record<'turn' | 'net' | 'wind' | 'windTag' | 'timer' | 'angle' | 'power' | 'shot' | 'help' | 'banner', Phaser.GameObjects.Text>;
   private slots!: { main: Button; drill: Button; items: Button[]; skill: Button };
   private touchUi: Phaser.GameObjects.GameObject[] = [];
   private aimHold = { dir: 0, since: 0 };
@@ -48,6 +50,7 @@ export default class HudScene extends Phaser.Scene {
     this.createPanels();
     this.t = {
       turn: label(this, 960, 10, '', 26).setOrigin(0.5, 0),
+      net: label(this, 960, 200, '', 30, '#ff8787').setOrigin(0.5, 0),
       wind: label(this, WIND.x, WIND.y, '', 32).setOrigin(0.5),
       windTag: label(this, WIND.x, WIND.y + WIND.r + 6, '', 18).setOrigin(0.5, 0),
       timer: label(this, WIND.x + 120, WIND.y, '', 34).setOrigin(0.5),
@@ -85,9 +88,9 @@ export default class HudScene extends Phaser.Scene {
       const i = count[t.team]++;
       const x = right ? 1880 : 40;
       const y = 22 + i * 92;
-      this.add.image(right ? x - 34 : x + 34, y + 76, poseTexture(this, t.char, 'idle')).setOrigin(0.5, 1).setScale(ART_SCALE * 1.05).setFlipX(right);
-      const name = t.isBot && t.team === 1 ? `${t.name} (${DIFF_LABEL[this.battle.setup.difficulty]})` : t.name;
-      label(this, right ? x - 80 : x + 80, y, `${name} · ${CHARACTERS[t.char].name}`, 22).setOrigin(right ? 1 : 0, 0);
+      this.add.image(right ? x - 34 : x + 34, y + 76, lookTexture(this, t.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * 1.05).setFlipX(right);
+      const name = t.isBot && (this.battle.net || t.team === 1) ? `${t.name} (${DIFF_LABEL[this.battle.setup.difficulty]})` : t.name;
+      label(this, right ? x - 80 : x + 80, y, `${name} · ${WEAPONS[t.loadout.weapon].name}`, 22).setOrigin(right ? 1 : 0, 0);
       const hp = label(this, right ? x - 80 : x + 80, y + 52, '', 18).setOrigin(right ? 1 : 0, 0);
       this.panels.set(t.id, { hp, x, y, right });
     }
@@ -161,9 +164,10 @@ export default class HudScene extends Phaser.Scene {
       const g = this.add.graphics();
       g.fillStyle(INK, 0.92);
       g.fillRoundedRect(-480, -330, 960, 660, 28);
-      g.lineStyle(6, winner === 0 ? 0xffd166 : 0x8899aa, 1);
+      const won = winner === b.myTeam;
+      g.lineStyle(6, won ? 0xffd166 : 0x8899aa, 1);
       g.strokeRoundedRect(-480, -330, 960, 660, 28);
-      const title = winner === 0 ? 'ชนะ!' : winner === -1 ? 'เสมอ' : 'แพ้...';
+      const title = won ? 'ชนะ!' : winner === -1 ? 'เสมอ' : 'แพ้...';
       const lines = b.world.tanks.map((t) => {
         const s = b.stats.get(t.id)!;
         const acc = s.shots ? Math.round((s.hits / s.shots) * 100) : 0;
@@ -171,11 +175,15 @@ export default class HudScene extends Phaser.Scene {
       });
       c.add([
         g,
-        label(this, 0, -290, title, 96, winner === 0 ? '#ffd166' : '#ffffff').setOrigin(0.5, 0),
-        label(this, 0, -170, `${FORMAT_LABEL[b.setup.format]} · บอท${DIFF_LABEL[b.setup.difficulty]} · ${b.turns.turnNumber} เทิร์น`, 26).setOrigin(0.5, 0),
+        label(this, 0, -290, title, 96, won ? '#ffd166' : '#ffffff').setOrigin(0.5, 0),
+        label(this, 0, -170, `${b.net ? `ออนไลน์ ${b.setup.format}` : FORMAT_LABEL[b.setup.format]} · บอท${DIFF_LABEL[b.setup.difficulty]} · ${b.turns.turnNumber} เทิร์น`, 26).setOrigin(0.5, 0),
         this.add.text(0, -110, lines.join('\n'), { fontFamily: FONT, fontSize: '28px', color: '#e6ecff', lineSpacing: 12, align: 'left' }).setOrigin(0.5, 0),
-        new Button(this, -200, 240, 340, 96, 'เล่นอีกครั้ง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.restart() }),
-        new Button(this, 200, 240, 340, 96, 'เปลี่ยนตัว/ด่าน', { size: 32, onClick: () => b.scene.start('setup') }),
+        ...(b.net
+          ? [new Button(this, 0, 240, 420, 96, 'กลับห้อง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.start('lobby') })]
+          : [
+            new Button(this, -200, 240, 340, 96, 'เล่นอีกครั้ง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.restart() }),
+            new Button(this, 200, 240, 340, 96, 'เปลี่ยนตัว/ด่าน', { size: 32, onClick: () => b.scene.start('setup') }),
+          ]),
       ]);
       c.setScale(0.8).setAlpha(0);
       this.tweens.add({ targets: c, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut' });
@@ -247,7 +255,8 @@ export default class HudScene extends Phaser.Scene {
     const g = this.g;
     g.clear();
     const active = b.active;
-    const human = !active.isBot && active.team === 0;
+    const human = b.isLocal(active);
+    this.t.net.setText(b.net && !net.connected ? 'หลุดการเชื่อมต่อ กำลังต่อใหม่…' : b.phase === 'wait' && b.isLocal(active) ? 'รอเซิร์ฟเวอร์…' : '');
 
     if (this.aimHold.dir && time - this.aimHold.since > 300) b.touch.aim = this.aimHold.dir;
     this.soundBtn.setLabel(isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด');
@@ -259,8 +268,8 @@ export default class HudScene extends Phaser.Scene {
       const bx = p.right ? p.x - 80 - w : p.x + 80;
       g.fillStyle(INK, 0.85);
       g.fillRoundedRect(bx - 4, p.y + 30, w + 8, 20, 7);
-      g.fillStyle(t.alive ? hpColor(t.hp) : 0x555555, 1);
-      const fw = (w * t.hp) / TUNING.maxHp;
+      g.fillStyle(t.alive ? hpColor(t.hp, t.maxHp) : 0x555555, 1);
+      const fw = (w * t.hp) / t.maxHp;
       if (fw > 0) g.fillRoundedRect(p.right ? bx + w - fw : bx, p.y + 33, Math.max(fw, 4), 14, 5);
       if (t === active && b.phase !== 'over') {
         g.lineStyle(4, 0xffd166, 1);
@@ -329,7 +338,7 @@ export default class HudScene extends Phaser.Scene {
     g.fillStyle(INK, 0.85);
     g.fillRoundedRect(x - 6, y + h + 16, w + 12, 12, 6);
     g.fillStyle(0x8ecae6, 1);
-    g.fillRoundedRect(x - 2, y + h + 18, Math.max(1, ((w + 4) * b.turns.fuel) / TUNING.fuelPerTurn), 8, 4);
+    g.fillRoundedRect(x - 2, y + h + 18, Math.max(1, ((w + 4) * b.turns.fuel) / (TUNING.fuelPerTurn * b.active.move)), 8, 4);
     this.t.power.setText(`${Math.round(b.power)}`);
   }
 
@@ -338,16 +347,18 @@ export default class HudScene extends Phaser.Scene {
     const t = b.active;
     const can = human && b.humanCanAct;
     const s = this.slots;
-    const main = WEAPONS[CHARACTERS[t.char].weapon];
+    const main = WEAPONS[t.loadout.weapon];
     s.main.setLabel(`1 ${SLOT_NAME[main.id]}`).setIcon(this.gunIcon(main.id)).setSelected(!b.useDrill).setEnabled(can);
     s.drill.setLabel(`2 สว่าน ×${t.drillLeft}`).setIcon(this.gunIcon('drill')).setSelected(b.useDrill).setEnabled(can && t.drillLeft > 0);
     s.items.forEach((btn, i) => {
       const item = t.items[i];
       btn.setLabel(`${i + 3} ${item ? ITEMS[item].name : '—'}`).setIcon(item ? iconTexture(this, item) : null).setSelected(false).setEnabled(can && !!item && !b.mods.itemUsed);
     });
-    const skill = SKILLS[CHARACTERS[t.char].skill];
+    const skillId = skillOf(t);
     const cd = t.skillCooldown;
-    s.skill.setLabel(cd > 0 ? `E รอ ${cd} ตา` : `E ${skill.name}`).setIcon(iconTexture(this, CHARACTERS[t.char].skill as IconId)).setEnabled(can && cd === 0 && !b.mods.skillUsed);
+    s.skill.setLabel(!skillId ? 'E —' : cd > 0 ? `E รอ ${cd} ตา` : `E ${SKILLS[skillId].name}`)
+      .setIcon(skillId ? iconTexture(this, skillId) : null)
+      .setEnabled(can && !!skillId && cd === 0 && !b.mods.skillUsed);
     for (const btn of [s.main, s.drill, ...s.items, s.skill]) btn.setVisible(human && b.phase !== 'over');
   }
 

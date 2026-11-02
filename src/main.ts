@@ -4,6 +4,8 @@ import MenuScene from './scenes/MenuScene';
 import SetupScene from './scenes/SetupScene';
 import BattleScene from './scenes/BattleScene';
 import HudScene from './scenes/HudScene';
+import LobbyScene from './scenes/LobbyScene';
+import { net } from './net/NetClient';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -12,9 +14,10 @@ const game = new Phaser.Game({
   height: 1080,
   backgroundColor: '#9fd3f7',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  dom: { createContainer: true }, // text inputs in the online lobby
   input: { activePointers: 3 }, // tablet: hold FIRE while nudging the angle, or pan with two fingers
-  scene: [BootScene, MenuScene, SetupScene, BattleScene, HudScene],
+  scene: [BootScene, MenuScene, SetupScene, LobbyScene, BattleScene, HudScene],
 });
 
 // Dev-only handle for debugging from the browser console.
-if (import.meta.env.DEV) (window as unknown as { game: Phaser.Game }).game = game;
+if (import.meta.env.DEV) Object.assign(window, { game, net });

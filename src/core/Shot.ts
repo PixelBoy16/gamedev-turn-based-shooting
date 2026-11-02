@@ -23,6 +23,7 @@ export interface Volley {
   weapon: WeaponDef;
   shells: Shell[];
   windMul: number; // 0 when the shooter used the "calm" skill
+  splitCount: number;
 }
 
 export type VolleyEvent =
@@ -31,7 +32,7 @@ export type VolleyEvent =
   | { kind: 'split'; x: number; y: number }
   | { kind: 'carve'; x: number; y: number; r: number };
 
-export function fireVolley(shooter: Tank, weapon: WeaponDef, power: number, noWind = false): Volley {
+export function fireVolley(shooter: Tank, weapon: WeaponDef, power: number, noWind = false, splitCount?: number): Volley {
   const m = muzzle(shooter);
   const speed = Math.max(0, Math.min(100, power)) * TUNING.launchSpeedPerPower * (weapon.speedMul ?? 1);
   const rad = (shooter.angle * Math.PI) / 180;
@@ -40,7 +41,7 @@ export function fireVolley(shooter: Tank, weapon: WeaponDef, power: number, noWi
     vx: Math.cos(rad) * speed * shooter.facing, vy: -Math.sin(rad) * speed,
     frames: 0, drilled: 0, sinceCarve: 0, split: false, done: false,
   };
-  return { shooter, weapon, shells: [shell], windMul: noWind ? 0 : 1 };
+  return { shooter, weapon, shells: [shell], windMul: noWind ? 0 : 1, splitCount: splitCount ?? weapon.split?.count ?? 0 };
 }
 
 export function volleyDone(v: Volley): boolean {
@@ -112,7 +113,8 @@ function stepShell(world: World, v: Volley, s: Shell, out: VolleyEvent[]): void 
   // Split rocket: burst at the top of the arc.
   if (w.split && !s.split && wasRising && s.vy >= 0) {
     s.split = true;
-    const { count, spreadVx } = w.split;
+    const { spreadVx } = w.split;
+    const count = v.splitCount;
     for (let i = 0; i < count; i++) {
       const offset = (i - (count - 1) / 2) * spreadVx;
       if (offset === 0) continue; // the original shell is the middle fragment

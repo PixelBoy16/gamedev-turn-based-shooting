@@ -45,12 +45,12 @@ export class TurnManager {
     }
     this.turnNumber++;
     this.timeLeft = TUNING.turnSeconds;
-    this.fuel = TUNING.fuelPerTurn;
     this.world.wind = Math.round((this.rng() * 2 - 1) * TUNING.maxWind);
     if (this.suddenDeath) {
       this.world.waterY = Math.min(this.world.waterY, this.world.terrain.height) - TUNING.waterRisePerTurn;
     }
     const t = this.active;
+    this.fuel = TUNING.fuelPerTurn * t.move;
     t.armored = false;
     t.burrowed = false;
     t.skillCooldown = Math.max(0, t.skillCooldown - 1);
