@@ -4,7 +4,7 @@ import { sfx } from '../audio/sfx';
 import { DEFAULT_LOADOUT, Loadout } from '../core/gear';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
-import { drawPlate } from '../ui/theme';
+import { THEME, drawPlate } from '../ui/theme';
 import { FONT, INK, label } from '../ui/widgets';
 import { menuBackdrop } from './backdrop';
 
@@ -53,7 +53,7 @@ export default class MenuScene extends Phaser.Scene {
     } else {
       // black letters with a hot orange rim and a burst of light behind them
       const glow = this.add.container(HERO_X, 220);
-      for (let i = 0; i < 6; i++) glow.add(this.add.ellipse(0, 0, 640 - i * 70, 300 - i * 34, 0xffb040, 0.07).setBlendMode(Phaser.BlendModes.ADD));
+      for (let i = 0; i < 16; i++) glow.add(this.add.ellipse(0, 0, 680 - i * 34, 300 - i * 15, 0xff9a30, 0.03).setBlendMode(Phaser.BlendModes.ADD));
       this.tweens.add({ targets: glow, scale: 1.1, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       const t = this.add.text(HERO_X, 220, 'BLACK BOOM', {
         fontFamily: FONT, fontSize: '150px', fontStyle: '900', color: '#1b1d26', stroke: '#ffb020', strokeThickness: 18,
@@ -103,12 +103,12 @@ export default class MenuScene extends Phaser.Scene {
   /** The three ways to play, as big cards with an icon, a name and one line about it. */
   private modes(): void {
     const cards: [string, string, string, number, () => void][] = [
-      ['bot', 'เล่นกับบอท', 'ฝึกมือ เล่นได้แม้ไม่มีเน็ต', 0x2f9e44, () => {
+      ['bot', 'เล่นกับบอท', 'ฝึกมือ เล่นได้แม้ไม่มีเน็ต', THEME.steel, () => {
         this.registry.set('setupMode', null);
         this.scene.start('setup');
       }],
-      ['friends', 'เล่นกับเพื่อน', 'สร้างห้อง แล้วส่งรหัส 6 หลักให้เพื่อน', 0x4c6ef5, () => this.scene.start('lobby')],
-      ['ranked', 'แข่งจัดอันดับ', 'จับคู่กับผู้เล่นฝีมือใกล้กัน', 0xe0a400, () => this.scene.start('ranked')],
+      ['friends', 'เล่นกับเพื่อน', 'สร้างห้อง แล้วส่งรหัส 6 หลักให้เพื่อน', THEME.blue, () => this.scene.start('lobby')],
+      ['ranked', 'แข่งจัดอันดับ', 'จับคู่กับผู้เล่นฝีมือใกล้กัน', THEME.red, () => this.scene.start('ranked')],
     ];
     cards.forEach(([icon, title, sub, fill, go], i) => {
       const c = new MenuCard(this, 1490, 400 + i * 190, 700, 160, fill, go);
@@ -122,8 +122,8 @@ export default class MenuScene extends Phaser.Scene {
 
     // shop and pass under the cards
     const small: [string, string, string, number, () => void][] = [
-      ['shop', 'ร้านค้า', '🛍️', 0xe0a400, () => this.scene.start('shop')],
-      ['pass', 'Battle Pass', '🎟️', 0x7b4fd6, () => this.scene.start('pass')],
+      ['shop', 'ร้านค้า', '🛍️', 0xa86a12, () => this.scene.start('shop')],
+      ['pass', 'Battle Pass', '🎟️', THEME.purple, () => this.scene.start('pass')],
     ];
     small.forEach(([icon, name, emoji, fill, go], i) => {
       const c = new MenuCard(this, 1315 + i * 350, 960, 330, 110, fill, go);
@@ -146,7 +146,7 @@ export default class MenuScene extends Phaser.Scene {
 
   /** Who you are (tap to manage the account) on the left; coins and gems on the right. */
   private topBar(): void {
-    const card = new MenuCard(this, 40 + 240, 76, 480, 100, 0x2b3350, () => this.scene.start('account'));
+    const card = new MenuCard(this, 40 + 240, 76, 480, 100, THEME.steelDark, () => this.scene.start('account'));
     const name = this.add.text(-210, -18, '', { fontFamily: FONT, fontSize: '32px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0, 0.5);
     const sub = this.add.text(-210, 24, '', { fontFamily: FONT, fontSize: '22px', color: '#cfd8ff' }).setOrigin(0, 0.5);
     card.add([name, sub]);
