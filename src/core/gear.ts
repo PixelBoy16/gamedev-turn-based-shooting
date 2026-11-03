@@ -1,6 +1,6 @@
 import { MAIN_WEAPONS, WeaponId } from './data';
 import { Rng } from './rng';
-import { TUNING } from './World';
+import { EQUIPMENT, FASHION, TUNING } from './config';
 
 // What a player wears, in two separate halves:
 // - fashion: decides how the chibi looks and nothing else, so it can be sold freely;
@@ -26,19 +26,8 @@ export interface FashionDef {
   name: string;
 }
 
-const fashion = (slot: FashionSlot, list: [string, string][]): FashionDef[] => list.map(([id, name]) => ({ id, slot, name }));
-
-/** "none" is the empty choice; slots without it always show something. */
-export const FASHION: FashionDef[] = [
-  ...fashion('hat', [['none', 'ไม่ใส่'], ['aviator', 'หมวกนักบิน'], ['crown', 'มงกุฎกระดาษ'], ['beanie', 'หมวกไหมพรม'], ['helm', 'หมวกเหล็ก']]),
-  ...fashion('glasses', [['none', 'ไม่ใส่'], ['round', 'แว่นกลม'], ['shades', 'แว่นดำ']]),
-  ...fashion('hair', [['short', 'ผมสั้น'], ['spiky', 'ผมตั้ง'], ['ponytail', 'ผมหางม้า'], ['bob', 'ผมบ็อบ']]),
-  ...fashion('face', [['none', 'ไม่มี'], ['blush', 'แก้มแดง'], ['bandaid', 'พลาสเตอร์'], ['mustache', 'หนวดเท่']]),
-  ...fashion('cloth', [['tee', 'เสื้อยืด'], ['armor', 'เกราะไม้'], ['robe', 'เสื้อคลุมจอมเวท'], ['ninja', 'ชุดนินจา'], ['dress', 'ชุดกระโปรง']]),
-  ...fashion('eyes', [['round', 'ตากลม'], ['happy', 'ตายิ้ม'], ['sharp', 'ตาคม'], ['star', 'ตาดาว']]),
-  ...fashion('set', [['none', 'ไม่ใส่'], ['bear', 'ชุดหมีน้อย']]),
-  ...fashion('back', [['none', 'ไม่ใส่'], ['wings', 'ปีกจิ๋ว'], ['backpack', 'เป้สนาม'], ['cape', 'ผ้าคลุมแดง']]),
-];
+/** "none" is the empty choice; slots without it always show something. The list is in config/game.json. */
+export { FASHION } from './config';
 
 export const fashionIn = (slot: FashionSlot) => FASHION.filter((f) => f.slot === slot);
 export const fashionDef = (slot: FashionSlot, id: string) => FASHION.find((f) => f.slot === slot && f.id === id);
@@ -64,7 +53,7 @@ export interface Stats {
 }
 
 /** One "point" of each stat; a piece's points must sum to zero. */
-export const STAT_POINT: Stats = { hp: 50, atk: 5, def: 5, move: 15 };
+export { STAT_POINT } from './config';
 export const STAT_NAME: Record<keyof Stats, string> = { hp: 'HP', atk: 'โจมตี', def: 'ป้องกัน', move: 'เดิน' };
 
 export interface EquipDef {
@@ -76,20 +65,7 @@ export interface EquipDef {
   color: [number, number];
 }
 
-export const EQUIPMENT: EquipDef[] = [
-  { id: 'none', slot: 'necklace', name: 'ไม่ใส่', stats: {}, color: [0, 0] },
-  { id: 'heart', slot: 'necklace', name: 'สร้อยหัวใจ', stats: { hp: 50, atk: -5 }, color: [0xffd23f, 0xff5d8f] },
-  { id: 'fang', slot: 'necklace', name: 'สร้อยเขี้ยว', stats: { atk: 5, def: -5 }, color: [0x8b5a2b, 0xf1f1f1] },
-  { id: 'none', slot: 'ring', name: 'ไม่ใส่', stats: {}, color: [0, 0] },
-  { id: 'ruby', slot: 'ring', name: 'แหวนทับทิม', stats: { atk: 5, hp: -50 }, color: [0xffd23f, 0xe63946] },
-  { id: 'stone', slot: 'ring', name: 'แหวนหินผา', stats: { def: 5, move: -15 }, color: [0x9aa0a6, 0x6c7a89] },
-  { id: 'none', slot: 'bracelet', name: 'ไม่ใส่', stats: {}, color: [0, 0] },
-  { id: 'wind', slot: 'bracelet', name: 'กำไลสายลม', stats: { move: 15, hp: -50 }, color: [0xc0c7d1, 0x7fd6ff] },
-  { id: 'iron', slot: 'bracelet', name: 'กำไลเหล็ก', stats: { hp: 100, atk: -5, move: -15 }, color: [0x6c7a89, 0xa9b4c2] },
-  { id: 'none', slot: 'charm', name: 'ไม่ใส่', stats: {}, color: [0, 0] },
-  { id: 'turtle', slot: 'charm', name: 'เครื่องรางเต่า', stats: { def: 5, atk: -5 }, color: [0x4f7942, 0x9be564] },
-  { id: 'feather', slot: 'charm', name: 'เครื่องรางขนนก', stats: { move: 15, def: -5 }, color: [0xb197fc, 0xffffff] },
-];
+export { EQUIPMENT } from './config';
 
 export const equipIn = (slot: EquipSlot) => EQUIPMENT.filter((e) => e.slot === slot);
 export const equipDef = (slot: EquipSlot, id: string) => EQUIPMENT.find((e) => e.slot === slot && e.id === id);

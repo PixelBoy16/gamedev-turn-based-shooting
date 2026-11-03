@@ -1,0 +1,444 @@
+{
+  "rules": {
+    "gravity": 420,
+    "windAccel": 18,
+    "maxWind": 5,
+    "launchSpeedPerPower": 9.5,
+    "walkSpeed": 70,
+    "fuelPerTurn": 150,
+    "safeFall": 120,
+    "fallDamagePerPx": 1.5,
+    "maxHp": 1000,
+    "turnSeconds": 20,
+    "chargeSeconds": 1.5,
+    "wall": {
+      "height": 80,
+      "width": 24,
+      "gap": 30
+    },
+    "suddenDeathTurn": 30,
+    "waterRisePerTurn": 40
+  },
+  "limits": {
+    "drillUses": 2,
+    "skillCooldown": 3,
+    "stormSplit": 5,
+    "itemsPerMatch": 3
+  },
+  "weapons": {
+    "cannon": {
+      "name": "ปืนใหญ่",
+      "desc": "สมดุล เหมาะมือใหม่",
+      "damage": 300,
+      "radius": 40,
+      "knockback": 260,
+      "windMul": 1,
+      "gravityMul": 1,
+      "skill": "calm"
+    },
+    "hammer": {
+      "name": "ค้อนหิน",
+      "desc": "หนัก วิถีต่ำ ลมแทบไม่มีผล กระเด็นแรง",
+      "damage": 380,
+      "radius": 28,
+      "knockback": 420,
+      "windMul": 0.5,
+      "gravityMul": 1.35,
+      "speedMul": 1.12,
+      "skill": "wall"
+    },
+    "splitter": {
+      "name": "จรวดแตก",
+      "desc": "แตก 3 ลูกกลางอากาศ โดนลมแรง",
+      "damage": 140,
+      "radius": 24,
+      "knockback": 160,
+      "windMul": 1.5,
+      "gravityMul": 1,
+      "split": {
+        "count": 3,
+        "spreadVx": 70
+      },
+      "skill": "storm"
+    },
+    "shovel": {
+      "name": "พลั่วระเบิด",
+      "desc": "ดาเมจเบา แต่ขุดหลุมใหญ่ ทำให้ศัตรูตกได้",
+      "damage": 220,
+      "radius": 58,
+      "knockback": 200,
+      "windMul": 1,
+      "gravityMul": 1,
+      "skill": "burrow"
+    },
+    "drill": {
+      "name": "สว่านเจาะ",
+      "desc": "เจาะทะลุดิน 240 px แล้วระเบิด",
+      "damage": 120,
+      "radius": 18,
+      "knockback": 120,
+      "windMul": 0,
+      "gravityMul": 1,
+      "drill": {
+        "length": 240,
+        "carveRadius": 13
+      }
+    }
+  },
+  "skills": {
+    "calm": {
+      "name": "ไร้ลม",
+      "desc": "นัดนี้ไม่โดนลม"
+    },
+    "wall": {
+      "name": "กำแพงดิน",
+      "desc": "เสกกำแพงดินสูง 80 px ตรงหน้า"
+    },
+    "storm": {
+      "name": "ห่าฝน",
+      "desc": "นัดนี้แตก 5 ลูกแทน 3"
+    },
+    "burrow": {
+      "name": "มุดดิน",
+      "desc": "หลบใต้ดิน ไม่โดนดาเมจจนถึงตาถัดไป (จบเทิร์นทันที)"
+    }
+  },
+  "items": {
+    "double": {
+      "name": "ยิงคู่",
+      "desc": "ยิงซ้ำอีกนัด ดาเมจนัดละ 60%"
+    },
+    "power": {
+      "name": "พลัง +30%",
+      "desc": "นัดนี้ดาเมจแรงขึ้น 30%"
+    },
+    "warp": {
+      "name": "วาร์ป",
+      "desc": "กระสุนตกที่ไหน ตัวเราไปอยู่ที่นั่น (ไม่ทำดาเมจ)"
+    },
+    "heal": {
+      "name": "ฟื้น HP",
+      "desc": "ฟื้น HP 250 ทันที"
+    },
+    "armor": {
+      "name": "เกราะ",
+      "desc": "ลดดาเมจที่ได้รับ 50% จนถึงตาถัดไป"
+    }
+  },
+  "itemValues": {
+    "doubleScale": 0.6,
+    "powerScale": 1.3,
+    "heal": 250,
+    "armorScale": 0.5
+  },
+  "statPoint": {
+    "hp": 50,
+    "atk": 5,
+    "def": 5,
+    "move": 15
+  },
+  "equipment": [
+    {
+      "id": "none",
+      "slot": "necklace",
+      "name": "ไม่ใส่",
+      "stats": {},
+      "color": [
+        "#000000",
+        "#000000"
+      ]
+    },
+    {
+      "id": "heart",
+      "slot": "necklace",
+      "name": "สร้อยหัวใจ",
+      "stats": {
+        "hp": 50,
+        "atk": -5
+      },
+      "color": [
+        "#ffd23f",
+        "#ff5d8f"
+      ]
+    },
+    {
+      "id": "fang",
+      "slot": "necklace",
+      "name": "สร้อยเขี้ยว",
+      "stats": {
+        "atk": 5,
+        "def": -5
+      },
+      "color": [
+        "#8b5a2b",
+        "#f1f1f1"
+      ]
+    },
+    {
+      "id": "none",
+      "slot": "ring",
+      "name": "ไม่ใส่",
+      "stats": {},
+      "color": [
+        "#000000",
+        "#000000"
+      ]
+    },
+    {
+      "id": "ruby",
+      "slot": "ring",
+      "name": "แหวนทับทิม",
+      "stats": {
+        "atk": 5,
+        "hp": -50
+      },
+      "color": [
+        "#ffd23f",
+        "#e63946"
+      ]
+    },
+    {
+      "id": "stone",
+      "slot": "ring",
+      "name": "แหวนหินผา",
+      "stats": {
+        "def": 5,
+        "move": -15
+      },
+      "color": [
+        "#9aa0a6",
+        "#6c7a89"
+      ]
+    },
+    {
+      "id": "none",
+      "slot": "bracelet",
+      "name": "ไม่ใส่",
+      "stats": {},
+      "color": [
+        "#000000",
+        "#000000"
+      ]
+    },
+    {
+      "id": "wind",
+      "slot": "bracelet",
+      "name": "กำไลสายลม",
+      "stats": {
+        "move": 15,
+        "hp": -50
+      },
+      "color": [
+        "#c0c7d1",
+        "#7fd6ff"
+      ]
+    },
+    {
+      "id": "iron",
+      "slot": "bracelet",
+      "name": "กำไลเหล็ก",
+      "stats": {
+        "hp": 100,
+        "atk": -5,
+        "move": -15
+      },
+      "color": [
+        "#6c7a89",
+        "#a9b4c2"
+      ]
+    },
+    {
+      "id": "none",
+      "slot": "charm",
+      "name": "ไม่ใส่",
+      "stats": {},
+      "color": [
+        "#000000",
+        "#000000"
+      ]
+    },
+    {
+      "id": "turtle",
+      "slot": "charm",
+      "name": "เครื่องรางเต่า",
+      "stats": {
+        "def": 5,
+        "atk": -5
+      },
+      "color": [
+        "#4f7942",
+        "#9be564"
+      ]
+    },
+    {
+      "id": "feather",
+      "slot": "charm",
+      "name": "เครื่องรางขนนก",
+      "stats": {
+        "move": 15,
+        "def": -5
+      },
+      "color": [
+        "#b197fc",
+        "#ffffff"
+      ]
+    }
+  ],
+  "fashion": [
+    {
+      "id": "none",
+      "slot": "hat",
+      "name": "ไม่ใส่"
+    },
+    {
+      "id": "aviator",
+      "slot": "hat",
+      "name": "หมวกนักบิน"
+    },
+    {
+      "id": "crown",
+      "slot": "hat",
+      "name": "มงกุฎกระดาษ"
+    },
+    {
+      "id": "beanie",
+      "slot": "hat",
+      "name": "หมวกไหมพรม"
+    },
+    {
+      "id": "helm",
+      "slot": "hat",
+      "name": "หมวกเหล็ก"
+    },
+    {
+      "id": "none",
+      "slot": "glasses",
+      "name": "ไม่ใส่"
+    },
+    {
+      "id": "round",
+      "slot": "glasses",
+      "name": "แว่นกลม"
+    },
+    {
+      "id": "shades",
+      "slot": "glasses",
+      "name": "แว่นดำ"
+    },
+    {
+      "id": "short",
+      "slot": "hair",
+      "name": "ผมสั้น"
+    },
+    {
+      "id": "spiky",
+      "slot": "hair",
+      "name": "ผมตั้ง"
+    },
+    {
+      "id": "ponytail",
+      "slot": "hair",
+      "name": "ผมหางม้า"
+    },
+    {
+      "id": "bob",
+      "slot": "hair",
+      "name": "ผมบ็อบ"
+    },
+    {
+      "id": "none",
+      "slot": "face",
+      "name": "ไม่มี"
+    },
+    {
+      "id": "blush",
+      "slot": "face",
+      "name": "แก้มแดง"
+    },
+    {
+      "id": "bandaid",
+      "slot": "face",
+      "name": "พลาสเตอร์"
+    },
+    {
+      "id": "mustache",
+      "slot": "face",
+      "name": "หนวดเท่"
+    },
+    {
+      "id": "tee",
+      "slot": "cloth",
+      "name": "เสื้อยืด"
+    },
+    {
+      "id": "armor",
+      "slot": "cloth",
+      "name": "เกราะไม้"
+    },
+    {
+      "id": "robe",
+      "slot": "cloth",
+      "name": "เสื้อคลุมจอมเวท"
+    },
+    {
+      "id": "ninja",
+      "slot": "cloth",
+      "name": "ชุดนินจา"
+    },
+    {
+      "id": "dress",
+      "slot": "cloth",
+      "name": "ชุดกระโปรง"
+    },
+    {
+      "id": "round",
+      "slot": "eyes",
+      "name": "ตากลม"
+    },
+    {
+      "id": "happy",
+      "slot": "eyes",
+      "name": "ตายิ้ม"
+    },
+    {
+      "id": "sharp",
+      "slot": "eyes",
+      "name": "ตาคม"
+    },
+    {
+      "id": "star",
+      "slot": "eyes",
+      "name": "ตาดาว"
+    },
+    {
+      "id": "none",
+      "slot": "set",
+      "name": "ไม่ใส่"
+    },
+    {
+      "id": "bear",
+      "slot": "set",
+      "name": "ชุดหมีน้อย"
+    },
+    {
+      "id": "none",
+      "slot": "back",
+      "name": "ไม่ใส่"
+    },
+    {
+      "id": "wings",
+      "slot": "back",
+      "name": "ปีกจิ๋ว"
+    },
+    {
+      "id": "backpack",
+      "slot": "back",
+      "name": "เป้สนาม"
+    },
+    {
+      "id": "cape",
+      "slot": "back",
+      "name": "ผ้าคลุมแดง"
+    }
+  ]
+}

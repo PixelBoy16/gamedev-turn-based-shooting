@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyConfig } from '../core/config';
 import { ClientMsg, DEFAULT_PORT, MatchView, RoomView, ServerMsg } from './protocol';
 
 // One WebSocket to the room server, shared by the lobby and battle scenes.
@@ -109,6 +110,7 @@ class NetClient extends Phaser.Events.EventEmitter {
         this.forget();
         break;
       case 'match':
+        applyConfig(msg.match.game); // the server's numbers win, so both sides simulate alike
         this.match = msg.match;
         break;
       case 'turn':

@@ -1,6 +1,7 @@
 import { TurnMods, freshMods, useItem, useSkill } from '../src/core/Actions';
 import { ShotPlanner, chooseAttackItem, chooseSupport } from '../src/core/BotAI';
-import { ITEMS_PER_MATCH, ITEM_IDS, ItemId, WEAPONS } from '../src/core/data';
+import { currentConfig } from '../src/core/config';
+import { ITEM_IDS, ItemId, LIMITS, WEAPONS } from '../src/core/data';
 import { cleanLoadout, randomLoadout } from '../src/core/gear';
 import { skillOf } from '../src/core/Actions';
 import { MAP_IDS, generateMap } from '../src/core/Maps';
@@ -122,7 +123,7 @@ function cleanProfile(p: Partial<Profile>): Profile {
   const name = String(p.name ?? '').trim().slice(0, 12) || 'ผู้เล่น';
   const loadout = cleanLoadout(p.loadout);
   const items = Array.isArray(p.items) ? [...new Set(p.items.filter((i) => ITEM_IDS.includes(i)))] : [];
-  return { name, loadout, items: items.length === ITEMS_PER_MATCH ? items : ['double', 'heal', 'armor'] };
+  return { name, loadout, items: items.length === LIMITS.itemsPerMatch ? items : ['double', 'heal', 'armor'] };
 }
 
 function token(): string {
@@ -299,6 +300,7 @@ export class ServerMatch {
     p.inMatch = true;
     const view: MatchView = {
       config: this.config,
+      game: currentConfig(),
       tanks: this.world.tanks,
       terrain: encodeMask(this.world.terrain),
       turn: this.turnInfo(),
@@ -482,7 +484,7 @@ export class ServerMatch {
 
   private botItems(): ItemId[] {
     const pool = [...ITEM_IDS];
-    return Array.from({ length: ITEMS_PER_MATCH }, () => pool.splice(Math.floor(this.rng() * pool.length), 1)[0]);
+    return Array.from({ length: LIMITS.itemsPerMatch }, () => pool.splice(Math.floor(this.rng() * pool.length), 1)[0]);
   }
 }
 

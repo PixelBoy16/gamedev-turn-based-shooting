@@ -4,7 +4,7 @@ import { Rng, createRng } from '../core/rng';
 import { TurnManager } from '../core/TurnManager';
 import { BotAction, ShotPlanner, Shot, chooseAttackItem, chooseSupport } from '../core/BotAI';
 import { TurnMods, freshMods, skillOf, useItem, useSkill } from '../core/Actions';
-import { ITEMS, ITEMS_PER_MATCH, ITEM_IDS, ItemId, SKILLS, WEAPONS, WeaponDef } from '../core/data';
+import { ITEMS, ITEM_IDS, ItemId, LIMITS, SKILLS, WEAPONS, WeaponDef } from '../core/data';
 import { randomLoadout } from '../core/gear';
 import { MAP_H, MAP_W, MapId, generateMap, spawnX } from '../core/Maps';
 import { ShotEvent, ShotRun, stepTanks } from '../core/Match';
@@ -210,7 +210,7 @@ export default class BattleScene extends Phaser.Scene {
     const botLook = () => randomLoadout(this.rng);
     const botItems = (): ItemId[] => {
       const pool = [...ITEM_IDS];
-      return Array.from({ length: ITEMS_PER_MATCH }, () => pool.splice(Math.floor(this.rng() * pool.length), 1)[0]);
+      return Array.from({ length: LIMITS.itemsPerMatch }, () => pool.splice(Math.floor(this.rng() * pool.length), 1)[0]);
     };
     const tanks: Tank[] = [createTank(0, 'คุณ', 0, false, spawnX(this.setup.map, 0, 0), terrain, loadout, items)];
     if (format === '2v2') tanks.push(createTank(tanks.length, 'เพื่อนบอท', 0, true, spawnX(this.setup.map, 0, 1), terrain, botLook(), botItems()));

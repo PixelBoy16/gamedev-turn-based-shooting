@@ -56,13 +56,13 @@ function drawLook(g: G, l: Loadout): void {
   BACK[v.back]?.(g);
   if (!bear) HAIR_BACK[v.hair]?.(g);
   if (bear) bearSuit(g);
-  else CLOTH[v.cloth](g);
+  else CLOTH[v.cloth]?.(g);
   head(g, SKIN);
-  EYES[v.eyes](g);
+  EYES[v.eyes]?.(g);
   mouth(g);
   FACE[v.face]?.(g);
   if (bear) bearHood(g);
-  else HAIR[v.hair](g);
+  else HAIR[v.hair]?.(g);
   if (!l.hide.glasses) GLASSES[v.glasses]?.(g);
   if (!bear && !l.hide.hat) HAT[v.hat]?.(g);
 }

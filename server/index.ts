@@ -1,8 +1,25 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
+import { GameConfig, applyConfig, validateConfig } from '../src/core/config';
 import { ClientMsg, DEFAULT_PORT, ServerMsg } from '../src/net/protocol';
 import { Conn, Lobby } from './rooms';
 
 // Room server: `npm run server`. One JSON message per WebSocket frame.
+
+// Game numbers are read from disk at start (GAME_CONFIG overrides the path), so a
+// deployed server picks up an edited config on restart without a rebuild. Every
+// match carries them to the clients.
+const configFile = process.env.GAME_CONFIG ?? fileURLToPath(new URL('../config/game.json', import.meta.url));
+const game: unknown = JSON.parse(readFileSync(configFile, 'utf8'));
+const report = validateConfig(game);
+for (const w of report.warnings) console.warn(`config: ${w}`);
+if (report.errors.length) {
+  for (const e of report.errors) console.error(`config: ${e}`);
+  console.error(`${configFile} has errors; not starting`);
+  process.exit(1);
+}
+applyConfig(game as GameConfig);
 
 const port = Number(process.env.PORT ?? DEFAULT_PORT);
 const lobby = new Lobby();

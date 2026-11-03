@@ -1,34 +1,10 @@
 import { Terrain } from './Terrain';
-import { DRILL_USES, ITEM_VALUES, ItemId } from './data';
+import { TUNING } from './config';
+import { ITEM_VALUES, ItemId, LIMITS } from './data';
 import { DEFAULT_LOADOUT, Loadout, tankStats } from './gear';
 
 // Core tunables. Weapon numbers live in data.ts.
-export const TUNING = {
-  dt: 1 / 60, // fixed simulation step (s)
-  gravity: 420, // px/s²
-  windAccel: 18, // px/s² per wind unit
-  maxWind: 5,
-  launchSpeedPerPower: 9.5, // power 100 → 950 px/s
-  maxProjectileSpeed: 1600,
-  subStepPx: 2, // collision check spacing for projectiles (prevents tunneling)
-
-  tankRadius: 20, // hit circle around the character's centre
-  tankCentreOffset: 22, // centre is this far above the feet
-  muzzleLength: 30,
-  walkSpeed: 70, // px/s
-  fuelPerTurn: 150, // px of walking per turn, before gear
-  maxClimb: 8, // px step-up while walking
-  safeFall: 120, // px fallen before fall damage starts
-  fallDamagePerPx: 1.5,
-
-  maxHp: 1000, // before gear
-  turnSeconds: 20,
-  chargeSeconds: 1.5,
-
-  wall: { height: 80, width: 24, gap: 30 },
-  suddenDeathTurn: 30,
-  waterRisePerTurn: 40,
-};
+export { TUNING } from './config';
 
 export interface Tank {
   id: number;
@@ -93,7 +69,7 @@ export function createTank(
     burrowed: false,
     skillCooldown: 0,
     items: [...items],
-    drillLeft: DRILL_USES,
+    drillLeft: LIMITS.drillUses,
   };
 }
 

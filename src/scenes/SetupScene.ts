@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ART_SCALE, equipTexture, gunLook, iconTexture, lookHand, lookRes, lookTexture, pieceTexture } from '../art/chibi';
-import { ITEMS, ITEMS_PER_MATCH, ITEM_IDS, MAIN_WEAPONS, SKILLS, WEAPONS } from '../core/data';
+import { ITEMS, ITEM_IDS, LIMITS, MAIN_WEAPONS, SKILLS, WEAPONS } from '../core/data';
 import {
   EQUIP_SLOTS, EQUIP_SLOT_NAME, EquipSlot, FASHION_SLOTS, FASHION_SLOT_NAME, FashionSlot, STAT_NAME, Stats,
   equipDef, equipIn, fashionDef, fashionIn, sumStats, tankStats,
@@ -57,8 +57,8 @@ export default class SetupScene extends Phaser.Scene {
   }
 
   private start(): void {
-    if (this.setup.items.length !== ITEMS_PER_MATCH) {
-      this.say(`เลือกไอเท็มให้ครบ ${ITEMS_PER_MATCH} ชิ้นก่อนนะ`);
+    if (this.setup.items.length !== LIMITS.itemsPerMatch) {
+      this.say(`เลือกไอเท็มให้ครบ ${LIMITS.itemsPerMatch} ชิ้นก่อนนะ`);
       return;
     }
     saveSetup(this.registry, this.setup);
@@ -272,8 +272,8 @@ export default class SetupScene extends Phaser.Scene {
           const s = this.setup.items;
           const at = s.indexOf(id);
           if (at >= 0) s.splice(at, 1);
-          else if (s.length < ITEMS_PER_MATCH) s.push(id);
-          else this.say(`เลือกได้ ${ITEMS_PER_MATCH} ชิ้น กดชิ้นที่เลือกแล้วเพื่อเอาออก`);
+          else if (s.length < LIMITS.itemsPerMatch) s.push(id);
+          else this.say(`เลือกได้ ${LIMITS.itemsPerMatch} ชิ้น กดชิ้นที่เลือกแล้วเพื่อเอาออก`);
           this.refresh();
         },
       });
@@ -283,7 +283,7 @@ export default class SetupScene extends Phaser.Scene {
       }).setOrigin(0.5, 0);
       this.refreshers.push(() => btn.setSelected(this.setup.items.includes(id)));
     });
-    this.refreshers.push(() => title.setText(`ไอเท็ม (เลือก ${ITEMS_PER_MATCH}) — เลือกแล้ว ${this.setup.items.length}`));
+    this.refreshers.push(() => title.setText(`ไอเท็ม (เลือก ${LIMITS.itemsPerMatch}) — เลือกแล้ว ${this.setup.items.length}`));
   }
 
   private rightColumn(): void {

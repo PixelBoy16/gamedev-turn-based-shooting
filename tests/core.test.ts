@@ -5,7 +5,7 @@ import { TUNING, World, createTank, createWorld, explode, isSettled, stepTank, t
 import { TurnManager } from '../src/core/TurnManager';
 import { ShotPlanner, chooseShot, scoreImpacts, simulateShot } from '../src/core/BotAI';
 import { VolleyEvent, fireVolley, stepVolley, volleyDone } from '../src/core/Shot';
-import { MAIN_WEAPONS, STORM_SPLIT, WEAPONS, WeaponDef } from '../src/core/data';
+import { LIMITS, MAIN_WEAPONS, WEAPONS, WeaponDef } from '../src/core/data';
 import { DEFAULT_LOADOUT, EQUIPMENT, FASHION, STAT_POINT, Stats, cleanLoadout, copyLoadout, lookId, tankStats } from '../src/core/gear';
 import { freshMods, useItem, useSkill } from '../src/core/Actions';
 import { MAP_IDS, generateMap, spawnX } from '../src/core/Maps';
@@ -288,7 +288,7 @@ describe('gear', () => {
     a.facing = 1;
     const v = fireVolley(a, WEAPONS.splitter, 70, false, mods.splitCount);
     for (let f = 0; f < 3000 && !volleyDone(v); f++) stepVolley(world, v);
-    expect(v.shells).toHaveLength(STORM_SPLIT);
+    expect(v.shells).toHaveLength(LIMITS.stormSplit);
     expect(tankStats(a.loadout).maxHp).toBe(TUNING.maxHp);
   });
 });

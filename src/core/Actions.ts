@@ -1,4 +1,4 @@
-import { ITEM_VALUES, ItemId, SKILL_COOLDOWN, STORM_SPLIT, SkillId, WEAPONS } from './data';
+import { ITEM_VALUES, ItemId, LIMITS, SkillId, WEAPONS } from './data';
 import { Tank, World, raiseWall } from './World';
 
 // Item and skill rules, shared by the human controls and the bot.
@@ -62,7 +62,7 @@ export function useSkill(world: World, t: Tank, mods: TurnMods): SkillResult | n
   if (!skill || t.skillCooldown > 0 || mods.skillUsed || !t.alive || t.airborne) return null;
   mods.skillUsed = true;
   // Ticks down at the start of each own turn, so it is ready again 3 own turns later.
-  t.skillCooldown = SKILL_COOLDOWN;
+  t.skillCooldown = LIMITS.skillCooldown;
   switch (skill) {
     case 'burrow':
       t.burrowed = true;
@@ -73,7 +73,7 @@ export function useSkill(world: World, t: Tank, mods: TurnMods): SkillResult | n
       mods.noWind = true;
       return { skill, endsTurn: false };
     case 'storm':
-      mods.splitCount = STORM_SPLIT;
+      mods.splitCount = LIMITS.stormSplit;
       return { skill, endsTurn: false };
   }
 }

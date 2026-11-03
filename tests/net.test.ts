@@ -8,6 +8,7 @@ import { createWorld } from '../src/core/World';
 import { freshMods } from '../src/core/Actions';
 import { WEAPONS } from '../src/core/data';
 import { DEFAULT_LOADOUT } from '../src/core/gear';
+import { BUNDLED, applyConfig } from '../src/core/config';
 import { ClientMsg, ServerMsg } from '../src/net/protocol';
 
 class FakeConn {
@@ -186,5 +187,18 @@ describe('friend rooms', () => {
     lobby.handle(a2, { t: 'rejoin', code, token });
     expect(a2.last('joined')!.code).toBe(code);
     expect(a2.last('match')!.match.tanks).toHaveLength(2);
+  });
+});
+
+describe('server game config', () => {
+  afterEach(() => applyConfig(BUNDLED));
+
+  it('sends its numbers with the match, and the client simulates with them', () => {
+    applyConfig({ ...structuredClone(BUNDLED), rules: { ...BUNDLED.rules, maxHp: 1234 } });
+    const { a, send } = setup();
+    send(a, { t: 'start' });
+    const view = a.last('match')!.match;
+    expect(view.game.rules.maxHp).toBe(1234);
+    expect(view.tanks[0].maxHp).toBe(1234);
   });
 });

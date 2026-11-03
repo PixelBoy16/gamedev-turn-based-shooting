@@ -1,4 +1,5 @@
 import type { Difficulty } from '../core/BotAI';
+import type { GameConfig } from '../core/config';
 import type { ItemId } from '../core/data';
 import type { Loadout } from '../core/gear';
 import type { MapId } from '../core/Maps';
@@ -49,6 +50,8 @@ export interface TurnInfo {
 
 export interface MatchView {
   config: RoomConfig;
+  /** The server's game numbers: applied before the match so both sides simulate alike. */
+  game: GameConfig;
   tanks: Tank[];
   terrain: number[]; // run-length mask, see encodeMask
   turn: TurnInfo;
