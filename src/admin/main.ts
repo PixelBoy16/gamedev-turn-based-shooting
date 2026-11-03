@@ -21,7 +21,8 @@ type Path = (string | number)[];
 const API = `${serverHttpUrl()}/admin/api`;
 const TOKEN_KEY = 'crater-clash:admin';
 const TABS = [
-  ['rules', 'กติกา'], ['weapons', 'อาวุธ'], ['items', 'สกิลและไอเท็ม'], ['equipment', 'อุปกรณ์'], ['fashion', 'แฟชั่น'], ['history', 'ประวัติ'],
+  ['rules', 'กติกา'], ['weapons', 'อาวุธ'], ['items', 'สกิลและไอเท็ม'], ['equipment', 'อุปกรณ์'], ['fashion', 'แฟชั่น'],
+  ['pass', 'รางวัลและ Battle Pass'], ['players', 'ผู้เล่น'], ['history', 'ประวัติ'],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 const STATS = ['hp', 'atk', 'def', 'move'] as const;
@@ -218,7 +219,8 @@ function renderAll(): void {
   const main = $('main');
   main.replaceChildren();
   const body = {
-    rules: renderRules, weapons: renderWeapons, items: renderItems, equipment: renderEquipment, fashion: renderFashion, history: renderHistory,
+    rules: renderRules, weapons: renderWeapons, items: renderItems, equipment: renderEquipment, fashion: renderFashion,
+    pass: renderPass, players: renderPlayers, history: renderHistory,
   }[tab]();
   main.append(body);
   changed();
@@ -298,7 +300,7 @@ function renderEquipment(): HTMLElement {
     const rows = draft.equipment.map((e, i) => ({ e, i })).filter((r) => r.e.slot === slot);
     return section(EQUIP_SLOT_LABEL[slot],
       h('div', { class: 'table' },
-        h('div', { class: 'row head eq' }, h('span', {}, 'id'), h('span', {}, 'ชื่อ'), ...STATS.map((k) => h('span', {}, STAT_LABEL[k])), h('span', {}, 'สี'), h('span', {}, 'สมดุล'), h('span', {})),
+        h('div', { class: 'row head eq' }, h('span', {}, 'id'), h('span', {}, 'ชื่อ'), ...STATS.map((k) => h('span', {}, STAT_LABEL[k])), h('span', {}, 'สี'), h('span', {}, 'สมดุล'), h('span', {}, 'ราคา'), h('span', {})),
         ...rows.map(({ e, i }) => {
           const none = e.id === 'none';
           const balance = h('span', { class: 'balance' });
@@ -319,6 +321,7 @@ function renderEquipment(): HTMLElement {
             ...STATS.map((k) => cell(numField(['equipment', i, 'stats', k], STAT_LABEL[k], { optional: true, disabled: none }))),
             none ? h('span', {}) : h('span', { class: 'colors' }, colorInput(i, 0), colorInput(i, 1)),
             balance,
+            none ? h('span', {}) : saleField('equipment', i),
             removeButton(() => {
               draft.equipment.splice(i, 1);
               renderAll();
@@ -332,6 +335,39 @@ function renderEquipment(): HTMLElement {
       }, `+ เพิ่ม${EQUIP_SLOT_LABEL[slot]}`));
   });
   return h('div', {}, top, ...slots);
+}
+
+/** How a piece is sold: free, coins, gems (fashion only) or Battle Pass only (fashion only), plus the amount. */
+function saleField(list: 'fashion' | 'equipment', i: number): HTMLElement {
+  const row = draft[list][i] as { price?: { coins?: number; gems?: number }; exclusive?: boolean };
+  const mode = row.exclusive ? 'pass' : row.price?.gems ? 'gems' : row.price?.coins ? 'coins' : 'free';
+  const modes: [string, string][] = list === 'fashion'
+    ? [['free', 'ฟรี'], ['coins', 'เหรียญ'], ['gems', 'เพชร'], ['pass', 'Battle Pass']]
+    : [['free', 'ฟรี'], ['coins', 'เหรียญ']];
+  const sel = h('select', {}, ...modes.map(([v, t]) => h('option', { value: v, selected: v === mode }, t)));
+  const amount = h('input', { type: 'number', min: 1, step: 1, inputMode: 'numeric', value: String(row.price?.gems ?? row.price?.coins ?? ''), disabled: mode === 'free' || mode === 'pass' });
+  const apply = () => {
+    const n = amount.value.trim() === '' ? NaN : Number(amount.value);
+    delete row.price;
+    delete row.exclusive;
+    if (sel.value === 'coins') row.price = { coins: n };
+    else if (sel.value === 'gems') row.price = { gems: n };
+    else if (sel.value === 'pass') row.exclusive = true;
+    amount.disabled = sel.value === 'free' || sel.value === 'pass';
+    const before = get(live.config, livePath([list, i]));
+    const differs = (k: string) => JSON.stringify((before as Record<string, unknown> | undefined)?.[k]) !== JSON.stringify((row as Record<string, unknown>)[k]);
+    wrap.classList.toggle('changed', differs('price') || differs('exclusive'));
+    changed();
+  };
+  sel.addEventListener('change', () => {
+    if ((sel.value === 'coins' || sel.value === 'gems') && !amount.value) amount.value = sel.value === 'gems' ? '30' : '300';
+    apply();
+  });
+  amount.addEventListener('input', apply);
+  const wrap = h('span', { class: 'sale' }, sel, amount);
+  const before = get(live.config, livePath([list, i])) as Record<string, unknown> | undefined;
+  wrap.classList.toggle('changed', JSON.stringify(before?.price) !== JSON.stringify(row.price) || before?.exclusive !== row.exclusive);
+  return wrap;
 }
 
 function colorInput(i: number, which: 0 | 1): HTMLElement {
@@ -353,12 +389,13 @@ function renderFashion(): HTMLElement {
       const rows = draft.fashion.map((f, i) => ({ f, i })).filter((r) => r.f.slot === slot);
       return section(FASHION_SLOT_LABEL[slot],
         h('div', { class: 'table' },
-          h('div', { class: 'row head fa' }, h('span', {}, 'id'), h('span', {}, 'ชื่อ'), h('span', {})),
+          h('div', { class: 'row head fa' }, h('span', {}, 'id'), h('span', {}, 'ชื่อ'), h('span', {}, 'ราคา'), h('span', {})),
           ...rows.map(({ f, i }) => {
             const locked = f.id === 'none' || DEFAULT_PIECES.includes(`${slot}/${f.id}`);
             return h('div', { class: 'row fa' },
               textField(['fashion', i, 'id'], 'id', { disabled: locked }),
               textField(['fashion', i, 'name'], 'ชื่อ'),
+              locked ? h('span', { class: 'muted' }, 'ฟรี (ชิ้นเริ่มต้น)') : saleField('fashion', i),
               removeButton(() => {
                 draft.fashion.splice(i, 1);
                 renderAll();
@@ -372,6 +409,140 @@ function renderFashion(): HTMLElement {
         }, `+ เพิ่ม${FASHION_SLOT_LABEL[slot]}`),
         OPTIONAL_SLOTS.includes(slot) ? null : h('small', { class: 'hint' }, 'ช่องนี้ต้องใส่เสมอ ไม่มี "ไม่ใส่"'));
     }));
+}
+
+/** Every piece a reward or a grant can name: "fashion:<slot>/<id>" / "equip:<slot>/<id>", without the empty choices. */
+function itemKeys(): { key: string; name: string }[] {
+  return [
+    ...draft.fashion.filter((f) => f.id !== 'none').map((f) => ({ key: `fashion:${f.slot}/${f.id}`, name: `${FASHION_SLOT_LABEL[f.slot]}: ${f.name}` })),
+    ...draft.equipment.filter((e) => e.id !== 'none').map((e) => ({ key: `equip:${e.slot}/${e.id}`, name: `${EQUIP_SLOT_LABEL[e.slot]}: ${e.name}` })),
+  ];
+}
+
+/** One Battle Pass reward cell: nothing, coins, gems or a piece. */
+function rewardField(tier: number, track: 'free' | 'premium'): HTMLElement {
+  const path: Path = ['season', 'tiers', tier, track];
+  const r = get(draft, path) as Record<string, unknown> | undefined;
+  const kind = !r ? 'none' : 'coins' in r ? 'coins' : 'gems' in r ? 'gems' : 'item';
+  const sel = h('select', {}, ...[['none', 'ไม่มี'], ['coins', 'เหรียญ'], ['gems', 'เพชร'], ['item', 'ไอเทม']].map(([v, t]) => h('option', { value: v, selected: v === kind }, t)));
+  const amount = h('input', { type: 'number', min: 1, step: 1, inputMode: 'numeric', value: kind === 'coins' || kind === 'gems' ? String(r![kind]) : '' });
+  const item = h('select', {}, ...itemKeys().map((k) => h('option', { value: k.key, selected: kind === 'item' && r!.item === k.key }, k.name)));
+  const wrap = h('span', { class: 'sale' }, sel, amount, item);
+  const apply = () => {
+    amount.hidden = sel.value !== 'coins' && sel.value !== 'gems';
+    item.hidden = sel.value !== 'item';
+    const n = amount.value.trim() === '' ? NaN : Number(amount.value);
+    set(draft, path, sel.value === 'none' ? undefined : sel.value === 'item' ? { item: item.value } : { [sel.value]: n });
+    mark(wrap, path);
+    changed();
+  };
+  sel.addEventListener('change', () => {
+    if ((sel.value === 'coins' || sel.value === 'gems') && !amount.value) amount.value = sel.value === 'gems' ? '10' : '100';
+    apply();
+  });
+  amount.addEventListener('input', apply);
+  item.addEventListener('change', apply);
+  amount.hidden = kind !== 'coins' && kind !== 'gems';
+  item.hidden = kind !== 'item';
+  mark(wrap, path);
+  return wrap;
+}
+
+function renderPass(): HTMLElement {
+  const s = draft.season;
+  const ends = h('input', { type: 'datetime-local', value: toLocalInput(s.endsAt) });
+  ends.addEventListener('input', () => {
+    set(draft, ['season', 'endsAt'], ends.value ? new Date(ends.value).toISOString() : '');
+    mark(ends, ['season', 'endsAt']);
+    changed();
+  });
+  mark(ends, ['season', 'endsAt']);
+  return h('div', {},
+    section('รางวัลต่อเกม', h('p', { class: 'note' }, 'ได้เฉพาะเกมที่มีผู้เล่นจริง 2 บัญชีขึ้นไป (ห้องเพื่อนหรือจัดอันดับ) เล่นกับบอทอย่างเดียวไม่ได้'),
+      h('div', { class: 'grid' }, ...Object.keys(draft.economy).map((k) => {
+        const l = FIELDS[`economy.${k}`];
+        return numField(['economy', k], l.label, { unit: l.unit, hint: l.hint });
+      }))),
+    section('ซีซัน',
+      h('p', { class: 'note' }, 'เปลี่ยน id = เริ่มซีซันใหม่ ทุกคนกลับไปขั้น 0 (ของที่ได้ไปแล้วยังอยู่)'),
+      h('div', { class: 'grid' },
+        textField(['season', 'id'], 'id ซีซัน'),
+        textField(['season', 'name'], 'ชื่อซีซัน'),
+        h('label', { class: 'field' }, h('span', { class: 'name' }, 'จบซีซัน'), ends),
+        numField(['season', 'xpPerTier'], FIELDS['season.xpPerTier'].label),
+        numField(['season', 'premiumGems'], FIELDS['season.premiumGems'].label, { unit: FIELDS['season.premiumGems'].unit }))),
+    section(`ขั้นของรางวัล (${s.tiers.length} ขั้น)`,
+      h('div', { class: 'table' },
+        h('div', { class: 'row head tier' }, h('span', {}, 'ขั้น'), h('span', {}, 'สายฟรี'), h('span', {}, 'สายพรีเมียม')),
+        ...s.tiers.map((_, i) => h('div', { class: 'row tier' }, h('strong', {}, String(i + 1)), rewardField(i, 'free'), rewardField(i, 'premium')))),
+      h('div', { class: 'bar-inline' },
+        h('button', { class: 'add', onclick: () => { s.tiers.push({ free: { coins: 100 } }); renderAll(); } }, '+ เพิ่มขั้น'),
+        h('button', { class: 'add', disabled: s.tiers.length <= 1, onclick: () => { s.tiers.pop(); renderAll(); } }, '− ลบขั้นสุดท้าย'))));
+}
+
+/** ISO time → the value a datetime-local input wants (the admin's local time). */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+interface PlayerInfo {
+  username: string;
+  displayName: string;
+  coins: number;
+  gems: number;
+  rating: number;
+  played: number;
+  owned: string[];
+  pass: { xp: number; premium: boolean };
+}
+
+function renderPlayers(): HTMLElement {
+  const user = h('input', { type: 'text', placeholder: 'ชื่อผู้ใช้', autocapitalize: 'off' });
+  const out = h('div', {});
+  const show = (p: PlayerInfo) => {
+    const coins = h('input', { type: 'number', min: 0, step: 1, value: '0' });
+    const gems = h('input', { type: 'number', min: 0, step: 1, value: '0' });
+    const item = h('select', {}, h('option', { value: '' }, '— ไม่ให้ไอเทม —'), ...itemKeys().map((k) => h('option', { value: k.key }, k.name)));
+    const reason = h('input', { type: 'text', placeholder: 'เหตุผล เช่น ชดเชยเซิร์ฟล่ม 3 พ.ย.', maxLength: 200 });
+    out.replaceChildren(
+      section(`${p.displayName} (@${p.username})`,
+        h('p', {}, `🪙 ${p.coins.toLocaleString()} · 💎 ${p.gems.toLocaleString()} · คะแนน ${p.rating} · เล่น ${p.played} เกม · Battle Pass ${p.pass.xp} XP${p.pass.premium ? ' (พรีเมียม)' : ''} · มีของ ${p.owned.length} ชิ้น`)),
+      section('ให้ของ (มีผลทันที ไม่ต้องกดเผยแพร่)',
+        h('div', { class: 'grid' },
+          h('label', { class: 'field' }, h('span', { class: 'name' }, 'เหรียญ'), coins),
+          h('label', { class: 'field' }, h('span', { class: 'name' }, 'เพชร'), gems),
+          h('label', { class: 'field' }, h('span', { class: 'name' }, 'ไอเทม'), item),
+          h('label', { class: 'field wide' }, h('span', { class: 'name' }, 'เหตุผล (บันทึกไว้ในประวัติการเงิน)'), reason)),
+        h('button', {
+          class: 'primary', onclick: async () => {
+            const body = { username: p.username, coins: Number(coins.value) || 0, gems: Number(gems.value) || 0, item: item.value || undefined, reason: reason.value };
+            if (!window.confirm(`ให้ ${p.displayName}: ${body.coins} เหรียญ, ${body.gems} เพชร${body.item ? `, ${item.selectedOptions[0].text}` : ''}?`)) return;
+            try {
+              show(await api<PlayerInfo>('/grant', body));
+              toast('ให้ของแล้ว');
+            } catch (err) {
+              toast((err as Error).message, 'bad');
+            }
+          },
+        }, 'ให้')));
+  };
+  const find = async () => {
+    try {
+      show(await api<PlayerInfo>(`/player?username=${encodeURIComponent(user.value.trim())}`));
+    } catch (err) {
+      out.replaceChildren(h('p', { class: 'error' }, (err as Error).message));
+    }
+  };
+  user.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') void find();
+  });
+  return h('div', {},
+    section('ค้นหาผู้เล่น', h('p', { class: 'note' }, 'ค้นได้เฉพาะบัญชีที่ตั้งชื่อผู้ใช้แล้ว'),
+      h('div', { class: 'bar-inline' }, user, h('button', { onclick: find }, 'ค้นหา'))),
+    out);
 }
 
 function renderHistory(): HTMLElement {
@@ -403,6 +574,7 @@ const dirty = () => !!live && JSON.stringify(live.config) !== JSON.stringify(dra
 function labelOf(path: Path): string {
   const key = path.join('.');
   if (FIELDS[key]) return FIELDS[key].label;
+  if (path[0] === 'season' && path[1] === 'tiers') return `Battle Pass ขั้น ${Number(path[2]) + 1} ${path[3] === 'premium' ? 'พรีเมียม' : 'ฟรี'}`;
   if (path[0] === 'weapons') {
     const w = live.config.weapons[path[1] as keyof GameConfig['weapons']];
     const f = WEAPON_FIELDS.find((x) => x.key === path[2]) ?? Object.values(WEAPON_EXTRA).flat().find((x) => x.key === path.slice(2).join('.'));
@@ -418,6 +590,10 @@ function changes(): string[] {
   const out: string[] = [];
   const walk = (a: unknown, b: unknown, path: Path) => {
     if (JSON.stringify(a) === JSON.stringify(b)) return;
+    if (Array.isArray(a) && Array.isArray(b)) {
+      for (let i = 0; i < Math.max(a.length, b.length); i++) walk(a[i], b[i], [...path, i]);
+      return;
+    }
     if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
       for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
         walk((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], [...path, k]);

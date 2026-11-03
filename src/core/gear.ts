@@ -20,10 +20,19 @@ export const FASHION_SLOT_NAME: Record<FashionSlot, string> = {
   hat: 'หมวก', glasses: 'แว่น', hair: 'ทรงผม', face: 'ใบหน้า', cloth: 'ชุด', eyes: 'ตา', set: 'ชุดเซ็ต', back: 'ติดหลัง',
 };
 
+/** What a piece costs in the shop; no price (and not exclusive) = free for everyone. */
+export interface Price {
+  coins?: number;
+  gems?: number;
+}
+
 export interface FashionDef {
   id: string;
   slot: FashionSlot;
   name: string;
+  price?: Price;
+  /** Not sold: only from the Battle Pass or an admin. */
+  exclusive?: boolean;
 }
 
 /** "none" is the empty choice; slots without it always show something. The list is in config/game.json. */
@@ -63,6 +72,8 @@ export interface EquipDef {
   stats: Partial<Stats>;
   /** Icon colours: metal and gem. */
   color: [number, number];
+  /** Coins only: stats are never sold for premium currency. */
+  price?: Price;
 }
 
 export { EQUIPMENT } from './config';

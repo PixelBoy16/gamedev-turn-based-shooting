@@ -24,6 +24,8 @@ export class ConfigStore {
       'select * from config_versions order by version');
     const versions: Stored[] = [];
     for (const r of rows) {
+      // a section added to the game after this version was published comes from the seed
+      r.config = { ...seed, ...r.config };
       if (validateConfig(r.config).errors.length) {
         console.error(`config store: v${r.version} no longer passes the checks, skipped`);
         continue;

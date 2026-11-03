@@ -41,6 +41,15 @@ export const FIELDS: Record<string, FieldLabel> = {
   'itemValues.powerScale': { label: 'พลัง: คูณดาเมจ', hint: '1.3 = แรงขึ้น 30%' },
   'itemValues.heal': { label: 'ฟื้น HP', unit: 'HP' },
   'itemValues.armorScale': { label: 'เกราะ: ดาเมจที่ยังโดน', hint: '0.5 = โดนครึ่งเดียว' },
+  'economy.startCoins': { label: 'เหรียญตอนสร้างบัญชี' },
+  'economy.startGems': { label: 'เพชรตอนสร้างบัญชี' },
+  'economy.winCoins': { label: 'ชนะได้เหรียญ' },
+  'economy.lossCoins': { label: 'แพ้ได้เหรียญ' },
+  'economy.winXp': { label: 'ชนะได้ XP' },
+  'economy.lossXp': { label: 'แพ้ได้ XP' },
+  'economy.minTurns': { label: 'เกมต้องยาวอย่างน้อย', unit: 'เทิร์น', hint: 'สั้นกว่านี้ (เช่นออกทันที) ไม่ได้รางวัล' },
+  'season.xpPerTier': { label: 'XP ต่อขั้น' },
+  'season.premiumGems': { label: 'ราคาพรีเมียม', unit: 'เพชร' },
 };
 
 export const WEAPON_FIELDS: { key: string; label: string; unit?: string; hint?: string }[] = [

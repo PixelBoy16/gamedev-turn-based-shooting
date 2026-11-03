@@ -7,7 +7,9 @@ import {
 } from '../core/gear';
 import { MAPS, MAP_IDS } from '../core/Maps';
 import { Difficulty } from '../core/BotAI';
-import { Button, FONT, INK, label } from '../ui/widgets';
+import { Button, FONT, INK, confirmBox, label, walletText } from '../ui/widgets';
+import { account } from '../net/account';
+import { ItemKind, enforceOwned, itemKey, owns, priceOf, priceText } from '../core/shop';
 import { menuBackdrop } from './backdrop';
 import { DIFF_LABEL, FORMAT_LABEL, Format, MatchSetup, loadSetup, saveSetup } from './setup';
 
@@ -37,6 +39,8 @@ export default class SetupScene extends Phaser.Scene {
     const mode = this.registry.get('setupMode');
     this.returnTo = mode === 'online' ? 'lobby' : mode === 'ranked' ? 'ranked' : null;
     this.online = this.returnTo !== null;
+    // a saved outfit may hold pieces this account doesn't own (bought on another account, or offline)
+    if (account.view) this.setup.loadout = enforceOwned(this.setup.loadout, account.owned());
   }
 
   create(): void {
@@ -45,6 +49,11 @@ export default class SetupScene extends Phaser.Scene {
     shade.fillStyle(0x10162a, 0.55);
     shade.fillRect(0, 0, 1920, 1080);
     label(this, 60, 24, 'ตู้เสื้อผ้า', 56, '#ffd166');
+    const wallet = label(this, 1860, 36, '', 30).setOrigin(1, 0);
+    const showWallet = () => wallet.setText(account.view ? walletText(account.view.coins, account.view.gems) : '');
+    showWallet();
+    const stop = account.onChange(showWallet);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, stop);
 
     this.wardrobe();
     this.itemPicker();
@@ -200,7 +209,9 @@ export default class SetupScene extends Phaser.Scene {
       key: pieceTexture(this, slot, f.id),
       title: f.name,
       body: '',
+      lock: this.lockText('fashion', slot, f.id, f.exclusive),
       pick: () => { l.look[slot] = f.id; },
+      buy: () => this.offer('fashion', slot, f.id, f.name, () => { l.look[slot] = f.id; }),
     })));
   }
 
@@ -211,8 +222,31 @@ export default class SetupScene extends Phaser.Scene {
       key: equipTexture(this, slot, e.id),
       title: e.name,
       body: (Object.keys(e.stats) as (keyof Stats)[]).map((k) => `${STAT_NAME[k]} ${fmt(k, e.stats[k]!)}`).join('\n'),
+      lock: this.lockText('equip', slot, e.id, false),
       pick: () => { l.equip[slot] = e.id; },
+      buy: () => this.offer('equip', slot, e.id, e.name, () => { l.equip[slot] = e.id; }),
     })));
+  }
+
+  /** What a piece's card says when it isn't owned yet; undefined when it is. */
+  private lockText(kind: ItemKind, slot: string, id: string, exclusive?: boolean): string | undefined {
+    if (owns(account.owned(), kind, slot, id)) return undefined;
+    const price = priceOf(kind, slot, id);
+    return exclusive || !price ? '🔒 Battle Pass' : `🔒 ${priceText(price)}`;
+  }
+
+  /** Ask to buy a piece that isn't owned; wear it once bought. */
+  private offer(kind: ItemKind, slot: string, id: string, name: string, wear: () => void): void {
+    const price = priceOf(kind, slot, id);
+    if (!price) return this.say('ชิ้นนี้ได้จาก Battle Pass เท่านั้น');
+    if (!account.view) return this.say('ต้องต่อเซิร์ฟเวอร์ก่อนถึงจะซื้อได้');
+    confirmBox(this, `ซื้อ ${name}\n${priceText(price)}`, 'ซื้อ', () => {
+      account.buy(itemKey(kind, slot, id)).then(() => {
+        wear();
+        this.refresh();
+        this.say(`ได้ ${name} แล้ว`);
+      }).catch((err: Error) => this.say(err.message));
+    });
   }
 
   private pickWeapon(): void {
@@ -229,7 +263,11 @@ export default class SetupScene extends Phaser.Scene {
     }));
   }
 
-  private openPicker(title: string, opts: { on: boolean; key: string | null; title: string; body: string; pick: () => void }[]): void {
+  private openPicker(title: string, opts: {
+    on: boolean; key: string | null; title: string; body: string; pick: () => void;
+    /** Not owned: shown on the card, and tapping offers to buy instead of wearing. */
+    lock?: string; buy?: () => void;
+  }[]): void {
     this.closePicker();
     const add = <T extends Phaser.GameObjects.GameObject>(o: T) => (this.picker.push(o), o);
     // the dim layer swallows clicks so nothing behind the window reacts; tapping it closes
@@ -245,8 +283,16 @@ export default class SetupScene extends Phaser.Scene {
     opts.forEach((o, i) => {
       const x = 960 - ((opts.length - 1) * 220) / 2 + i * 220;
       const card = add(new Button(this, x, 560, 200, 300, '', {
-        radius: 18, onClick: () => { o.pick(); this.closePicker(); this.refresh(); },
+        radius: 18, onClick: () => {
+          this.closePicker();
+          if (o.lock) o.buy?.();
+          else {
+            o.pick();
+            this.refresh();
+          }
+        },
       }).setDepth(52));
+      if (o.lock) card.setAlpha(0.85);
       card.setSelected(o.on);
       if (o.key) {
         const img = this.add.image(0, -60, o.key);
@@ -254,6 +300,7 @@ export default class SetupScene extends Phaser.Scene {
         card.add(img);
       } else card.add(label(this, 0, -60, '—', 60, '#5d6a8f').setOrigin(0.5));
       card.add(label(this, 0, 30, o.title, 24, o.on ? '#ffd166' : '#ffffff').setOrigin(0.5, 0));
+      if (o.lock) card.add(label(this, 0, 118, o.lock, 22, '#ffd166').setOrigin(0.5, 1));
       card.add(this.add.text(0, 66, o.body, {
         fontFamily: FONT, fontSize: '18px', color: '#cfd8ff', align: 'center', wordWrap: { width: 180 }, lineSpacing: 4,
       }).setOrigin(0.5, 0));

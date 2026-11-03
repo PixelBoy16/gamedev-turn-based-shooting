@@ -4,6 +4,7 @@ import { ItemId } from '../core/data';
 import { DEFAULT_LOADOUT, Loadout, cleanLoadout, copyLoadout } from '../core/gear';
 import { MapId } from '../core/Maps';
 import { account } from '../net/account';
+import { enforceOwned } from '../core/shop';
 
 export type Format = '1v1' | '1v2' | '2v2';
 
@@ -57,8 +58,13 @@ export function syncSetup(registry: Phaser.Data.DataManager): void {
   if (!a) return;
   const setup = loadSetup(registry);
   if (a.loadout && a.items) {
-    const next = { ...setup, loadout: cleanLoadout(a.loadout), items: [...a.items] };
+    const next = { ...setup, loadout: enforceOwned(cleanLoadout(a.loadout), account.owned()), items: [...a.items] };
     registry.set('setup', next);
     store(next);
-  } else account.save({ loadout: setup.loadout, items: setup.items }).catch(() => undefined);
+  } else {
+    const next = { ...setup, loadout: enforceOwned(setup.loadout, account.owned()) };
+    registry.set('setup', next);
+    store(next);
+    account.save({ loadout: next.loadout, items: next.items }).catch(() => undefined);
+  }
 }

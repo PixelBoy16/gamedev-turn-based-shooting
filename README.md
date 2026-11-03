@@ -63,6 +63,18 @@ Data lives in PostgreSQL when `DATABASE_URL` is set (any host: Neon and Supabase
 
 Server pieces: `server/db.ts` (connection + migrations), `server/accounts.ts` (guests, usernames with scrypt-hashed passwords, sessions stored as hashes, Elo), `server/api.ts` (HTTP `/api/...`), and the `auth` / `queue` messages in `server/rooms.ts`. Client: `src/net/account.ts`, `AccountScene`, `RankedScene`.
 
+## Shop and Battle Pass
+
+Nothing sold changes who wins: fashion is looks only, and equipment (stats) is sold for coins only, never gems, and is switched off in ranked anyway.
+
+- Currencies: **coins** (🪙) are earned by playing; **gems** (💎) are premium. New accounts start with `economy.startCoins` / `startGems`. Gems also come from the Battle Pass and from admins; buying gems with real money is not built yet (it needs a payment provider).
+- Prices live in `config/game.json` on each fashion and equipment entry: `"price": { "coins": 300 }` or `{ "gems": 60 }`; no price = free for everyone; `"exclusive": true` = never sold (Battle Pass or admin only). Starting pieces must stay free.
+- Shop (menu → ร้านค้า): every non-free piece by slot; tap to try it on the chibi, buy, wear. The wardrobe shows 🔒 and the price on pieces not owned, and offers to buy them.
+- Battle Pass (menu → Battle Pass): `season` in the config: id, name, end date, XP per tier, premium price in gems, and per tier a free and a premium reward (`{ "coins": n }`, `{ "gems": n }` or `{ "item": "fashion:back/wings" }`). Tap a reached reward to claim it. A new season id starts everyone from zero.
+- Pay per match (`economy`): coins and XP for a win or a loss, only for matches between two or more accounts that lasted `minTurns` turns, so playing alone against bots can't be farmed.
+- The server checks every outfit against what the account owns, every purchase and claim is one conditional update (no double spending or double claims), and every coin and gem in or out is written to the `ledger` table.
+- Admin page: price columns on the equipment and fashion tabs, a "รางวัลและ Battle Pass" tab for the economy and the season, and a "ผู้เล่น" tab to look a player up by username and grant coins, gems or a piece (with a reason, logged).
+
 ## Admin page (for game masters)
 
 `/admin.html` on the game's site edits the server's config without touching files.

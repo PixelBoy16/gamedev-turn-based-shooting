@@ -13,6 +13,8 @@ class AccountClient {
   view: AccountView | null = null;
   /** Rating change from the last ranked match, until the next one. */
   lastChange: number | null = null;
+  /** Coins and XP the last match paid, until the next one. */
+  lastReward: { coins: number; xp: number } | null = null;
   private listeners = new Set<() => void>();
   private loading: Promise<AccountView | null> | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -123,14 +125,36 @@ class AccountClient {
     });
   }
 
+  /** Buy a shop piece ("fashion:hat/crown"). */
+  async buy(item: string): Promise<void> {
+    this.view = await this.call<AccountView>('/buy', { item });
+    this.changed();
+  }
+
+  async buyPass(): Promise<void> {
+    this.view = await this.call<AccountView>('/pass/buy', {});
+    this.changed();
+  }
+
+  async claim(tier: number, track: 'free' | 'premium'): Promise<void> {
+    this.view = await this.call<AccountView>('/pass/claim', { tier, track });
+    this.changed();
+  }
+
+  /** What this account has bought or won (free pieces aren't listed). */
+  owned(): Set<string> {
+    return new Set(this.view?.owned ?? []);
+  }
+
   leaderboard(): Promise<LeaderRow[]> {
     return this.call<LeaderRow[]>('/leaderboard');
   }
 
   /** New numbers pushed by the room server after a match. */
-  update(view: AccountView, ratingChange?: number): void {
+  update(view: AccountView, ratingChange?: number, reward?: { coins: number; xp: number }): void {
     this.view = view;
     if (ratingChange !== undefined) this.lastChange = ratingChange;
+    if (reward) this.lastReward = reward;
     this.changed();
   }
 }

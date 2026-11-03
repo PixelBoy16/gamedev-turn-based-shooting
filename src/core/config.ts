@@ -39,6 +39,29 @@ export interface ItemValues {
   armorScale: number;
 }
 
+/** Coins and Battle Pass XP for playing; only matches with two or more players' accounts pay out. */
+export interface Economy {
+  startCoins: number; // a new account's purse
+  startGems: number;
+  winCoins: number;
+  lossCoins: number;
+  winXp: number;
+  lossXp: number;
+  minTurns: number; // shorter matches (an instant forfeit) pay nothing
+}
+
+/** One Battle Pass reward: currency, or a fashion/equipment piece as "fashion:<slot>/<id>" / "equip:<slot>/<id>". */
+export type Reward = { coins: number } | { gems: number } | { item: string };
+
+export interface Season {
+  id: string; // a new id starts everyone's pass from zero
+  name: string;
+  endsAt: string; // ISO date; after this no XP is earned and nothing can be claimed
+  xpPerTier: number;
+  premiumGems: number; // price of the premium track
+  tiers: { free?: Reward; premium?: Reward }[];
+}
+
 export interface GameConfig {
   rules: Rules;
   limits: Limits;
@@ -50,6 +73,8 @@ export interface GameConfig {
   /** Icon colours as "#rrggbb": metal and gem. */
   equipment: (Omit<EquipDef, 'color'> & { color: [string, string] })[];
   fashion: FashionDef[];
+  economy: Economy;
+  season: Season;
 }
 
 // Ids the code has behaviour for: their numbers and names are config, the set is not.
@@ -89,6 +114,7 @@ export const STAT_POINT: Stats = { ...BUNDLED.statPoint };
 export const EQUIPMENT: EquipDef[] = [];
 export const FASHION: FashionDef[] = [];
 
+
 let current: GameConfig = BUNDLED;
 
 /** The config in effect (what the server sends to clients). */
@@ -113,9 +139,9 @@ export function applyConfig(cfg: GameConfig): void {
   for (const id of SKILL_IDS) SKILLS[id] = { ...c.skills[id] };
   for (const id of ITEM_IDS) ITEMS[id] = { ...c.items[id] };
   EQUIPMENT.splice(0, EQUIPMENT.length, ...c.equipment.map((e) => ({
-    ...e, stats: { ...e.stats }, color: [color(e.color[0]), color(e.color[1])] as [number, number],
+    ...structuredClone(e), color: [color(e.color[0]), color(e.color[1])] as [number, number],
   })));
-  FASHION.splice(0, FASHION.length, ...c.fashion.map((f) => ({ ...f })));
+  FASHION.splice(0, FASHION.length, ...c.fashion.map((f) => structuredClone(f)));
 }
 
 applyConfig(BUNDLED);
@@ -162,7 +188,17 @@ export function validateConfig(raw: unknown): ConfigReport {
 
   const root = obj('config', raw);
   if (!root) return { errors, warnings };
-  keys('config', root, ['rules', 'limits', 'weapons', 'skills', 'items', 'itemValues', 'statPoint', 'equipment', 'fashion']);
+  keys('config', root, ['rules', 'limits', 'weapons', 'skills', 'items', 'itemValues', 'statPoint', 'equipment', 'fashion', 'economy', 'season']);
+  /** A price in one currency: whole coins or gems; `coinsOnly` for equipment. */
+  const price = (path: string, v: unknown, coinsOnly: boolean) => {
+    if (v === undefined) return;
+    const pr = obj(path, v);
+    if (!pr) return;
+    const ks = Object.keys(pr);
+    if (ks.length !== 1 || (ks[0] !== 'coins' && ks[0] !== 'gems')) return errors.push(`${path}: ต้องเป็น { "coins": n } หรือ { "gems": n } อย่างใดอย่างหนึ่ง`);
+    int(`${path}.${ks[0]}`, pr[ks[0]], 1, 1_000_000);
+    if (coinsOnly && ks[0] === 'gems') errors.push(`${path}: อุปกรณ์ขายด้วยเหรียญเท่านั้น (ไม่ขายพลังด้วยเงินจริง)`);
+  };
 
   const r = obj('rules', root.rules);
   if (r) {
@@ -278,6 +314,7 @@ export function validateConfig(raw: unknown): ConfigReport {
       if (seen.has(key)) errors.push(`${p}: id ซ้ำในช่องเดียวกัน`);
       seen.add(key);
       text(`${p}.name`, e.name, 30);
+      if (e.id === 'none' && e.price) errors.push(`${p}: "ไม่ใส่" ต้องฟรี`);
       const st = obj(`${p}.stats`, e.stats);
       if (st) {
         for (const k of Object.keys(st)) {
@@ -290,6 +327,7 @@ export function validateConfig(raw: unknown): ConfigReport {
           if (Math.abs(points) > 1e-6) warnings.push(`${p}: ได้กับเสียไม่เท่ากัน (${points > 0 ? '+' : ''}${Math.round(points * 100) / 100} แต้ม)`);
         }
       }
+      price(`${p}.price`, e.price, true);
       if (!Array.isArray(e.color) || e.color.length !== 2 || !e.color.every((c) => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c))) {
         errors.push(`${p}.color: ต้องเป็น ["#rrggbb", "#rrggbb"]`);
       }
@@ -310,11 +348,58 @@ export function validateConfig(raw: unknown): ConfigReport {
       if (seen.has(key)) errors.push(`${p}: id ซ้ำในช่องเดียวกัน`);
       seen.add(key);
       text(`${p}.name`, f.name, 30);
+      price(`${p}.price`, f.price, false);
+      if (f.exclusive !== undefined && typeof f.exclusive !== 'boolean') errors.push(`${p}.exclusive: ต้องเป็น true หรือ false`);
+      if (f.exclusive && f.price) errors.push(`${p}: ของเฉพาะ (exclusive) ไม่มีราคาขาย`);
+      const isDefault = f.id === 'none' || DEFAULT_PIECES[f.slot as FashionSlot] === f.id;
+      if (isDefault && (f.price || f.exclusive)) errors.push(`${p}: ชิ้นเริ่มต้นต้องฟรี`);
     });
     for (const s of OPTIONAL_SLOTS) if (!seen.has(`${s}/none`)) errors.push(`fashion: ช่อง ${s} ต้องมี id "none" (ไม่ใส่)`);
     for (const [s, id] of Object.entries(DEFAULT_PIECES)) if (!seen.has(`${s}/${id}`)) errors.push(`fashion: ต้องมี ${s} "${id}" (ชุดเริ่มต้น)`);
     for (const s of FASHION_SLOT_IDS) {
       if (!OPTIONAL_SLOTS.includes(s) && seen.has(`${s}/none`)) errors.push(`fashion: ช่อง ${s} ต้องใส่เสมอ ห้ามมี "none"`);
+    }
+  }
+
+  const ec = obj('economy', root.economy);
+  if (ec) {
+    keys('economy', ec, ['startCoins', 'startGems', 'winCoins', 'lossCoins', 'winXp', 'lossXp', 'minTurns']);
+    for (const k of ['startCoins', 'startGems', 'winCoins', 'lossCoins', 'winXp', 'lossXp']) int(`economy.${k}`, ec[k], 0, 100_000);
+    int('economy.minTurns', ec.minTurns, 0, 100);
+  }
+
+  const se = obj('season', root.season);
+  if (se) {
+    keys('season', se, ['id', 'name', 'endsAt', 'xpPerTier', 'premiumGems', 'tiers']);
+    if (typeof se.id !== 'string' || !/^[a-z0-9-]{1,30}$/.test(se.id)) errors.push('season.id: ใช้ a-z ตัวเลข และ - ยาวไม่เกิน 30');
+    text('season.name', se.name, 40);
+    if (typeof se.endsAt !== 'string' || Number.isNaN(Date.parse(se.endsAt))) errors.push('season.endsAt: ต้องเป็นวันที่ เช่น 2027-01-31T23:59:00+07:00');
+    int('season.xpPerTier', se.xpPerTier, 1, 100_000);
+    int('season.premiumGems', se.premiumGems, 0, 1_000_000);
+    if (!Array.isArray(se.tiers) || se.tiers.length < 1 || se.tiers.length > 100) errors.push('season.tiers: ต้องมี 1–100 ขั้น');
+    else {
+      const items = new Set<string>();
+      if (Array.isArray(root.fashion)) for (const f of root.fashion as FashionDef[]) items.add(`fashion:${f.slot}/${f.id}`);
+      if (Array.isArray(root.equipment)) for (const e of root.equipment as EquipDef[]) items.add(`equip:${e.slot}/${e.id}`);
+      se.tiers.forEach((raw, i) => {
+        const t = obj(`season.tiers[${i}]`, raw);
+        if (!t) return;
+        for (const track of Object.keys(t)) {
+          const p = `season.tiers[${i}].${track}`;
+          if (track !== 'free' && track !== 'premium') {
+            errors.push(`${p}: ใช้ได้แค่ free หรือ premium`);
+            continue;
+          }
+          const rw = obj(p, t[track]);
+          if (!rw) continue;
+          const ks = Object.keys(rw);
+          if (ks.length !== 1 || !['coins', 'gems', 'item'].includes(ks[0])) errors.push(`${p}: ต้องเป็น { coins }, { gems } หรือ { item }`);
+          else if (ks[0] === 'item') {
+            if (typeof rw.item !== 'string' || !items.has(rw.item)) errors.push(`${p}.item: ไม่พบ "${String(rw.item)}" (รูปแบบ fashion:<ช่อง>/<id> หรือ equip:<ช่อง>/<id>)`);
+            else if (/\/none$/.test(rw.item)) errors.push(`${p}.item: ให้ "ไม่ใส่" เป็นรางวัลไม่ได้`);
+          } else int(`${p}.${ks[0]}`, rw[ks[0]], 1, 1_000_000);
+        }
+      });
     }
   }
 

@@ -11,6 +11,9 @@ import { RateLimit, bearer, cors, fail, readJson, sendJson } from './http';
 //   POST /login     { username, password }     → { token, account }
 //   POST /logout
 //   GET  /leaderboard                          → top ranked players
+//   POST /buy       { item }                   → account             a shop piece, "fashion:hat/crown"
+//   POST /pass/buy                             → account             the season's premium track
+//   POST /pass/claim { tier, track }           → account
 
 export function accountApi(accounts: Accounts): (req: IncomingMessage, res: ServerResponse) => boolean {
   const guests = new RateLimit(10);
@@ -45,6 +48,12 @@ export function accountApi(accounts: Accounts): (req: IncomingMessage, res: Serv
       if (!logins.take(req)) return fail(res, 429, 'ลองหลายครั้งเกินไป รอ 1 นาที');
       const body = await readJson(req);
       return sendJson(res, 200, accountView(await accounts.register(me.id, body.username, body.password)));
+    }
+    if (post && path === '/buy') return sendJson(res, 200, accountView(await accounts.buy(me.id, (await readJson(req)).item)));
+    if (post && path === '/pass/buy') return sendJson(res, 200, accountView(await accounts.buyPass(me.id)));
+    if (post && path === '/pass/claim') {
+      const body = await readJson(req);
+      return sendJson(res, 200, accountView(await accounts.claim(me.id, body.tier, body.track)));
     }
     if (post && path === '/logout') {
       await accounts.logout(token);

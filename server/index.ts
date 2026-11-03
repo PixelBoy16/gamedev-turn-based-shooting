@@ -10,7 +10,7 @@ import { adminApi } from './admin';
 import { accountApi } from './api';
 import { ConfigStore } from './configStore';
 import { openDb } from './db';
-import { Conn, Lobby, Services, setPublished } from './rooms';
+import { Conn, Lobby, Services, publishedConfig, setPublished } from './rooms';
 
 // Room server: `npm run server`. One JSON message per WebSocket frame.
 
@@ -35,10 +35,10 @@ const store = await ConfigStore.open(db, seed as GameConfig);
 applyConfig(store.latest.config);
 setPublished(store.latest.config);
 console.log(`game config v${store.latest.version} (${store.latest.by})`);
-const admin = adminApi({ store, password: process.env.ADMIN_PASSWORD, onPublish: setPublished });
+const accounts = new Accounts(db, publishedConfig);
+const admin = adminApi({ store, accounts, password: process.env.ADMIN_PASSWORD, onPublish: setPublished });
 if (!process.env.ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not set: the admin page is off');
 
-const accounts = new Accounts(db);
 const api = accountApi(accounts);
 const services: Services = {
   account: async (token) => {

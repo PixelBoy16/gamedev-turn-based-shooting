@@ -30,6 +30,12 @@ export interface AccountView {
   played: number;
   wins: number;
   rankedPlayed: number;
+  coins: number;
+  gems: number;
+  /** Bought or won pieces, "fashion:<slot>/<id>" / "equip:<slot>/<id>" (free ones aren't listed). */
+  owned: string[];
+  /** Progress in the current season's Battle Pass. */
+  pass: { season: string; xp: number; premium: boolean; claimed: string[] };
 }
 
 export interface LeaderRow {
@@ -114,7 +120,8 @@ export type ClientMsg =
   | { t: 'needTerrain' };
 
 export type ServerMsg =
-  | { t: 'account'; account: AccountView; ratingChange?: number } // signed in, or numbers after a match
+  // signed in, or new numbers after a match (with what it paid)
+  | { t: 'account'; account: AccountView; ratingChange?: number; reward?: { coins: number; xp: number } }
   | { t: 'queue'; waiting: boolean }
   | { t: 'joined'; code: string; token: string; you: number; game: GameConfig }
   | { t: 'room'; room: RoomView }

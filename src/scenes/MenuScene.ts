@@ -3,7 +3,7 @@ import { ART_SCALE, lookRes, lookTexture } from '../art/chibi';
 import { DEFAULT_LOADOUT, Loadout } from '../core/gear';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
-import { Button, label } from '../ui/widgets';
+import { Button, label, walletText } from '../ui/widgets';
 import { menuBackdrop } from './backdrop';
 
 export default class MenuScene extends Phaser.Scene {
@@ -45,11 +45,15 @@ export default class MenuScene extends Phaser.Scene {
     new Button(this, 960, 690, 560, 110, 'แข่งจัดอันดับ', { fill: 0xe0a400, size: 46, onClick: () => this.scene.start('ranked') });
     label(this, 960, 760, 'จับคู่กับผู้เล่นฝีมือใกล้กัน', 24).setOrigin(0.5);
 
-    // who you are, top right; tap to manage the account
+    // who you are, top right; tap to manage the account. Shop and pass below it.
     const badge = new Button(this, 1700, 70, 400, 84, '', { size: 26, onClick: () => this.scene.start('account') });
+    const wallet = label(this, 1890, 122, '', 24).setOrigin(1, 0);
+    new Button(this, 1600, 210, 190, 76, 'ร้านค้า', { fill: 0xe0a400, size: 28, onClick: () => this.scene.start('shop') });
+    new Button(this, 1800, 210, 190, 76, 'Battle Pass', { fill: 0x7b4fd6, size: 26, onClick: () => this.scene.start('pass') });
     const showBadge = () => {
       const a = account.view;
       badge.text.setText(a ? `${a.displayName} · ${a.rating}${a.username ? '' : '  (ชั่วคราว)'}` : 'บัญชี (ออฟไลน์)');
+      wallet.setText(a ? walletText(a.coins, a.gems) : '');
     };
     showBadge();
     const stop = account.onChange(showBadge);

@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { GameConfig, validateConfig } from '../src/core/config';
+import { Accounts, accountView } from './accounts';
 import { ConfigStore } from './configStore';
 import { RateLimit, bearer, cors, fail, readJson, sendJson } from './http';
 
@@ -13,12 +14,15 @@ import { RateLimit, bearer, cors, fail, readJson, sendJson } from './http';
 //   POST /publish   { config, note, base }      → the new version; 409 if `base` is not the latest
 //   GET  /history                               → versions, newest first
 //   GET  /history/:v                            → that version's config
+//   GET  /player?username=                      → a player's account
+//   POST /grant     { username, coins?, gems?, item?, reason } → the player's account
 
 const TOKEN_HOURS = 12;
 const LOGIN_TRIES = 5; // per minute per address
 
 export interface AdminDeps {
   store: ConfigStore;
+  accounts: Accounts;
   password: string | undefined;
   /** A new version was published: new matches use it from now on. */
   onPublish: (config: GameConfig) => void;
@@ -67,6 +71,28 @@ export function adminApi(deps: AdminDeps): (req: IncomingMessage, res: ServerRes
     if (req.method === 'GET' && v) {
       const config = deps.store.get(Number(v[1]));
       return config ? send(res, 200, { config }) : fail(res, 404, 'ไม่พบเวอร์ชันนี้');
+    }
+
+    if (req.method === 'GET' && path === '/player') {
+      const username = new URL(req.url ?? '/', 'http://x').searchParams.get('username') ?? '';
+      const a = await deps.accounts.byUsername(username);
+      return a ? send(res, 200, { id: a.id, ...accountView(a) }) : fail(res, 404, 'ไม่พบผู้เล่นชื่อผู้ใช้นี้ (บัญชีชั่วคราวค้นหาไม่ได้)');
+    }
+    if (req.method === 'POST' && path === '/grant') {
+      const body = await readJson(req);
+      const a = await deps.accounts.byUsername(String(body.username ?? ''));
+      if (!a) return fail(res, 404, 'ไม่พบผู้เล่น');
+      const n = (v: unknown) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 1_000_000 ? (v as number) : 0);
+      const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 200) : '';
+      if (!reason) return fail(res, 400, 'ใส่เหตุผลก่อน (บันทึกในประวัติการเงิน)');
+      const item = typeof body.item === 'string' && body.item ? body.item : undefined;
+      try {
+        const after = await deps.accounts.grant(a.id, { coins: n(body.coins), gems: n(body.gems), item }, `admin ${name}: ${reason}`);
+        console.log(`admin: ${name} granted ${a.username} coins ${n(body.coins)} gems ${n(body.gems)} ${item ?? ''} (${reason})`);
+        return send(res, 200, { id: after.id, ...accountView(after) });
+      } catch (err) {
+        return fail(res, 400, (err as Error).message);
+      }
     }
 
     if (req.method === 'POST' && path === '/publish') {

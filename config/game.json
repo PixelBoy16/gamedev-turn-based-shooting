@@ -159,7 +159,10 @@
       "color": [
         "#ffd23f",
         "#ff5d8f"
-      ]
+      ],
+      "price": {
+        "coins": 450
+      }
     },
     {
       "id": "fang",
@@ -172,7 +175,10 @@
       "color": [
         "#8b5a2b",
         "#f1f1f1"
-      ]
+      ],
+      "price": {
+        "coins": 450
+      }
     },
     {
       "id": "none",
@@ -195,7 +201,10 @@
       "color": [
         "#ffd23f",
         "#e63946"
-      ]
+      ],
+      "price": {
+        "coins": 450
+      }
     },
     {
       "id": "stone",
@@ -208,7 +217,10 @@
       "color": [
         "#9aa0a6",
         "#6c7a89"
-      ]
+      ],
+      "price": {
+        "coins": 450
+      }
     },
     {
       "id": "none",
@@ -231,7 +243,10 @@
       "color": [
         "#c0c7d1",
         "#7fd6ff"
-      ]
+      ],
+      "price": {
+        "coins": 450
+      }
     },
     {
       "id": "iron",
@@ -245,7 +260,10 @@
       "color": [
         "#6c7a89",
         "#a9b4c2"
-      ]
+      ],
+      "price": {
+        "coins": 600
+      }
     },
     {
       "id": "none",
@@ -268,7 +286,10 @@
       "color": [
         "#4f7942",
         "#9be564"
-      ]
+      ],
+      "price": {
+        "coins": 450
+      }
     },
     {
       "id": "feather",
@@ -281,7 +302,10 @@
       "color": [
         "#b197fc",
         "#ffffff"
-      ]
+      ],
+      "price": {
+        "coins": 450
+      }
     }
   ],
   "fashion": [
@@ -293,22 +317,34 @@
     {
       "id": "aviator",
       "slot": "hat",
-      "name": "หมวกนักบิน"
+      "name": "หมวกนักบิน",
+      "price": {
+        "coins": 300
+      }
     },
     {
       "id": "crown",
       "slot": "hat",
-      "name": "มงกุฎกระดาษ"
+      "name": "มงกุฎกระดาษ",
+      "price": {
+        "gems": 60
+      }
     },
     {
       "id": "beanie",
       "slot": "hat",
-      "name": "หมวกไหมพรม"
+      "name": "หมวกไหมพรม",
+      "price": {
+        "coins": 200
+      }
     },
     {
       "id": "helm",
       "slot": "hat",
-      "name": "หมวกเหล็ก"
+      "name": "หมวกเหล็ก",
+      "price": {
+        "coins": 400
+      }
     },
     {
       "id": "none",
@@ -318,12 +354,18 @@
     {
       "id": "round",
       "slot": "glasses",
-      "name": "แว่นกลม"
+      "name": "แว่นกลม",
+      "price": {
+        "coins": 200
+      }
     },
     {
       "id": "shades",
       "slot": "glasses",
-      "name": "แว่นดำ"
+      "name": "แว่นดำ",
+      "price": {
+        "gems": 30
+      }
     },
     {
       "id": "short",
@@ -338,12 +380,18 @@
     {
       "id": "ponytail",
       "slot": "hair",
-      "name": "ผมหางม้า"
+      "name": "ผมหางม้า",
+      "price": {
+        "coins": 250
+      }
     },
     {
       "id": "bob",
       "slot": "hair",
-      "name": "ผมบ็อบ"
+      "name": "ผมบ็อบ",
+      "price": {
+        "coins": 250
+      }
     },
     {
       "id": "none",
@@ -358,12 +406,18 @@
     {
       "id": "bandaid",
       "slot": "face",
-      "name": "พลาสเตอร์"
+      "name": "พลาสเตอร์",
+      "price": {
+        "coins": 150
+      }
     },
     {
       "id": "mustache",
       "slot": "face",
-      "name": "หนวดเท่"
+      "name": "หนวดเท่",
+      "price": {
+        "gems": 30
+      }
     },
     {
       "id": "tee",
@@ -373,22 +427,34 @@
     {
       "id": "armor",
       "slot": "cloth",
-      "name": "เกราะไม้"
+      "name": "เกราะไม้",
+      "price": {
+        "coins": 400
+      }
     },
     {
       "id": "robe",
       "slot": "cloth",
-      "name": "เสื้อคลุมจอมเวท"
+      "name": "เสื้อคลุมจอมเวท",
+      "price": {
+        "gems": 80
+      }
     },
     {
       "id": "ninja",
       "slot": "cloth",
-      "name": "ชุดนินจา"
+      "name": "ชุดนินจา",
+      "price": {
+        "coins": 500
+      }
     },
     {
       "id": "dress",
       "slot": "cloth",
-      "name": "ชุดกระโปรง"
+      "name": "ชุดกระโปรง",
+      "price": {
+        "coins": 400
+      }
     },
     {
       "id": "round",
@@ -403,12 +469,18 @@
     {
       "id": "sharp",
       "slot": "eyes",
-      "name": "ตาคม"
+      "name": "ตาคม",
+      "price": {
+        "coins": 200
+      }
     },
     {
       "id": "star",
       "slot": "eyes",
-      "name": "ตาดาว"
+      "name": "ตาดาว",
+      "price": {
+        "gems": 40
+      }
     },
     {
       "id": "none",
@@ -418,7 +490,8 @@
     {
       "id": "bear",
       "slot": "set",
-      "name": "ชุดหมีน้อย"
+      "name": "ชุดหมีน้อย",
+      "exclusive": true
     },
     {
       "id": "none",
@@ -428,17 +501,202 @@
     {
       "id": "wings",
       "slot": "back",
-      "name": "ปีกจิ๋ว"
+      "name": "ปีกจิ๋ว",
+      "exclusive": true
     },
     {
       "id": "backpack",
       "slot": "back",
-      "name": "เป้สนาม"
+      "name": "เป้สนาม",
+      "price": {
+        "coins": 300
+      }
     },
     {
       "id": "cape",
       "slot": "back",
-      "name": "ผ้าคลุมแดง"
+      "name": "ผ้าคลุมแดง",
+      "price": {
+        "coins": 500
+      }
     }
-  ]
+  ],
+  "economy": {
+    "startCoins": 500,
+    "startGems": 50,
+    "winCoins": 60,
+    "lossCoins": 25,
+    "winXp": 100,
+    "lossXp": 50,
+    "minTurns": 4
+  },
+  "season": {
+    "id": "s1",
+    "name": "ซีซัน 1: หลุมแรก",
+    "endsAt": "2027-01-31T23:59:00+07:00",
+    "xpPerTier": 300,
+    "premiumGems": 300,
+    "tiers": [
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "gems": 20
+        }
+      },
+      {
+        "free": {
+          "gems": 10
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "item": "fashion:glasses/shades"
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "item": "fashion:hat/beanie"
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "gems": 20
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "gems": 10
+        },
+        "premium": {
+          "item": "fashion:back/wings"
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "coins": 100
+        },
+        "premium": {
+          "coins": 200
+        }
+      },
+      {
+        "free": {
+          "gems": 10
+        },
+        "premium": {
+          "item": "fashion:set/bear"
+        }
+      }
+    ]
+  }
 }

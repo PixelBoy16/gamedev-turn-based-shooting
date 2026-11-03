@@ -23,9 +23,11 @@ class NetClient extends Phaser.Events.EventEmitter {
 
   constructor() {
     super();
-    // signed in or switched account while connected: tell the server
+    // signed in, switched account or bought something while connected: tell the server
+    // (it checks what we wear against what we own)
     account.onChange(() => {
-      if (this.connected && account.token && account.token !== this.authToken) this.auth();
+      const owned = account.view?.owned.length ?? 0;
+      if (this.connected && account.token && (account.token !== this.authToken || owned !== this.authOwned)) this.auth();
     });
     try {
       this.seat = JSON.parse(sessionStorage.getItem(SEAT_KEY) ?? 'null');
@@ -76,9 +78,11 @@ class NetClient extends Phaser.Events.EventEmitter {
   }
 
   private authToken: string | null = null;
+  private authOwned = -1;
 
   private auth(): void {
     this.authToken = account.token;
+    this.authOwned = account.view?.owned.length ?? 0;
     this.send({ t: 'auth', token: account.token! });
   }
 
@@ -106,11 +110,13 @@ class NetClient extends Phaser.Events.EventEmitter {
   private receive(msg: ServerMsg): void {
     switch (msg.t) {
       case 'over':
-        account.lastChange = null; // the ranked rating change follows in an 'account' message
+        account.lastChange = null; // the ranked rating change and rewards follow in an 'account' message
+        account.lastReward = null;
         break;
       case 'account':
         this.authed = true;
-        account.update(msg.account, msg.ratingChange);
+        this.authOwned = msg.account.owned.length;
+        account.update(msg.account, msg.ratingChange, msg.reward);
         break;
       case 'joined':
         applyConfig(msg.game); // names and limits in the room's wardrobe match the server's

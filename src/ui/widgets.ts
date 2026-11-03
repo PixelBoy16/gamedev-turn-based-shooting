@@ -129,3 +129,27 @@ export class Button extends Phaser.GameObjects.Container {
     }
   }
 }
+
+/** A yes/no window over everything; tapping outside or "ยกเลิก" closes it. Returns a close function. */
+export function confirmBox(scene: Phaser.Scene, text: string, yes: string, onYes: () => void): () => void {
+  const parts: Phaser.GameObjects.GameObject[] = [];
+  const close = () => {
+    for (const p of parts) p.destroy();
+    parts.length = 0;
+  };
+  parts.push(scene.add.rectangle(960, 540, 1920, 1080, 0x000000, 0.5).setInteractive().setDepth(60).on('pointerdown', close));
+  const g = scene.add.graphics().setDepth(61);
+  g.fillStyle(INK, 0.98);
+  g.fillRoundedRect(560, 380, 800, 320, 26);
+  g.lineStyle(5, 0xffd166, 1);
+  g.strokeRoundedRect(560, 380, 800, 320, 26);
+  parts.push(g);
+  parts.push(scene.add.text(960, 470, text, { fontFamily: FONT, fontSize: '34px', color: '#ffffff', align: 'center', wordWrap: { width: 720 } })
+    .setOrigin(0.5).setDepth(62));
+  parts.push(new Button(scene, 820, 620, 260, 90, yes, { fill: 0x2f9e44, size: 34, onClick: () => { close(); onYes(); } }).setDepth(62));
+  parts.push(new Button(scene, 1100, 620, 260, 90, 'ยกเลิก', { size: 32, onClick: close }).setDepth(62));
+  return close;
+}
+
+/** "🪙 500   💎 50" */
+export const walletText = (coins: number, gems: number) => `🪙 ${coins.toLocaleString()}   💎 ${gems.toLocaleString()}`;

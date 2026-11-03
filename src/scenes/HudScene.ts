@@ -171,9 +171,15 @@ export default class HudScene extends Phaser.Scene {
       const title = won ? 'ชนะ!' : winner === -1 ? 'เสมอ' : 'แพ้...';
       // ranked: the new rating arrives a moment after the result
       const rating = label(this, 0, 150, 'กำลังคิดคะแนน…', 34, '#ffd166').setOrigin(0.5, 0);
+      if (!net.room?.ranked) rating.setText('');
       const showRating = () => {
+        if (!b.net) return; // offline matches pay nothing
         const d = account.lastChange;
-        if (d !== null && account.view) rating.setText(`คะแนน ${d >= 0 ? '+' : ''}${d} → ${account.view.rating}`);
+        const pay = account.lastReward;
+        const parts: string[] = [];
+        if (d !== null && account.view && net.room?.ranked) parts.push(`คะแนน ${d >= 0 ? '+' : ''}${d} → ${account.view.rating}`);
+        if (pay) parts.push(`+${pay.coins} 🪙${pay.xp ? `  +${pay.xp} XP` : ''}`);
+        if (parts.length) rating.setText(parts.join('   '));
       };
       showRating();
       const stop = account.onChange(showRating);
@@ -196,7 +202,7 @@ export default class HudScene extends Phaser.Scene {
             },
           })]
           : b.net
-          ? [new Button(this, 0, 240, 420, 96, 'กลับห้อง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.start('lobby') })]
+          ? [rating, new Button(this, 0, 240, 420, 96, 'กลับห้อง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.start('lobby') })]
           : [
             new Button(this, -200, 240, 340, 96, 'เล่นอีกครั้ง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.restart() }),
             new Button(this, 200, 240, 340, 96, 'เปลี่ยนตัว/ด่าน', { size: 32, onClick: () => b.scene.start('setup') }),

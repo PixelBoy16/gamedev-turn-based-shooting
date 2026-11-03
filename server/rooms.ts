@@ -3,6 +3,7 @@ import { ShotPlanner, chooseAttackItem, chooseSupport } from '../src/core/BotAI'
 import { GameConfig, currentConfig, useConfig } from '../src/core/config';
 import { ITEM_IDS, ItemId, LIMITS, WEAPONS } from '../src/core/data';
 import { DEFAULT_EQUIPMENT, cleanLoadout, randomLoadout } from '../src/core/gear';
+import { enforceOwned } from '../src/core/shop';
 import { skillOf } from '../src/core/Actions';
 import { MAP_IDS, generateMap } from '../src/core/Maps';
 import { RosterEntry, ShotRun, buildTanks, runShot, stepTanks } from '../src/core/Match';
@@ -44,11 +45,11 @@ export const QUEUE = { baseGap: 100, gapPerSecond: 10, tickMs: 2000 };
 export interface Services {
   account(token: string): Promise<{ id: number; view: AccountView } | null>;
   accountView(id: number): Promise<AccountView | null>;
-  /** Record a finished match; returns each ranked player's rating change by account id. */
+  /** Record a finished match; returns rating changes and coins/XP paid, by account id. */
   record(m: {
-    ranked: boolean; map: string; format: string; winner: number;
+    ranked: boolean; map: string; format: string; winner: number; turns: number;
     players: { accountId: number | null; name: string; team: number }[];
-  }): Promise<Map<number, number>>;
+  }): Promise<{ rating: Map<number, number>; pay: Map<number, { coins: number; xp: number }> }>;
 }
 
 interface Signed {
@@ -84,6 +85,8 @@ let published: GameConfig = currentConfig();
 export function setPublished(config: GameConfig): void {
   published = config;
 }
+
+export const publishedConfig = () => published;
 
 export class Lobby {
   readonly rooms = new Map<string, Room>();
@@ -149,6 +152,9 @@ export class Lobby {
         this.leave(conn);
         conn.send({ t: 'left' });
         return;
+      case 'profile':
+        if (seat) seat.room.handle(seat.player, { ...msg, ...this.profileOf(conn, msg) });
+        return;
     }
     if (seat) seat.room.handle(seat.player, msg);
   }
@@ -186,11 +192,12 @@ export class Lobby {
     conn.send({ t: 'account', account: a.view });
   }
 
-  /** A signed-in player always plays under their account's name. */
+  /** A signed-in player plays under their account's name; anyone wears only what they own. */
   private profileOf(conn: Conn, p: Partial<Profile>): Profile {
     const profile = cleanProfile(p);
     const a = this.signed.get(conn);
-    return a ? { ...profile, name: a.view.displayName } : profile;
+    const loadout = enforceOwned(profile.loadout, new Set(a?.view.owned ?? []), published);
+    return a ? { ...profile, loadout, name: a.view.displayName } : { ...profile, loadout };
   }
 
   private unqueue(conn: Conn): void {
@@ -286,7 +293,7 @@ export class Room {
     switch (msg.t) {
       case 'profile':
         if (this.match) return;
-        Object.assign(p, cleanProfile(msg));
+        Object.assign(p, cleanProfile(msg)); // the lobby has already applied the account's name and ownership
         return this.changed();
       case 'team': {
         const team = msg.team === 1 ? 1 : 0;
@@ -356,21 +363,26 @@ export class Room {
     for (const p of this.players) if (p !== except) p.conn?.send(msg);
   }
 
-  matchEnded(winner: number, accountOf: { accountId: number | null; name: string; team: number }[]): void {
+  matchEnded(winner: number, turns: number, accountOf: { accountId: number | null; name: string; team: number }[]): void {
     this.match = null;
     this.changed();
-    if (this.services) void this.record(winner, accountOf);
+    if (this.services) void this.record(winner, turns, accountOf);
   }
 
   /** Save the result, then tell each signed-in player their new numbers. */
-  private async record(winner: number, players: { accountId: number | null; name: string; team: number }[]): Promise<void> {
+  private async record(winner: number, turns: number, players: { accountId: number | null; name: string; team: number }[]): Promise<void> {
     const s = this.services!;
     try {
-      const delta = await s.record({ ranked: this.ranked, map: this.config.map, format: this.config.format, winner, players });
+      const res = await s.record({ ranked: this.ranked, map: this.config.map, format: this.config.format, winner, turns, players });
       for (const p of this.players) {
         if (p.accountId === null || !p.conn) continue;
         const view = await s.accountView(p.accountId);
-        if (view) p.conn.send({ t: 'account', account: view, ratingChange: this.ranked ? delta.get(p.accountId) ?? 0 : undefined });
+        if (view) {
+          p.conn.send({
+            t: 'account', account: view, reward: res.pay.get(p.accountId),
+            ratingChange: this.ranked ? res.rating.get(p.accountId) ?? 0 : undefined,
+          });
+        }
       }
     } catch (err) {
       console.error('recording a match failed', err);
@@ -554,7 +566,7 @@ export class ServerMatch {
     if (winner !== null) {
       this.phase = 'over';
       this.room.broadcast({ t: 'over', winner, tanks: this.world.tanks });
-      this.room.matchEnded(winner, this.seatOf);
+      this.room.matchEnded(winner, this.turns.turnNumber, this.seatOf);
       return;
     }
     this.nextTurn();

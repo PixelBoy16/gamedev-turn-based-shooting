@@ -8,6 +8,8 @@ import LobbyScene from './scenes/LobbyScene';
 import LookLabScene from './scenes/LookLabScene';
 import RankedScene from './scenes/RankedScene';
 import AccountScene from './scenes/AccountScene';
+import ShopScene from './scenes/ShopScene';
+import PassScene from './scenes/PassScene';
 import { account } from './net/account';
 import { net } from './net/NetClient';
 
@@ -20,7 +22,7 @@ const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   dom: { createContainer: true }, // text inputs in the online lobby
   input: { activePointers: 3 }, // tablet: hold FIRE while nudging the angle, or pan with two fingers
-  scene: [BootScene, MenuScene, SetupScene, LobbyScene, BattleScene, HudScene, RankedScene, AccountScene, LookLabScene],
+  scene: [BootScene, MenuScene, SetupScene, LobbyScene, BattleScene, HudScene, RankedScene, AccountScene, ShopScene, PassScene, LookLabScene],
 });
 
 // Dev-only handle for debugging from the browser console.

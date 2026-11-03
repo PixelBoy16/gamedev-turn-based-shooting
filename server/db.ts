@@ -67,6 +67,33 @@ const MIGRATIONS: string[] = [
      note text not null default '',
      config jsonb not null
    );`,
+  // shop and Battle Pass
+  `alter table accounts add column coins integer not null default 0;
+   alter table accounts add column gems integer not null default 0;
+   create table owned (
+     account_id bigint not null references accounts(id) on delete cascade,
+     item text not null,                 -- "fashion:<slot>/<id>" or "equip:<slot>/<id>"
+     source text not null,               -- shop, pass, admin
+     at timestamptz not null default now(),
+     primary key (account_id, item)
+   );
+   create table passes (
+     account_id bigint not null references accounts(id) on delete cascade,
+     season text not null,
+     xp integer not null default 0,
+     premium boolean not null default false,
+     claimed jsonb not null default '[]',  -- ["free:3", "premium:3", ...]
+     primary key (account_id, season)
+   );
+   create table ledger (                 -- every coin and gem in or out, for support and audits
+     id bigserial primary key,
+     account_id bigint not null references accounts(id) on delete cascade,
+     coins integer not null default 0,
+     gems integer not null default 0,
+     reason text not null,
+     at timestamptz not null default now()
+   );
+   create index ledger_account on ledger(account_id, at);`,
 ];
 
 async function migrate(db: Db): Promise<void> {

@@ -2,6 +2,7 @@
 import { createServer, Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Accounts } from '../server/accounts';
 import { adminApi } from '../server/admin';
 import { ConfigStore } from '../server/configStore';
 import { Db, openDb } from '../server/db';
@@ -12,10 +13,12 @@ describe('admin api', () => {
   let server: Server;
   let base: string;
   let published: GameConfig[];
+  let accounts: Accounts;
 
   const open = async () => {
     const store = await ConfigStore.open(db, BUNDLED);
-    const api = adminApi({ store, password: 'test-pass', onPublish: (c) => published.push(c) });
+    accounts = new Accounts(db, () => BUNDLED);
+    const api = adminApi({ store, accounts, password: 'test-pass', onPublish: (c) => published.push(c) });
     server = createServer((req, res) => {
       if (!api(req, res)) res.writeHead(404).end();
     });
@@ -84,5 +87,17 @@ describe('admin api', () => {
     const cur = (await call('/config', undefined, again)).body;
     expect(cur.version).toBe(1);
     expect(cur.config.rules.maxHp).toBe(1200);
+  });
+
+  it('finds a player by username and grants gems with a reason', async () => {
+    const token = await login();
+    const { account } = await accounts.createGuest();
+    await accounts.register(account.id, 'lucky_one', 'secret1');
+    expect((await call('/player?username=nobody', undefined, token)).status).toBe(404);
+    expect((await call('/grant', { username: 'lucky_one', gems: 100 }, token)).status).toBe(400); // no reason
+    const res = await call('/grant', { username: 'lucky_one', gems: 100, item: 'fashion:set/bear', reason: 'ชดเชยเซิร์ฟล่ม' }, token);
+    expect(res.body.gems).toBe(account.gems + 100);
+    expect(res.body.owned).toContain('fashion:set/bear');
+    expect((await call('/player?username=LUCKY_ONE', undefined, token)).body.gems).toBe(account.gems + 100);
   });
 });
