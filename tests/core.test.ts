@@ -270,7 +270,7 @@ describe('gear', () => {
     const dirty = { weapon: 'drill', look: { hat: 'tee', cloth: 'robe' }, equip: { ring: 'ruby', charm: 'nope' }, hide: { hat: 1 } };
     expect(cleanLoadout(dirty)).toEqual({
       weapon: 'cannon',
-      look: { ...DEFAULT_LOADOUT.look, cloth: 'robe' },
+      look: { ...DEFAULT_LOADOUT.look, cloth: 'trench' },
       equip: { ...DEFAULT_LOADOUT.equip, ring: 'ruby' },
       hide: { hat: true, glasses: false },
     });

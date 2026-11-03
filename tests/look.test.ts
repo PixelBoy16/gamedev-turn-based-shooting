@@ -11,22 +11,22 @@ describe('painted look layers', () => {
     expect(files).toHaveLength(32);
     expect(new Set(files).size).toBe(32);
     expect(files).toContain('hair-ponytail-back');
-    expect(files).toContain('set-bear-hood');
+    expect(files).toContain('set-bearskull-hood');
   });
 
   it('stacks a look back to front like the drawn chibi', () => {
-    expect(lookLayers(dress({ hat: 'crown', glasses: 'round', back: 'wings', face: 'blush' }))).toEqual([
-      'back-wings', 'hair-short-back', 'body', 'cloth-tee', 'eyes-round', 'face-blush', 'hair-short-front', 'glasses-round', 'hat-crown',
+    expect(lookLayers(dress({ hat: 'spikecrown', glasses: 'goggles', back: 'ironwings', face: 'warpaint' }))).toEqual([
+      'back-ironwings', 'hair-buzz-back', 'body', 'cloth-tank', 'eyes-glare', 'face-warpaint', 'hair-buzz-front', 'glasses-goggles', 'hat-spikecrown',
     ]);
   });
 
   it('lets a set replace outfit, hair and hat, and respects the hide toggles', () => {
-    expect(lookLayers(dress({ set: 'bear', hat: 'crown' }))).toEqual(['body', 'set-bear-body', 'eyes-round', 'set-bear-hood']);
-    expect(lookLayers(dress({ hat: 'crown', glasses: 'shades' }, { hat: true, glasses: true }))).not.toContain('hat-crown');
+    expect(lookLayers(dress({ set: 'bearskull', hat: 'spikecrown' }))).toEqual(['body', 'set-bearskull-body', 'eyes-glare', 'set-bearskull-hood']);
+    expect(lookLayers(dress({ hat: 'spikecrown', glasses: 'shades' }, { hat: true, glasses: true }))).not.toContain('hat-spikecrown');
   });
 
   it('maps a file back to its piece', () => {
-    expect(fileOwner('hair-bob-front')).toEqual({ slot: 'hair', id: 'bob' });
+    expect(fileOwner('hair-mohawk-front')).toEqual({ slot: 'hair', id: 'mohawk' });
     expect(fileOwner('body')).toBeNull();
   });
 });

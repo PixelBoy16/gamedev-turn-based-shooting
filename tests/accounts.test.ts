@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountError, Accounts, accountView } from '../server/accounts';
-import { Db, openDb } from '../server/db';
+import { Db, migrate, openDb } from '../server/db';
 import { Lobby, QUEUE, Services } from '../server/rooms';
 import { createRng } from '../src/core/rng';
 import { BUNDLED, GameConfig } from '../src/core/config';
@@ -175,15 +175,25 @@ describe('shop and battle pass', () => {
     expect([account.coins, account.gems]).toEqual([cfg().economy.startCoins, cfg().economy.startGems]);
   });
 
+  it('keeps pieces owned under their old ids', async () => {
+    const { account } = await accounts.createGuest();
+    await db.query('update schema_version set version = 2');
+    for (const item of ['fashion:set/bear', 'fashion:hat/beanie']) {
+      await db.query("insert into owned (account_id, item, source) values ($1, $2, 'pass')", [account.id, item]);
+    }
+    await migrate(db);
+    expect((await accounts.get(account.id))!.owned.sort()).toEqual(['fashion:hat/bandana', 'fashion:set/bearskull']);
+  });
+
   it('sells a piece once, and refuses when short of the currency', async () => {
     const { account } = await accounts.createGuest();
     const after = await accounts.buy(account.id, 'fashion:hat/aviator');
     expect(after.coins).toBe(account.coins - 300);
     expect(after.owned).toEqual(['fashion:hat/aviator']);
     await expect(accounts.buy(account.id, 'fashion:hat/aviator')).rejects.toThrow('มีชิ้นนี้อยู่แล้ว');
-    await expect(accounts.buy(account.id, 'fashion:cloth/robe')).rejects.toThrow('เพชรไม่พอ'); // 80 gems, has 50
-    await expect(accounts.buy(account.id, 'fashion:set/bear')).rejects.toThrow('ไม่ได้วางขาย'); // pass exclusive
-    await expect(accounts.buy(account.id, 'fashion:hair/short')).rejects.toThrow('ฟรีอยู่แล้ว');
+    await expect(accounts.buy(account.id, 'fashion:cloth/trench')).rejects.toThrow('เพชรไม่พอ'); // 80 gems, has 50
+    await expect(accounts.buy(account.id, 'fashion:set/bearskull')).rejects.toThrow('ไม่ได้วางขาย'); // pass exclusive
+    await expect(accounts.buy(account.id, 'fashion:hair/buzz')).rejects.toThrow('ฟรีอยู่แล้ว');
   });
 
   it('only saves pieces the player owns', async () => {
@@ -220,7 +230,7 @@ describe('shop and battle pass', () => {
     expect(bought.pass.premium).toBe(true);
     expect(bought.gems).toBe(50); // 50 + 300 - 300
     const wings = await accounts.claim(account.id, 15, 'premium');
-    expect(wings.owned).toContain('fashion:back/wings');
+    expect(wings.owned).toContain('fashion:back/ironwings');
   });
 
   it('keeps every movement in the ledger', async () => {

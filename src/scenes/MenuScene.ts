@@ -79,9 +79,9 @@ export default class MenuScene extends Phaser.Scene {
     const dress = (look: Partial<Loadout['look']>, weapon: Loadout['weapon']): Loadout =>
       ({ ...DEFAULT_LOADOUT, weapon, look: { ...DEFAULT_LOADOUT.look, ...look } });
     const looks: Loadout[] = [
-      dress({ hair: 'ponytail', glasses: 'round', cloth: 'dress', eyes: 'happy', face: 'blush' }, 'splitter'),
-      dress({ hat: 'aviator', hair: 'spiky', back: 'cape', face: 'bandaid' }, 'cannon'),
-      dress({ set: 'bear', eyes: 'star', back: 'backpack' }, 'hammer'),
+      dress({ hair: 'ponytail', glasses: 'goggles', cloth: 'vest', eyes: 'squint', face: 'warpaint' }, 'splitter'),
+      dress({ hat: 'aviator', hair: 'spiky', back: 'cape', face: 'scar' }, 'cannon'),
+      dress({ set: 'bearskull', eyes: 'glow', back: 'ammo' }, 'hammer'),
     ];
     const imgs = looks.map((l, i) => {
       const x = HERO_X + (i - 1) * 280;

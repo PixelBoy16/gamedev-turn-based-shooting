@@ -87,7 +87,7 @@ const FASHION_SLOT_IDS: FashionSlot[] = ['hat', 'glasses', 'hair', 'face', 'clot
 /** Slots that must offer "none" (the rest always show something). */
 const OPTIONAL_SLOTS: FashionSlot[] = ['hat', 'glasses', 'face', 'set', 'back'];
 /** Ids the default look starts in, so they must stay. */
-const DEFAULT_PIECES: Partial<Record<FashionSlot, string>> = { hair: 'short', cloth: 'tee', eyes: 'round' };
+const DEFAULT_PIECES: Partial<Record<FashionSlot, string>> = { hair: 'buzz', cloth: 'tank', eyes: 'glare' };
 
 // ------------------------------------------------------------------ live values
 

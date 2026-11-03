@@ -44,8 +44,25 @@ export const fashionDef = (slot: FashionSlot, id: string) => FASHION.find((f) =>
 export type Look = Record<FashionSlot, string>;
 
 export const DEFAULT_LOOK: Look = {
-  hat: 'none', glasses: 'none', hair: 'short', face: 'none', cloth: 'tee', eyes: 'round', set: 'none', back: 'none',
+  hat: 'none', glasses: 'none', hair: 'buzz', face: 'none', cloth: 'tank', eyes: 'glare', set: 'none', back: 'none',
 };
+
+/**
+ * Pieces renamed when the look went from cute to tough (old id → new id). Saved outfits,
+ * owned items and stored admin configs from before still name the old ids.
+ */
+export const FASHION_RENAMES: Partial<Record<FashionSlot, Record<string, string>>> = {
+  hat: { crown: 'spikecrown', beanie: 'bandana' },
+  glasses: { round: 'goggles' },
+  hair: { short: 'buzz', bob: 'mohawk' },
+  face: { blush: 'warpaint', bandaid: 'scar', mustache: 'beard' },
+  cloth: { tee: 'tank', robe: 'trench', dress: 'vest' },
+  eyes: { round: 'glare', happy: 'squint', star: 'glow' },
+  set: { bear: 'bearskull' },
+  back: { wings: 'ironwings', backpack: 'ammo' },
+};
+
+export const renameFashion = (slot: FashionSlot, id: string): string => FASHION_RENAMES[slot]?.[id] ?? id;
 
 // ------------------------------------------------------------------ equipment
 
@@ -130,8 +147,9 @@ export function cleanLoadout(raw: unknown): Loadout {
   const out = copyLoadout(DEFAULT_LOADOUT);
   if (MAIN_WEAPONS.includes(l.weapon!)) out.weapon = l.weapon!;
   for (const slot of FASHION_SLOTS) {
-    const id = l.look?.[slot];
-    if (typeof id === 'string' && fashionDef(slot, id)) out.look[slot] = id;
+    const raw = l.look?.[slot];
+    const id = typeof raw === 'string' ? renameFashion(slot, raw) : null;
+    if (id && fashionDef(slot, id)) out.look[slot] = id;
   }
   for (const slot of EQUIP_SLOTS) {
     const id = l.equip?.[slot];

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { BUNDLED, EQUIPMENT, GameConfig, TUNING, WEAPONS, applyConfig, currentConfig, validateConfig } from '../src/core/config';
-import { DEFAULT_LOADOUT, tankStats } from '../src/core/gear';
+import { DEFAULT_LOADOUT, DEFAULT_LOOK, cleanLoadout, tankStats } from '../src/core/gear';
 
 const edit = (f: (c: GameConfig) => void): GameConfig => {
   const c = structuredClone(BUNDLED);
@@ -11,6 +11,20 @@ const edit = (f: (c: GameConfig) => void): GameConfig => {
 describe('game config', () => {
   afterEach(() => applyConfig(BUNDLED));
 
+  it('ships the tough wardrobe', () => {
+    const ids = BUNDLED.fashion.map((f) => `${f.slot}/${f.id}`);
+    for (const old of ['hat/crown', 'hair/short', 'face/blush', 'eyes/star', 'set/bear', 'back/wings', 'cloth/dress']) expect(ids).not.toContain(old);
+    for (const now of ['hat/bandana', 'hair/buzz', 'face/warpaint', 'eyes/glow', 'set/bearskull', 'back/ironwings', 'cloth/vest']) expect(ids).toContain(now);
+    expect(DEFAULT_LOOK).toMatchObject({ hair: 'buzz', cloth: 'tank', eyes: 'glare' });
+    expect(BUNDLED.season.tiers[9].free).toEqual({ item: 'fashion:hat/bandana' });
+    expect(BUNDLED.season.tiers[19].premium).toEqual({ item: 'fashion:set/bearskull' });
+  });
+
+  it('reads old saved outfits as the renamed pieces', () => {
+    const l = cleanLoadout({ look: { hair: 'short', set: 'bear', eyes: 'star', hat: 'aviator' } });
+    expect(l.look).toMatchObject({ hair: 'buzz', set: 'bearskull', eyes: 'glow', hat: 'aviator' });
+  });
+
   it('ships a config with no errors or warnings', () => {
     expect(validateConfig(BUNDLED)).toEqual({ errors: [], warnings: [] });
   });
@@ -20,14 +34,14 @@ describe('game config', () => {
       (c.weapons.cannon as { damage: unknown }).damage = 'lots';
       c.rules.turnSeconds = 1;
       c.equipment = c.equipment.filter((e) => !(e.slot === 'ring' && e.id === 'none'));
-      c.fashion = c.fashion.filter((f) => f.id !== 'tee');
+      c.fashion = c.fashion.filter((f) => f.id !== 'tank');
       (c.rules as unknown as Record<string, number>).gravityy = 400;
     }));
     expect(errors).toEqual(expect.arrayContaining([
       'weapons.cannon.damage: ต้องเป็นตัวเลข',
       'rules.turnSeconds: 1 อยู่นอกช่วง 5–120',
       'equipment: ช่อง ring ต้องมี id "none" (ไม่ใส่)',
-      'fashion: ต้องมี cloth "tee" (ชุดเริ่มต้น)',
+      'fashion: ต้องมี cloth "tank" (ชุดเริ่มต้น)',
       'rules.gravityy: ไม่รู้จักชื่อนี้',
     ]));
   });

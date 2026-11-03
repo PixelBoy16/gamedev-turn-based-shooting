@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import pg from 'pg';
+import { FASHION_RENAMES } from '../src/core/gear';
 
 // The server's database. Production: PostgreSQL from DATABASE_URL (Neon, Supabase,
 // Render...). Locally and in tests: PGlite, the same Postgres compiled to WASM,
@@ -94,9 +95,12 @@ const MIGRATIONS: string[] = [
      at timestamptz not null default now()
    );
    create index ledger_account on ledger(account_id, at);`,
+  // the cute pieces became tough ones: keep what people owned under the new ids
+  Object.entries(FASHION_RENAMES).flatMap(([slot, ids]) => Object.entries(ids!).map(([from, to]) =>
+    `update owned set item = 'fashion:${slot}/${to}' where item = 'fashion:${slot}/${from}';`)).join('\n'),
 ];
 
-async function migrate(db: Db): Promise<void> {
+export async function migrate(db: Db): Promise<void> {
   await db.query('create table if not exists schema_version (version integer not null)');
   const rows = await db.query<{ version: number }>('select version from schema_version');
   let at = rows[0]?.version ?? 0;

@@ -1,4 +1,5 @@
-import { GameConfig, validateConfig } from '../src/core/config';
+import { GameConfig, Reward, validateConfig } from '../src/core/config';
+import { FashionDef, renameFashion } from '../src/core/gear';
 import { Db } from './db';
 
 // Published game configs, one row per version in the database. The newest is the one
@@ -16,6 +17,29 @@ interface Stored extends ConfigVersion {
   config: GameConfig;
 }
 
+/**
+ * A version published before the wardrobe went tough names the old pieces: each renamed
+ * piece becomes the seed's new one, keeping the price the admin set; rewards follow.
+ */
+export function renameConfig(config: GameConfig, seed: GameConfig): GameConfig {
+  const fashion = config.fashion.map((f): FashionDef => {
+    const id = renameFashion(f.slot, f.id);
+    if (id === f.id) return f;
+    const next = seed.fashion.find((s) => s.slot === f.slot && s.id === id);
+    return next ? { ...next, price: f.price } : { ...f, id };
+  });
+  const item = (key: string) => {
+    const m = /^fashion:(\w+)\/(\w+)$/.exec(key);
+    return m ? `fashion:${m[1]}/${renameFashion(m[1] as FashionDef['slot'], m[2])}` : key;
+  };
+  const reward = (r: Reward) => ('item' in r ? { item: item(r.item) } : r);
+  const tiers = config.season.tiers.map((t) => ({
+    ...(t.free && { free: reward(t.free) }),
+    ...(t.premium && { premium: reward(t.premium) }),
+  }));
+  return { ...config, fashion, season: { ...config.season, tiers } };
+}
+
 export class ConfigStore {
   private constructor(private db: Db, private versions: Stored[]) {}
 
@@ -25,7 +49,7 @@ export class ConfigStore {
     const versions: Stored[] = [];
     for (const r of rows) {
       // a section added to the game after this version was published comes from the seed
-      r.config = { ...seed, ...r.config };
+      r.config = renameConfig({ ...seed, ...r.config }, seed);
       if (validateConfig(r.config).errors.length) {
         console.error(`config store: v${r.version} no longer passes the checks, skipped`);
         continue;

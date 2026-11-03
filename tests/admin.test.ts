@@ -4,7 +4,7 @@ import { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Accounts } from '../server/accounts';
 import { adminApi } from '../server/admin';
-import { ConfigStore } from '../server/configStore';
+import { ConfigStore, renameConfig } from '../server/configStore';
 import { Db, openDb } from '../server/db';
 import { BUNDLED, GameConfig } from '../src/core/config';
 
@@ -95,9 +95,22 @@ describe('admin api', () => {
     await accounts.register(account.id, 'lucky_one', 'secret1');
     expect((await call('/player?username=nobody', undefined, token)).status).toBe(404);
     expect((await call('/grant', { username: 'lucky_one', gems: 100 }, token)).status).toBe(400); // no reason
-    const res = await call('/grant', { username: 'lucky_one', gems: 100, item: 'fashion:set/bear', reason: 'ชดเชยเซิร์ฟล่ม' }, token);
+    const res = await call('/grant', { username: 'lucky_one', gems: 100, item: 'fashion:set/bearskull', reason: 'ชดเชยเซิร์ฟล่ม' }, token);
     expect(res.body.gems).toBe(account.gems + 100);
-    expect(res.body.owned).toContain('fashion:set/bear');
+    expect(res.body.owned).toContain('fashion:set/bearskull');
     expect((await call('/player?username=LUCKY_ONE', undefined, token)).body.gems).toBe(account.gems + 100);
+  });
+
+  it('maps an old published catalog onto the new pieces', () => {
+    const stored = structuredClone(BUNDLED);
+    const crown = stored.fashion.find((f) => f.id === 'spikecrown')!;
+    Object.assign(crown, { id: 'crown', name: 'มงกุฎกระดาษ', price: { gems: 99 } });
+    stored.fashion.find((f) => f.id === 'bearskull')!.id = 'bear';
+    stored.season.tiers[19].premium = { item: 'fashion:set/bear' };
+    const out = renameConfig(stored, BUNDLED);
+    const ids = out.fashion.map((f) => `${f.slot}/${f.id}`);
+    expect(ids).not.toContain('hat/crown');
+    expect(out.fashion.find((f) => f.id === 'spikecrown')).toMatchObject({ name: 'มงกุฎเหล็กหนาม', price: { gems: 99 } });
+    expect(out.season.tiers[19].premium).toEqual({ item: 'fashion:set/bearskull' });
   });
 });

@@ -323,17 +323,17 @@
       }
     },
     {
-      "id": "crown",
+      "id": "spikecrown",
       "slot": "hat",
-      "name": "มงกุฎกระดาษ",
+      "name": "มงกุฎเหล็กหนาม",
       "price": {
         "gems": 60
       }
     },
     {
-      "id": "beanie",
+      "id": "bandana",
       "slot": "hat",
-      "name": "หมวกไหมพรม",
+      "name": "ผ้าโพกหัว",
       "price": {
         "coins": 200
       }
@@ -352,9 +352,9 @@
       "name": "ไม่ใส่"
     },
     {
-      "id": "round",
+      "id": "goggles",
       "slot": "glasses",
-      "name": "แว่นกลม",
+      "name": "แว่นกันลม",
       "price": {
         "coins": 200
       }
@@ -368,9 +368,9 @@
       }
     },
     {
-      "id": "short",
+      "id": "buzz",
       "slot": "hair",
-      "name": "ผมสั้น"
+      "name": "ผมเกรียน"
     },
     {
       "id": "spiky",
@@ -386,9 +386,9 @@
       }
     },
     {
-      "id": "bob",
+      "id": "mohawk",
       "slot": "hair",
-      "name": "ผมบ็อบ",
+      "name": "ทรงโมฮอว์ก",
       "price": {
         "coins": 250
       }
@@ -399,43 +399,43 @@
       "name": "ไม่มี"
     },
     {
-      "id": "blush",
+      "id": "warpaint",
       "slot": "face",
-      "name": "แก้มแดง"
+      "name": "ลายพรางหน้า"
     },
     {
-      "id": "bandaid",
+      "id": "scar",
       "slot": "face",
-      "name": "พลาสเตอร์",
+      "name": "แผลเป็น",
       "price": {
         "coins": 150
       }
     },
     {
-      "id": "mustache",
+      "id": "beard",
       "slot": "face",
-      "name": "หนวดเท่",
+      "name": "เคราดุ",
       "price": {
         "gems": 30
       }
     },
     {
-      "id": "tee",
+      "id": "tank",
       "slot": "cloth",
-      "name": "เสื้อยืด"
+      "name": "เสื้อกล้ามทหาร"
     },
     {
       "id": "armor",
       "slot": "cloth",
-      "name": "เกราะไม้",
+      "name": "เกราะเหล็ก",
       "price": {
         "coins": 400
       }
     },
     {
-      "id": "robe",
+      "id": "trench",
       "slot": "cloth",
-      "name": "เสื้อคลุมจอมเวท",
+      "name": "โค้ทสนาม",
       "price": {
         "gems": 80
       }
@@ -449,22 +449,22 @@
       }
     },
     {
-      "id": "dress",
+      "id": "vest",
       "slot": "cloth",
-      "name": "ชุดกระโปรง",
+      "name": "เสื้อเกราะเบา",
       "price": {
         "coins": 400
       }
     },
     {
-      "id": "round",
+      "id": "glare",
       "slot": "eyes",
-      "name": "ตากลม"
+      "name": "ตาจ้อง"
     },
     {
-      "id": "happy",
+      "id": "squint",
       "slot": "eyes",
-      "name": "ตายิ้ม"
+      "name": "ตาหรี่"
     },
     {
       "id": "sharp",
@@ -475,9 +475,9 @@
       }
     },
     {
-      "id": "star",
+      "id": "glow",
       "slot": "eyes",
-      "name": "ตาดาว",
+      "name": "ตาเรืองแสง",
       "price": {
         "gems": 40
       }
@@ -488,9 +488,9 @@
       "name": "ไม่ใส่"
     },
     {
-      "id": "bear",
+      "id": "bearskull",
       "slot": "set",
-      "name": "ชุดหมีน้อย",
+      "name": "ชุดกะโหลกหมี",
       "exclusive": true
     },
     {
@@ -499,15 +499,15 @@
       "name": "ไม่ใส่"
     },
     {
-      "id": "wings",
+      "id": "ironwings",
       "slot": "back",
-      "name": "ปีกจิ๋ว",
+      "name": "ปีกเหล็ก",
       "exclusive": true
     },
     {
-      "id": "backpack",
+      "id": "ammo",
       "slot": "back",
-      "name": "เป้สนาม",
+      "name": "เป้กระสุน",
       "price": {
         "coins": 300
       }
@@ -515,7 +515,7 @@
     {
       "id": "cape",
       "slot": "back",
-      "name": "ผ้าคลุมแดง",
+      "name": "ผ้าคลุมขาดวิ่น",
       "price": {
         "coins": 500
       }
@@ -611,7 +611,7 @@
       },
       {
         "free": {
-          "item": "fashion:hat/beanie"
+          "item": "fashion:hat/bandana"
         },
         "premium": {
           "coins": 200
@@ -654,7 +654,7 @@
           "gems": 10
         },
         "premium": {
-          "item": "fashion:back/wings"
+          "item": "fashion:back/ironwings"
         }
       },
       {
@@ -694,7 +694,7 @@
           "gems": 10
         },
         "premium": {
-          "item": "fashion:set/bear"
+          "item": "fashion:set/bearskull"
         }
       }
     ]
