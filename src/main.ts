@@ -1,4 +1,7 @@
 import Phaser from 'phaser';
+import '@fontsource/kanit/400.css';
+import '@fontsource/kanit/700.css';
+import '@fontsource/kanit/900.css';
 import BootScene from './scenes/BootScene';
 import MenuScene from './scenes/MenuScene';
 import SetupScene from './scenes/SetupScene';
@@ -12,6 +15,12 @@ import ShopScene from './scenes/ShopScene';
 import PassScene from './scenes/PassScene';
 import { account } from './net/account';
 import { net } from './net/NetClient';
+
+// Canvas text can't wait for a web font, so start once Kanit is in (or after 3 s without it).
+await Promise.race([
+  Promise.all(['400 40px Kanit', '700 40px Kanit', '900 40px Kanit'].map((f) => document.fonts.load(f, 'กขA'))).catch(() => undefined),
+  new Promise((ok) => setTimeout(ok, 3000)),
+]);
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

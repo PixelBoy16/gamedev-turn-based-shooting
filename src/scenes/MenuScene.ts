@@ -4,6 +4,7 @@ import { sfx } from '../audio/sfx';
 import { DEFAULT_LOADOUT, Loadout } from '../core/gear';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
+import { drawPlate } from '../ui/theme';
 import { FONT, INK, label } from '../ui/widgets';
 import { menuBackdrop } from './backdrop';
 
@@ -229,23 +230,14 @@ export default class MenuScene extends Phaser.Scene {
 }
 
 /**
- * A chunky tappable card: dark outline, coloured face with a darker bottom lip and a
- * shine, sinks a little when pressed. Children are added in its local space (centre 0,0).
+ * A chunky tappable steel plate (see theme.ts), riveted when tall; sinks a little
+ * when pressed. Children are added in its local space (centre 0,0).
  */
 class MenuCard extends Phaser.GameObjects.Container {
   constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, fill: number, onClick: () => void) {
     super(scene, x, y);
-    const r = Math.min(28, h / 3);
-    const lip = Phaser.Display.Color.IntegerToColor(fill).darken(25).color;
     const g = scene.add.graphics();
-    g.fillStyle(INK, 0.95);
-    g.fillRoundedRect(-w / 2 - 5, -h / 2 - 5, w + 10, h + 18, r + 4);
-    g.fillStyle(lip, 1);
-    g.fillRoundedRect(-w / 2, -h / 2, w, h + 8, r);
-    g.fillStyle(fill, 1);
-    g.fillRoundedRect(-w / 2, -h / 2, w, h, r);
-    g.fillStyle(0xffffff, 0.16);
-    g.fillRoundedRect(-w / 2 + 10, -h / 2 + 6, w - 20, Math.min(h * 0.3, 40), r * 0.6);
+    drawPlate(g, w, h, fill, { rivets: h >= 140 });
     const zone = scene.add.zone(0, 0, w, h + 8).setInteractive({ useHandCursor: true });
     this.add([g, zone]);
     scene.add.existing(this);

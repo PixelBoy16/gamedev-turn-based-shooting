@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import { sfx } from '../audio/sfx';
+import { THEME, drawPlate } from './theme';
 
-export const FONT = 'system-ui, "Noto Sans Thai", sans-serif';
-export const INK = 0x1b2030;
+export const FONT = '"Kanit", system-ui, "Noto Sans Thai", sans-serif';
+export const INK = THEME.panel;
 export const TEAM_COLORS = [0x3b82f6, 0xef4444];
 
 export function label(scene: Phaser.Scene, x: number, y: number, str: string, size: number, color = '#ffffff'): Phaser.GameObjects.Text {
-  return scene.add.text(x, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, stroke: '#1b2030', strokeThickness: Math.max(3, size / 6) });
+  return scene.add.text(x, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, stroke: '#0d0f15', strokeThickness: Math.max(3, size / 6) });
 }
 
 export interface ButtonOpts {
@@ -37,7 +38,7 @@ export class Button extends Phaser.GameObjects.Container {
     this.bg = scene.add.graphics();
     this.text = scene.add.text(0, 0, str, {
       fontFamily: FONT, fontSize: `${opts.size ?? 28}px`, color: '#ffffff', align: 'center',
-      stroke: '#1b2030', strokeThickness: 4,
+      stroke: '#0d0f15', strokeThickness: 5,
     }).setOrigin(0.5);
     this.icon = scene.add.image(-w / 2 + h / 2, 0, '__DEFAULT').setVisible(false);
     this.zone = scene.add.zone(0, 0, w, h).setInteractive({ useHandCursor: true });
@@ -105,28 +106,19 @@ export class Button extends Phaser.GameObjects.Container {
     const { w, h } = this;
     const g = this.bg;
     g.clear();
-    const fill = this.opts.fill ?? 0x2b3350;
-    g.fillStyle(INK, 0.9);
+    const fill = this.opts.fill ?? THEME.steel;
     if (this.opts.circle) {
+      g.fillStyle(THEME.ink, 0.95);
       g.fillCircle(0, 0, w / 2 + 4);
-      g.fillStyle(fill, 0.9);
+      g.fillStyle(fill, 0.95);
       g.fillCircle(0, 0, w / 2);
       if (this.selected) {
-        g.lineStyle(6, 0xffd166, 1);
+        g.lineStyle(6, THEME.fire, 1);
         g.strokeCircle(0, 0, w / 2);
       }
       return;
     }
-    const r = this.opts.radius ?? 14;
-    g.fillRoundedRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, r + 3);
-    g.fillStyle(fill, 1);
-    g.fillRoundedRect(-w / 2, -h / 2, w, h, r);
-    g.fillStyle(0xffffff, 0.12);
-    g.fillRoundedRect(-w / 2 + 6, -h / 2 + 5, w - 12, h * 0.35, r * 0.6);
-    if (this.selected) {
-      g.lineStyle(6, 0xffd166, 1);
-      g.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
-    }
+    drawPlate(g, w, h, fill, { cut: this.opts.radius, selected: this.selected });
   }
 }
 
@@ -138,15 +130,12 @@ export function confirmBox(scene: Phaser.Scene, text: string, yes: string, onYes
     parts.length = 0;
   };
   parts.push(scene.add.rectangle(960, 540, 1920, 1080, 0x000000, 0.5).setInteractive().setDepth(60).on('pointerdown', close));
-  const g = scene.add.graphics().setDepth(61);
-  g.fillStyle(INK, 0.98);
-  g.fillRoundedRect(560, 380, 800, 320, 26);
-  g.lineStyle(5, 0xffd166, 1);
-  g.strokeRoundedRect(560, 380, 800, 320, 26);
+  const g = scene.add.graphics().setDepth(61).setPosition(960, 540);
+  drawPlate(g, 800, 320, THEME.panel, { cut: 28, rivets: true, selected: true });
   parts.push(g);
   parts.push(scene.add.text(960, 470, text, { fontFamily: FONT, fontSize: '34px', color: '#ffffff', align: 'center', wordWrap: { width: 720 } })
     .setOrigin(0.5).setDepth(62));
-  parts.push(new Button(scene, 820, 620, 260, 90, yes, { fill: 0x2f9e44, size: 34, onClick: () => { close(); onYes(); } }).setDepth(62));
+  parts.push(new Button(scene, 820, 620, 260, 90, yes, { fill: THEME.green, size: 34, onClick: () => { close(); onYes(); } }).setDepth(62));
   parts.push(new Button(scene, 1100, 620, 260, 90, 'ยกเลิก', { size: 32, onClick: close }).setDepth(62));
   return close;
 }
