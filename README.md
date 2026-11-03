@@ -42,6 +42,24 @@ How it works:
 - A reload or dropped connection rejoins the same seat (token in sessionStorage). Your turns time out while you're away. A player who leaves the room is replaced by a bot.
 - Set `VITE_SERVER_URL` to point the client at a hosted server; `PORT` changes the server port.
 
+## Deploying (Render)
+
+`render.yaml` describes both parts: the room server (Node web service, health check `/health`) and the game (static site built with `VITE_SERVER_URL` set to the server's host).
+
+1. Push this repo to GitHub.
+2. On render.com: New → Blueprint → pick the repo → Apply. Both services build; later pushes redeploy them.
+3. Open the `crater-clash` static site URL and share it.
+
+The free server sleeps after 15 idle minutes; the first player after that waits about a minute.
+
+## Game config (for game masters)
+
+Every number and name players see lives in `config/game.json`: rules (`rules`), per-match limits (`limits`), weapons, skills, items and their values, equipment (stats must give and cost the same points) and the fashion list.
+
+1. Edit the file.
+2. `npm run check-config`: lists mistakes in Thai and exits non-zero if the file can't be used.
+3. Restart the server (on Render: push, or Manual Deploy). The server refuses to start with a broken config, and sends its numbers to every client at match start, so online matches always agree. Bot mode uses the numbers built into the game.
+
 ## Controls
 
 | Action | Keyboard / mouse | Touch |

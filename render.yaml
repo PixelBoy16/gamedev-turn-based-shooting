@@ -1,0 +1,27 @@
+# Render Blueprint: the room server (WebSocket) and the game (static site).
+# New → Blueprint on render.com, pick this repo; both services deploy on every push.
+services:
+  - type: web
+    name: crater-clash-server
+    runtime: node
+    plan: free # sleeps after 15 idle minutes; the first player then waits ~1 minute
+    buildCommand: npm ci && npm run check-config
+    startCommand: npx tsx server/index.ts
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+
+  - type: web
+    name: crater-clash
+    runtime: static
+    buildCommand: npm ci && npx vite build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VITE_SERVER_URL
+        fromService:
+          type: web
+          name: crater-clash-server
+          property: host

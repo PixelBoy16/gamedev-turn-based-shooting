@@ -10,7 +10,8 @@ const SEAT_KEY = 'crater-clash:seat';
 
 function serverUrl(): string {
   const env = import.meta.env.VITE_SERVER_URL as string | undefined;
-  if (env) return env;
+  // a bare host (what a hosting dashboard hands out) gets a secure WebSocket scheme
+  if (env) return /^wss?:\/\//.test(env) ? env : `wss://${env}`;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${location.hostname || 'localhost'}:${DEFAULT_PORT}`;
 }

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { GameConfig, applyConfig, validateConfig } from '../src/core/config';
@@ -23,7 +24,12 @@ applyConfig(game as GameConfig);
 
 const port = Number(process.env.PORT ?? DEFAULT_PORT);
 const lobby = new Lobby();
-const wss = new WebSocketServer({ port });
+// Plain HTTP answers the host's health check; WebSockets upgrade on the same port.
+const http = createServer((req, res) => {
+  res.writeHead(req.url === '/health' ? 200 : 404, { 'content-type': 'text/plain' });
+  res.end(req.url === '/health' ? 'ok' : 'not found');
+});
+const wss = new WebSocketServer({ server: http });
 const alive = new WeakMap<WebSocket, boolean>();
 
 wss.on('connection', (ws) => {
@@ -62,4 +68,4 @@ setInterval(() => {
   }
 }, 10000);
 
-console.log(`Crater Clash room server on ws://localhost:${port}`);
+http.listen(port, () => console.log(`Crater Clash room server on ws://localhost:${port}`));
