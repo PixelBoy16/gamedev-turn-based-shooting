@@ -101,4 +101,4 @@ setInterval(() => {
   }
 }, 10000);
 
-http.listen(port, () => console.log(`Crater Clash room server on ws://localhost:${port}`));
+http.listen(port, () => console.log(`Black Boom room server on ws://localhost:${port}`));

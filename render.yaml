@@ -2,7 +2,7 @@
 # New → Blueprint on render.com, pick this repo; both services deploy on every push.
 services:
   - type: web
-    name: crater-clash-server
+    name: black-boom-server
     runtime: node
     plan: free # sleeps after 15 idle minutes; the first player then waits ~1 minute
     buildCommand: npm ci && npm run check-config
@@ -19,7 +19,7 @@ services:
     # disk, which the free plan wipes on every restart or sleep.
 
   - type: web
-    name: crater-clash
+    name: black-boom
     runtime: static
     buildCommand: npm ci && npx vite build
     staticPublishPath: dist
@@ -29,5 +29,5 @@ services:
       - key: VITE_SERVER_URL
         fromService:
           type: web
-          name: crater-clash-server
+          name: black-boom-server
           property: host

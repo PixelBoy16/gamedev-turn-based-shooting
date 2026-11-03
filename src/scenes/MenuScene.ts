@@ -50,16 +50,20 @@ export default class MenuScene extends Phaser.Scene {
       logo = this.add.image(HERO_X, 230, 'art-logo');
       logo.setScale(Math.min(960 / logo.width, 380 / logo.height));
     } else {
-      const t = this.add.text(HERO_X, 220, 'Crater Clash', {
-        fontFamily: FONT, fontSize: '150px', fontStyle: '900', color: '#ffd166', stroke: '#1b2030', strokeThickness: 22,
+      // black letters with a hot orange rim and a burst of light behind them
+      const glow = this.add.container(HERO_X, 220);
+      for (let i = 0; i < 6; i++) glow.add(this.add.ellipse(0, 0, 640 - i * 70, 300 - i * 34, 0xffb040, 0.07).setBlendMode(Phaser.BlendModes.ADD));
+      this.tweens.add({ targets: glow, scale: 1.1, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      const t = this.add.text(HERO_X, 220, 'BLACK BOOM', {
+        fontFamily: FONT, fontSize: '150px', fontStyle: '900', color: '#1b1d26', stroke: '#ffb020', strokeThickness: 18,
         padding: { x: 20, y: 20 },
       }).setOrigin(0.5);
       const grad = t.context.createLinearGradient(0, 40, 0, t.height - 40);
-      grad.addColorStop(0, '#fff3b0');
-      grad.addColorStop(0.5, '#ffc93c');
-      grad.addColorStop(1, '#ff8a3d');
+      grad.addColorStop(0, '#5a6078');
+      grad.addColorStop(0.55, '#1b1d26');
+      grad.addColorStop(1, '#000000');
       t.setFill(grad);
-      t.setShadow(0, 10, '#1b2030', 0, true, true);
+      t.setShadow(0, 12, '#7a1d00', 0, true, false);
       logo = t;
     }
     const s = logo.scale;

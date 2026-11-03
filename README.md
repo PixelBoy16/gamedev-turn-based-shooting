@@ -1,4 +1,4 @@
-# Crater Clash — bot mode + friend rooms (milestone 3)
+# Black Boom — bot mode + friend rooms (milestone 3)
 
 Turn-based artillery on the web: aim against the wind, crater the ground, knock enemies off the map.
 
@@ -71,7 +71,7 @@ npm run tunnel-url                       # print that address
 
 1. Push this repo to GitHub.
 2. On render.com: New → Blueprint → pick the repo → Apply. Both services build; later pushes redeploy them.
-3. Open the `crater-clash` static site URL and share it.
+3. Open the `black-boom` static site URL and share it.
 
 The free server sleeps after 15 idle minutes; the first player after that waits about a minute.
 
