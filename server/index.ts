@@ -11,6 +11,7 @@ import { accountApi } from './api';
 import { ConfigStore } from './configStore';
 import { openDb } from './db';
 import { Conn, Lobby, Services, publishedConfig, setPublished } from './rooms';
+import { staticFiles } from './static';
 
 // Room server: `npm run server`. One JSON message per WebSocket frame.
 
@@ -54,8 +55,10 @@ const services: Services = {
 
 const port = Number(process.env.PORT ?? DEFAULT_PORT);
 const lobby = new Lobby(Math.random, services);
+// STATIC_DIR: also serve the built game pages (the Docker image does), so one address is enough
+const pages = process.env.STATIC_DIR ? staticFiles(process.env.STATIC_DIR) : () => false;
 const http = createServer((req, res) => {
-  if (admin(req, res) || api(req, res)) return;
+  if (admin(req, res) || api(req, res) || pages(req, res)) return;
   res.writeHead(req.url === '/health' ? 200 : 404, { 'content-type': 'text/plain' });
   res.end(req.url === '/health' ? 'ok' : 'not found');
 });

@@ -1,0 +1,61 @@
+# Team test server on this machine: the game + PostgreSQL, and optionally a Cloudflare
+# tunnel so teammates can play from anywhere. Not the production setup.
+#
+#   cp .env.example .env              # then set ADMIN_PASSWORD (and TUNNEL_TOKEN for a fixed address)
+#   docker compose up -d --build      # game at http://localhost:8080
+#   docker compose --profile tunnel up -d   # + a temporary https://*.trycloudflare.com address
+#   npm run tunnel-url                # print that address
+#
+# A fixed address on your own domain: put the tunnel's token in TUNNEL_TOKEN and use
+# --profile named-tunnel instead (point the tunnel's public hostname at http://game:2567).
+
+services:
+  game:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://crater:crater@db:5432/crater
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      # the tunnel reports each player's real address; the port below is bound to this machine only
+      TRUST_PROXY: "1"
+    ports:
+      - "127.0.0.1:${PORT:-8080}:2567"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crater
+      POSTGRES_PASSWORD: crater # reachable only inside this compose network
+      POSTGRES_DB: crater
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "crater"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Quick tunnel: no Cloudflare account needed; the address changes whenever this restarts.
+  tunnel:
+    image: cloudflare/cloudflared:2025.9.1
+    profiles: [tunnel]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://game:2567
+    depends_on: [game]
+
+  # Named tunnel: a fixed address on a domain in your Cloudflare account.
+  named-tunnel:
+    image: cloudflare/cloudflared:2025.9.1
+    profiles: [named-tunnel]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on: [game]
+
+volumes:
+  db:

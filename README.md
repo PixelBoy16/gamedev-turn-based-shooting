@@ -42,6 +42,29 @@ How it works:
 - A reload or dropped connection rejoins the same seat (token in sessionStorage). Your turns time out while you're away. A player who leaves the room is replaced by a bot.
 - Set `VITE_SERVER_URL` to point the client at a hosted server; `PORT` changes the server port.
 
+## Team test server (Docker + Cloudflare tunnel)
+
+The whole game in Docker on one machine, with PostgreSQL, for testing inside the team.
+The room server also serves the built pages, so one address carries the game, `/admin`,
+the APIs and the WebSocket. This is not the production setup.
+
+```bash
+cp .env.example .env                     # set ADMIN_PASSWORD
+docker compose up -d --build             # http://localhost:8080 (admin: /admin)
+docker compose --profile tunnel up -d    # share it: a temporary https://*.trycloudflare.com
+npm run tunnel-url                       # print that address
+```
+
+- The quick tunnel needs no Cloudflare account, but its address changes every time the
+  `tunnel` container restarts. For a fixed address on your own domain, create a tunnel in
+  Cloudflare Zero Trust, point its public hostname at `http://game:2567`, put its token in
+  `TUNNEL_TOKEN` and use `--profile named-tunnel` instead.
+- After pulling new code: `docker compose up -d --build`. Players, results and published
+  configs stay in the `db` volume; `docker compose down -v` wipes them.
+- The game port is bound to this machine only (`127.0.0.1`), because the server trusts the
+  player address the tunnel reports (`TRUST_PROXY`) for its sign-in rate limits.
+- The game stops when this machine sleeps or Docker stops.
+
 ## Deploying (Render)
 
 `render.yaml` describes both parts: the room server (Node web service, health check `/health`) and the game (static site built with `VITE_SERVER_URL` set to the server's host).

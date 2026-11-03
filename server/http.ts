@@ -51,6 +51,20 @@ export function cors(req: IncomingMessage, res: ServerResponse): boolean {
   return true;
 }
 
+/**
+ * The player's address. Behind a tunnel or proxy every request comes from the proxy, so
+ * with TRUST_PROXY set the address the proxy reports is used instead. Only set it when
+ * the server can't be reached except through that proxy: the header is easy to fake.
+ */
+export function clientIp(req: IncomingMessage): string {
+  if (process.env.TRUST_PROXY) {
+    const h = req.headers['cf-connecting-ip'] ?? req.headers['x-forwarded-for'];
+    const ip = (Array.isArray(h) ? h[0] : h)?.split(',')[0].trim();
+    if (ip) return ip;
+  }
+  return req.socket.remoteAddress ?? '?';
+}
+
 /** At most `max` attempts per address per minute (sign-in, account creation). */
 export class RateLimit {
   private hits = new Map<string, { n: number; since: number }>();
@@ -59,7 +73,7 @@ export class RateLimit {
 
   /** Count one attempt; false if this address is over the limit. */
   take(req: IncomingMessage): boolean {
-    const ip = req.socket.remoteAddress ?? '?';
+    const ip = clientIp(req);
     const now = Date.now();
     const h = this.hits.get(ip);
     const cur = h && now - h.since < 60_000 ? h : { n: 0, since: now };
@@ -70,6 +84,6 @@ export class RateLimit {
   }
 
   reset(req: IncomingMessage): void {
-    this.hits.delete(req.socket.remoteAddress ?? '?');
+    this.hits.delete(clientIp(req));
   }
 }

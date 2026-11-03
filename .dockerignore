@@ -1,0 +1,8 @@
+node_modules
+dist
+data
+art-src
+.git
+.env
+*.log
+.DS_Store
