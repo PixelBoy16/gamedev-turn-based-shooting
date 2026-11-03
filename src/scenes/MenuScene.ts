@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ART_SCALE, lookRes, lookTexture } from '../art/chibi';
 import { DEFAULT_LOADOUT, Loadout } from '../core/gear';
+import { account } from '../net/account';
 import { net } from '../net/NetClient';
 import { Button, label } from '../ui/widgets';
 import { menuBackdrop } from './backdrop';
@@ -35,11 +36,24 @@ export default class MenuScene extends Phaser.Scene {
       this.tweens.add({ targets: img, scaleY: img.scaleY * 1.04, duration: 700 + i * 90, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     });
 
-    new Button(this, 960, 450, 560, 120, 'เล่นกับบอท', { fill: 0x2f9e44, size: 48, onClick: () => {
+    new Button(this, 960, 400, 560, 110, 'เล่นกับบอท', { fill: 0x2f9e44, size: 46, onClick: () => {
       this.registry.set('setupMode', null);
       this.scene.start('setup');
     } });
-    new Button(this, 960, 610, 560, 120, 'เล่นกับเพื่อน', { fill: 0x4c6ef5, size: 48, onClick: () => this.scene.start('lobby') });
-    label(this, 960, 690, 'สร้างห้อง แล้วส่งรหัส 6 หลักให้เพื่อน', 26).setOrigin(0.5);
+    new Button(this, 960, 530, 560, 110, 'เล่นกับเพื่อน', { fill: 0x4c6ef5, size: 46, onClick: () => this.scene.start('lobby') });
+    label(this, 960, 600, 'สร้างห้อง แล้วส่งรหัส 6 หลักให้เพื่อน', 24).setOrigin(0.5);
+    new Button(this, 960, 690, 560, 110, 'แข่งจัดอันดับ', { fill: 0xe0a400, size: 46, onClick: () => this.scene.start('ranked') });
+    label(this, 960, 760, 'จับคู่กับผู้เล่นฝีมือใกล้กัน', 24).setOrigin(0.5);
+
+    // who you are, top right; tap to manage the account
+    const badge = new Button(this, 1700, 70, 400, 84, '', { size: 26, onClick: () => this.scene.start('account') });
+    const showBadge = () => {
+      const a = account.view;
+      badge.text.setText(a ? `${a.displayName} · ${a.rating}${a.username ? '' : '  (ชั่วคราว)'}` : 'บัญชี (ออฟไลน์)');
+    };
+    showBadge();
+    const stop = account.onChange(showBadge);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, stop);
+    void account.ensure();
   }
 }

@@ -52,6 +52,17 @@ How it works:
 
 The free server sleeps after 15 idle minutes; the first player after that waits about a minute.
 
+## Accounts and ranked play
+
+- The first time the game opens it creates a guest account in the background (no sign-up). The wardrobe, name and results are saved to it.
+- บัญชี (top right of the menu): change the display name, give the guest account a username and password to play on another device, sign in to an existing account, and see the leaderboard.
+- แข่งจัดอันดับ: the server pairs two signed-in players whose ratings are within 100 points, widening by 10 points a second while they wait. The match starts at once, has no bots, and ignores equipment stats. Ratings move by Elo (K = 32) when it ends; the result screen shows the change.
+- Friend rooms count towards matches played and wins, not rating.
+
+Data lives in PostgreSQL when `DATABASE_URL` is set (any host: Neon and Supabase have free tiers). Without it the server uses an embedded Postgres (PGlite) in `DATA_DIR` (default `./data`), which is what local development and the tests use; nothing to install. Tables are created on start (`server/db.ts`).
+
+Server pieces: `server/db.ts` (connection + migrations), `server/accounts.ts` (guests, usernames with scrypt-hashed passwords, sessions stored as hashes, Elo), `server/api.ts` (HTTP `/api/...`), and the `auth` / `queue` messages in `server/rooms.ts`. Client: `src/net/account.ts`, `AccountScene`, `RankedScene`.
+
 ## Admin page (for game masters)
 
 `/admin.html` on the game's site edits the server's config without touching files.
@@ -59,7 +70,7 @@ The free server sleeps after 15 idle minutes; the first player after that waits 
 - Sign in with your name and the shared `ADMIN_PASSWORD` (set on the server; without it the page is off). Your name goes into the history.
 - Tabs: rules, weapons, skills and items, equipment (with a give/cost balance per piece), fashion, history.
 - Changed fields are highlighted; the bar at the bottom lists every change, errors (which block publishing) and warnings.
-- Publish saves a new version (`DATA_DIR/config/v<n>.json`, default `./data`). New matches use it at once; matches in progress finish on the numbers they started with. If someone else published first you are asked to reload.
+- Publish saves a new version in the database. New matches use it at once; matches in progress finish on the numbers they started with. If someone else published first you are asked to reload.
 - History: load any old version as a draft and publish it again to roll back.
 
 Locally: `ADMIN_PASSWORD=<something> npm run server`, then open http://localhost:5173/admin.html.

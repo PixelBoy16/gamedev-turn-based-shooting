@@ -6,6 +6,7 @@ import { TUNING, tankCentre } from '../core/World';
 import { Button, FONT, INK, TEAM_COLORS, label } from '../ui/widgets';
 import BattleScene, { hpColor } from './BattleScene';
 import { isMuted, setMuted } from '../audio/sfx';
+import { account } from '../net/account';
 import { net } from '../net/NetClient';
 import { DIFF_LABEL, FORMAT_LABEL } from './setup';
 
@@ -168,6 +169,15 @@ export default class HudScene extends Phaser.Scene {
       g.lineStyle(6, won ? 0xffd166 : 0x8899aa, 1);
       g.strokeRoundedRect(-480, -330, 960, 660, 28);
       const title = won ? 'ชนะ!' : winner === -1 ? 'เสมอ' : 'แพ้...';
+      // ranked: the new rating arrives a moment after the result
+      const rating = label(this, 0, 150, 'กำลังคิดคะแนน…', 34, '#ffd166').setOrigin(0.5, 0);
+      const showRating = () => {
+        const d = account.lastChange;
+        if (d !== null && account.view) rating.setText(`คะแนน ${d >= 0 ? '+' : ''}${d} → ${account.view.rating}`);
+      };
+      showRating();
+      const stop = account.onChange(showRating);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, stop);
       const lines = b.world.tanks.map((t) => {
         const s = b.stats.get(t.id)!;
         const acc = s.shots ? Math.round((s.hits / s.shots) * 100) : 0;
@@ -178,7 +188,14 @@ export default class HudScene extends Phaser.Scene {
         label(this, 0, -290, title, 96, won ? '#ffd166' : '#ffffff').setOrigin(0.5, 0),
         label(this, 0, -170, `${b.net ? `ออนไลน์ ${b.setup.format}` : FORMAT_LABEL[b.setup.format]} · บอท${DIFF_LABEL[b.setup.difficulty]} · ${b.turns.turnNumber} เทิร์น`, 26).setOrigin(0.5, 0),
         this.add.text(0, -110, lines.join('\n'), { fontFamily: FONT, fontSize: '28px', color: '#e6ecff', lineSpacing: 12, align: 'left' }).setOrigin(0.5, 0),
-        ...(b.net
+        ...(b.net && net.room?.ranked
+          ? [rating, new Button(this, 0, 240, 420, 96, 'กลับเมนู', {
+            fill: 0x2f9e44, size: 36, onClick: () => {
+              net.leave();
+              b.scene.start('menu');
+            },
+          })]
+          : b.net
           ? [new Button(this, 0, 240, 420, 96, 'กลับห้อง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.start('lobby') })]
           : [
             new Button(this, -200, 240, 340, 96, 'เล่นอีกครั้ง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.restart() }),

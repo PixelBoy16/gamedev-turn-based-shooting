@@ -1,22 +1,20 @@
 /// <reference types="node" />
-import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer, Server } from 'node:http';
 import { AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminApi } from '../server/admin';
 import { ConfigStore } from '../server/configStore';
+import { Db, openDb } from '../server/db';
 import { BUNDLED, GameConfig } from '../src/core/config';
 
 describe('admin api', () => {
-  let dir: string;
+  let db: Db;
   let server: Server;
   let base: string;
   let published: GameConfig[];
 
-  const open = () => {
-    const store = new ConfigStore(dir, BUNDLED);
+  const open = async () => {
+    const store = await ConfigStore.open(db, BUNDLED);
     const api = adminApi({ store, password: 'test-pass', onPublish: (c) => published.push(c) });
     server = createServer((req, res) => {
       if (!api(req, res)) res.writeHead(404).end();
@@ -37,13 +35,13 @@ describe('admin api', () => {
   const login = async () => (await call('/login', { name: 'จีเอ็ม', password: 'test-pass' })).body.token as string;
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'cc-admin-'));
+    db = await openDb(); // in-memory Postgres
     published = [];
     await open();
   });
-  afterEach(() => {
+  afterEach(async () => {
     server.close();
-    rmSync(dir, { recursive: true, force: true });
+    await db.close();
   });
 
   it('refuses a wrong password and requests without a token', async () => {
@@ -75,7 +73,7 @@ describe('admin api', () => {
     expect((await call('/publish', { config: BUNDLED, base: 0 }, token)).status).toBe(409);
   });
 
-  it('keeps published versions across a restart', async () => {
+  it('keeps published versions across a server restart', async () => {
     const token = await login();
     const config = structuredClone(BUNDLED);
     config.rules.maxHp = 1200;

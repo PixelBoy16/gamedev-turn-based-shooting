@@ -20,6 +20,25 @@ export interface Profile {
   items: ItemId[];
 }
 
+/** A player's account as the client sees it. */
+export interface AccountView {
+  username: string | null; // null = guest
+  displayName: string;
+  loadout: Loadout | null; // saved wardrobe, null until first saved
+  items: ItemId[] | null;
+  rating: number;
+  played: number;
+  wins: number;
+  rankedPlayed: number;
+}
+
+export interface LeaderRow {
+  displayName: string;
+  rating: number;
+  played: number;
+  wins: number;
+}
+
 export interface RoomConfig {
   map: MapId;
   format: OnlineFormat;
@@ -34,6 +53,8 @@ export interface PlayerView extends Profile {
 
 export interface RoomView {
   code: string;
+  /** A ranked match from the queue: no lobby, no bots, no equipment. */
+  ranked: boolean;
   hostId: number;
   config: RoomConfig;
   players: PlayerView[];
@@ -72,6 +93,9 @@ export interface FireMsg extends MoveMsg {
 }
 
 export type ClientMsg =
+  | { t: 'auth'; token: string } // first message after connecting, when signed in
+  | ({ t: 'queue' } & Profile) // look for a ranked 1v1
+  | { t: 'unqueue' }
   | ({ t: 'create' } & Profile)
   | ({ t: 'join'; code: string } & Profile)
   | { t: 'rejoin'; code: string; token: string }
@@ -90,6 +114,8 @@ export type ClientMsg =
   | { t: 'needTerrain' };
 
 export type ServerMsg =
+  | { t: 'account'; account: AccountView; ratingChange?: number } // signed in, or numbers after a match
+  | { t: 'queue'; waiting: boolean }
   | { t: 'joined'; code: string; token: string; you: number; game: GameConfig }
   | { t: 'room'; room: RoomView }
   | { t: 'error'; msg: string }

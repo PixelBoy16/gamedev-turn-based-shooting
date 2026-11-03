@@ -1,10 +1,9 @@
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { GameConfig, validateConfig } from '../src/core/config';
+import { Db } from './db';
 
-// Published game configs, one JSON file per version in <dataDir>/config/. The newest
-// is the one new matches use. Version 0 is the seed file from the repo
-// (config/game.json), used until an admin publishes anything.
+// Published game configs, one row per version in the database. The newest is the one
+// new matches use. Version 0 is the seed file from the repo (config/game.json), used
+// until an admin publishes anything. All versions are small, so they are kept in memory.
 
 export interface ConfigVersion {
   version: number;
@@ -18,27 +17,24 @@ interface Stored extends ConfigVersion {
 }
 
 export class ConfigStore {
-  private dir: string;
-  private versions: Stored[] = [];
+  private constructor(private db: Db, private versions: Stored[]) {}
 
-  constructor(dataDir: string, seed: GameConfig) {
-    this.dir = join(dataDir, 'config');
-    mkdirSync(this.dir, { recursive: true });
-    for (const f of readdirSync(this.dir)) {
-      if (!/^v\d+\.json$/.test(f)) continue;
-      try {
-        const s = JSON.parse(readFileSync(join(this.dir, f), 'utf8')) as Stored;
-        if (validateConfig(s.config).errors.length === 0) this.versions.push(s);
-        else console.error(`config store: ${f} is invalid, skipped`);
-      } catch {
-        console.error(`config store: ${f} is unreadable, skipped`);
+  static async open(db: Db, seed: GameConfig): Promise<ConfigStore> {
+    const rows = await db.query<{ version: number; at: Date | string; by_name: string; note: string; config: GameConfig }>(
+      'select * from config_versions order by version');
+    const versions: Stored[] = [];
+    for (const r of rows) {
+      if (validateConfig(r.config).errors.length) {
+        console.error(`config store: v${r.version} no longer passes the checks, skipped`);
+        continue;
       }
+      versions.push({ version: r.version, at: new Date(r.at).toISOString(), by: r.by_name, note: r.note, config: r.config });
     }
-    this.versions.sort((a, b) => a.version - b.version);
-    if (!this.versions.length) this.versions.push({ version: 0, at: new Date().toISOString(), by: 'repo', note: 'config/game.json', config: seed });
+    if (!versions.length) versions.push({ version: 0, at: new Date().toISOString(), by: 'repo', note: 'config/game.json', config: seed });
+    return new ConfigStore(db, versions);
   }
 
-  get latest(): ConfigVersion & { config: GameConfig } {
+  get latest(): Stored {
     return this.versions[this.versions.length - 1];
   }
 
@@ -51,10 +47,12 @@ export class ConfigStore {
   }
 
   /** Save a new version (the caller has validated it). */
-  publish(config: GameConfig, by: string, note: string): ConfigVersion {
-    const s: Stored = { version: this.latest.version + 1, at: new Date().toISOString(), by, note, config };
-    writeFileSync(join(this.dir, `v${s.version}.json`), `${JSON.stringify(s, null, 2)}\n`);
-    this.versions.push(s);
+  async publish(config: GameConfig, by: string, note: string): Promise<ConfigVersion> {
+    const version = this.latest.version + 1;
+    const rows = await this.db.query<{ at: Date | string }>(
+      'insert into config_versions (version, by_name, note, config) values ($1, $2, $3, $4) returning at',
+      [version, by, note, JSON.stringify(config)]);
+    this.versions.push({ version, at: new Date(rows[0].at).toISOString(), by, note, config });
     return this.list()[0];
   }
 }

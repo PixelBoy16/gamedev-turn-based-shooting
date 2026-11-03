@@ -3,6 +3,7 @@ import { Difficulty } from '../core/BotAI';
 import { ItemId } from '../core/data';
 import { DEFAULT_LOADOUT, Loadout, cleanLoadout, copyLoadout } from '../core/gear';
 import { MapId } from '../core/Maps';
+import { account } from '../net/account';
 
 export type Format = '1v1' | '1v2' | '2v2';
 
@@ -35,9 +36,29 @@ export function loadSetup(registry: Phaser.Data.DataManager): MatchSetup {
 
 export function saveSetup(registry: Phaser.Data.DataManager, setup: MatchSetup): void {
   registry.set('setup', setup);
+  account.save({ loadout: setup.loadout, items: setup.items }).catch(() => undefined); // offline: kept locally
+  store(setup);
+}
+
+function store(setup: MatchSetup): void {
   try {
     localStorage.setItem('crater-clash:setup', JSON.stringify(setup));
   } catch {
     // ignore: the registry copy is enough for this session
   }
+}
+
+/**
+ * The account's saved wardrobe wins over this device's (it follows the player
+ * between devices). An account with nothing saved yet takes this device's.
+ */
+export function syncSetup(registry: Phaser.Data.DataManager): void {
+  const a = account.view;
+  if (!a) return;
+  const setup = loadSetup(registry);
+  if (a.loadout && a.items) {
+    const next = { ...setup, loadout: cleanLoadout(a.loadout), items: [...a.items] };
+    registry.set('setup', next);
+    store(next);
+  } else account.save({ loadout: setup.loadout, items: setup.items }).catch(() => undefined);
 }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { applyConfig } from '../core/config';
 import { ClientMsg, MatchView, RoomView, ServerMsg } from './protocol';
+import { account } from './account';
 import { serverUrl } from './serverUrl';
 
 // One WebSocket to the room server, shared by the lobby and battle scenes.
@@ -13,6 +14,8 @@ class NetClient extends Phaser.Events.EventEmitter {
   room: RoomView | null = null;
   match: MatchView | null = null;
   you = -1; // player id in the room
+  /** The server knows our account on this connection (needed for ranked). */
+  authed = false;
   private ws: WebSocket | null = null;
   private wanted = false;
   private retryMs = 500;
@@ -20,6 +23,10 @@ class NetClient extends Phaser.Events.EventEmitter {
 
   constructor() {
     super();
+    // signed in or switched account while connected: tell the server
+    account.onChange(() => {
+      if (this.connected && account.token && account.token !== this.authToken) this.auth();
+    });
     try {
       this.seat = JSON.parse(sessionStorage.getItem(SEAT_KEY) ?? 'null');
     } catch {
@@ -43,6 +50,9 @@ class NetClient extends Phaser.Events.EventEmitter {
     this.ws = ws;
     ws.onopen = () => {
       this.retryMs = 500;
+      this.authed = false;
+      this.authToken = null;
+      if (account.token) this.auth();
       if (this.seat) this.send({ t: 'rejoin', ...this.seat });
       this.emit('status');
     };
@@ -63,6 +73,13 @@ class NetClient extends Phaser.Events.EventEmitter {
       setTimeout(() => this.connect(), this.retryMs);
       this.retryMs = Math.min(5000, this.retryMs * 2);
     };
+  }
+
+  private authToken: string | null = null;
+
+  private auth(): void {
+    this.authToken = account.token;
+    this.send({ t: 'auth', token: account.token! });
   }
 
   send(msg: ClientMsg): void {
@@ -88,6 +105,13 @@ class NetClient extends Phaser.Events.EventEmitter {
 
   private receive(msg: ServerMsg): void {
     switch (msg.t) {
+      case 'over':
+        account.lastChange = null; // the ranked rating change follows in an 'account' message
+        break;
+      case 'account':
+        this.authed = true;
+        account.update(msg.account, msg.ratingChange);
+        break;
       case 'joined':
         applyConfig(msg.game); // names and limits in the room's wardrobe match the server's
         this.you = msg.you;

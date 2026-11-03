@@ -478,7 +478,7 @@ export default class BattleScene extends Phaser.Scene {
   toMenu(): void {
     if (this.net) {
       net.send({ t: 'away' });
-      this.scene.start('lobby');
+      this.scene.start(net.room?.ranked ? 'ranked' : 'lobby');
     } else this.scene.start('menu');
   }
 

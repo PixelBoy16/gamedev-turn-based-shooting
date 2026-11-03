@@ -21,6 +21,8 @@ export default class SetupScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Text;
   /** Picking a character and items for a friend room: the room decides map, format and bots. */
   private online = false;
+  /** Where "back"/"done" go when dressing up for a friend room or ranked (no map or bot picks). */
+  private returnTo: 'lobby' | 'ranked' | null = null;
   /** The open "pick a piece" window, if any. */
   private picker: Phaser.GameObjects.GameObject[] = [];
 
@@ -32,7 +34,9 @@ export default class SetupScene extends Phaser.Scene {
     this.setup = loadSetup(this.registry);
     this.refreshers = [];
     this.picker = [];
-    this.online = this.registry.get('setupMode') === 'online';
+    const mode = this.registry.get('setupMode');
+    this.returnTo = mode === 'online' ? 'lobby' : mode === 'ranked' ? 'ranked' : null;
+    this.online = this.returnTo !== null;
   }
 
   create(): void {
@@ -47,7 +51,7 @@ export default class SetupScene extends Phaser.Scene {
     if (!this.online) this.rightColumn();
 
     this.hint = label(this, 960, 1040, '', 26, '#ffd166').setOrigin(0.5);
-    new Button(this, 200, 990, 260, 90, '← กลับ', { size: 34, onClick: () => this.scene.start(this.online ? 'lobby' : 'menu') });
+    new Button(this, 200, 990, 260, 90, '← กลับ', { size: 34, onClick: () => this.scene.start(this.returnTo ?? 'menu') });
     new Button(this, 1640, 985, 440, 110, this.online ? 'ตกลง' : 'เริ่มเล่น!', { fill: 0x2f9e44, size: 48, onClick: () => this.start() });
     this.refresh();
   }
@@ -62,7 +66,7 @@ export default class SetupScene extends Phaser.Scene {
       return;
     }
     saveSetup(this.registry, this.setup);
-    this.scene.start(this.online ? 'lobby' : 'battle');
+    this.scene.start(this.returnTo ?? 'battle');
   }
 
   private say(msg: string): void {

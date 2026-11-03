@@ -30,6 +30,8 @@ export default class LobbyScene extends Phaser.Scene {
   }
 
   create(): void {
+    // the battle's key bindings (W, A, S, D, E, R...) stay captured game-wide and would eat letters typed here
+    this.input.keyboard?.clearCaptures();
     menuBackdrop(this);
     const shade = this.add.graphics();
     shade.fillStyle(0x10162a, 0.6);
@@ -59,6 +61,10 @@ export default class LobbyScene extends Phaser.Scene {
   private onNet(msg: ServerMsg): void {
     if (msg.t === 'match') {
       this.scene.start('battle', { online: true });
+      return;
+    }
+    if (msg.t === 'room' && msg.room.ranked) {
+      this.scene.start('ranked'); // reloaded during a ranked match
       return;
     }
     if (msg.t === 'error') this.say(msg.msg);

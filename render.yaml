@@ -13,15 +13,10 @@ services:
         value: "22"
       - key: ADMIN_PASSWORD # the admin page's password: Render asks for it on the first deploy
         sync: false
-      - key: DATA_DIR
-        value: /var/data
-    # Published config versions live in DATA_DIR. On the free plan the disk is wiped
-    # whenever the server restarts or sleeps, so admin edits fall back to
-    # config/game.json. To keep them, switch to a paid plan and uncomment:
-    # disk:
-    #   name: data
-    #   mountPath: /var/data
-    #   sizeGB: 1
+      - key: DATABASE_URL # PostgreSQL connection string (Neon / Supabase free tier): accounts, results, admin configs
+        sync: false
+    # Without DATABASE_URL the server falls back to an embedded database on local
+    # disk, which the free plan wipes on every restart or sleep.
 
   - type: web
     name: crater-clash

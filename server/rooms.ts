@@ -2,7 +2,7 @@ import { TurnMods, freshMods, useItem, useSkill } from '../src/core/Actions';
 import { ShotPlanner, chooseAttackItem, chooseSupport } from '../src/core/BotAI';
 import { GameConfig, currentConfig, useConfig } from '../src/core/config';
 import { ITEM_IDS, ItemId, LIMITS, WEAPONS } from '../src/core/data';
-import { cleanLoadout, randomLoadout } from '../src/core/gear';
+import { DEFAULT_EQUIPMENT, cleanLoadout, randomLoadout } from '../src/core/gear';
 import { skillOf } from '../src/core/Actions';
 import { MAP_IDS, generateMap } from '../src/core/Maps';
 import { RosterEntry, ShotRun, buildTanks, runShot, stepTanks } from '../src/core/Match';
@@ -11,12 +11,15 @@ import { encodeMask, terrainHash } from '../src/core/Terrain';
 import { TurnManager } from '../src/core/TurnManager';
 import { TUNING, World, createWorld, tankCentre, walk } from '../src/core/World';
 import {
-  ClientMsg, FireMsg, MatchView, PlayerView, Profile, RoomConfig, RoomView, ServerMsg, TEAM_SIZE, TurnInfo,
+  AccountView, ClientMsg, FireMsg, MatchView, PlayerView, Profile, RoomConfig, RoomView, ServerMsg, TEAM_SIZE, TurnInfo,
 } from '../src/net/protocol';
 
 // Friend rooms: 6-digit codes, teams, host settings, and the authoritative match.
-// Transport-agnostic: a Conn is anything that can send a message, so tests drive
-// this directly and index.ts plugs in WebSockets.
+// Also the ranked queue: two signed-in players of similar rating are put in a room
+// of their own that starts at once. Transport-agnostic: a Conn is anything that can
+// send a message, so tests drive this directly and index.ts plugs in WebSockets.
+// Accounts are optional (Services): without them everyone plays as a guest and
+// nothing is recorded.
 
 export interface Conn {
   send(msg: ServerMsg): void;
@@ -34,8 +37,35 @@ export const TIMING = {
 
 const SAMPLES = { easy: 120, normal: 220, hard: 320 };
 
+/** Ranked pairing: ratings this far apart match at once; the gap allowed grows while waiting. */
+export const QUEUE = { baseGap: 100, gapPerSecond: 10, tickMs: 2000 };
+
+/** What the lobby needs from the account system (server/accounts.ts). */
+export interface Services {
+  account(token: string): Promise<{ id: number; view: AccountView } | null>;
+  accountView(id: number): Promise<AccountView | null>;
+  /** Record a finished match; returns each ranked player's rating change by account id. */
+  record(m: {
+    ranked: boolean; map: string; format: string; winner: number;
+    players: { accountId: number | null; name: string; team: number }[];
+  }): Promise<Map<number, number>>;
+}
+
+interface Signed {
+  id: number;
+  view: AccountView;
+}
+
+interface Waiting {
+  conn: Conn;
+  account: Signed;
+  profile: Profile;
+  since: number;
+}
+
 interface Player extends Profile {
   id: number;
+  accountId: number | null;
   team: number;
   token: string;
   conn: Conn | null;
@@ -58,18 +88,39 @@ export function setPublished(config: GameConfig): void {
 export class Lobby {
   readonly rooms = new Map<string, Room>();
   private seats = new Map<Conn, { room: Room; player: Player }>();
+  private signed = new Map<Conn, Signed>();
+  private queue: Waiting[] = [];
+  private queueTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private rng: Rng = Math.random) {}
+  constructor(private rng: Rng = Math.random, private services: Services | null = null) {}
 
   handle(conn: Conn, msg: ClientMsg): void {
     useConfig(published); // a match's own handler switches to its config
     const seat = this.seats.get(conn);
     switch (msg.t) {
+      case 'auth':
+        void this.auth(conn, msg.token);
+        return;
+      case 'queue': {
+        const account = this.signed.get(conn);
+        if (!account) return conn.send({ t: 'error', msg: 'ต้องมีบัญชีก่อนเล่นแบบจัดอันดับ' });
+        if (seat) this.leave(conn);
+        if (this.queue.some((w) => w.conn === conn)) return;
+        this.queue.push({ conn, account, profile: this.profileOf(conn, msg), since: Date.now() });
+        conn.send({ t: 'queue', waiting: true });
+        this.pair();
+        if (!this.queueTimer && this.queue.length) this.queueTimer = setInterval(() => this.pair(), QUEUE.tickMs);
+        return;
+      }
+      case 'unqueue':
+        this.unqueue(conn);
+        conn.send({ t: 'queue', waiting: false });
+        return;
       case 'create': {
         if (seat) this.leave(conn);
-        const room = new Room(this.newCode(), this.rng, (r) => this.rooms.delete(r.code));
-        this.rooms.set(room.code, room);
-        this.sit(conn, room, room.add(cleanProfile(msg), conn)!);
+        this.unqueue(conn);
+        const room = this.newRoom();
+        this.sit(conn, room, room.add(this.profileOf(conn, msg), conn, this.signed.get(conn)?.id ?? null)!);
         return;
       }
       case 'join': {
@@ -77,7 +128,9 @@ export class Lobby {
         const room = this.rooms.get(String(msg.code).trim());
         if (!room) return conn.send({ t: 'error', msg: 'ไม่พบห้องนี้' });
         if (room.match) return conn.send({ t: 'error', msg: 'ห้องนี้กำลังเล่นอยู่' });
-        const p = room.add(cleanProfile(msg), conn);
+        if (room.ranked) return conn.send({ t: 'error', msg: 'ไม่พบห้องนี้' });
+        this.unqueue(conn);
+        const p = room.add(this.profileOf(conn, msg), conn, this.signed.get(conn)?.id ?? null);
         if (!p) return conn.send({ t: 'error', msg: 'ห้องเต็มแล้ว' });
         this.sit(conn, room, p);
         return;
@@ -101,6 +154,8 @@ export class Lobby {
   }
 
   disconnect(conn: Conn): void {
+    this.unqueue(conn);
+    this.signed.delete(conn);
     const seat = this.seats.get(conn);
     if (!seat) return;
     this.seats.delete(conn);
@@ -124,6 +179,54 @@ export class Lobby {
     seat.room.remove(seat.player);
   }
 
+  private async auth(conn: Conn, token: string): Promise<void> {
+    const a = await this.services?.account(token).catch(() => null);
+    if (!a) return conn.send({ t: 'error', msg: 'บัญชีหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+    this.signed.set(conn, a);
+    conn.send({ t: 'account', account: a.view });
+  }
+
+  /** A signed-in player always plays under their account's name. */
+  private profileOf(conn: Conn, p: Partial<Profile>): Profile {
+    const profile = cleanProfile(p);
+    const a = this.signed.get(conn);
+    return a ? { ...profile, name: a.view.displayName } : profile;
+  }
+
+  private unqueue(conn: Conn): void {
+    this.queue = this.queue.filter((w) => w.conn !== conn);
+    if (!this.queue.length && this.queueTimer) {
+      clearInterval(this.queueTimer);
+      this.queueTimer = null;
+    }
+  }
+
+  /** Match up waiting players, longest-waiting first. */
+  private pair(): void {
+    const now = Date.now();
+    const gap = (w: Waiting) => QUEUE.baseGap + (QUEUE.gapPerSecond * (now - w.since)) / 1000;
+    for (let i = 0; i < this.queue.length; i++) {
+      const a = this.queue[i];
+      const b = this.queue.slice(i + 1).find((w) => w.account.id !== a.account.id
+        && Math.abs(w.account.view.rating - a.account.view.rating) <= Math.min(gap(a), gap(w)));
+      if (!b) continue;
+      this.unqueue(a.conn);
+      this.unqueue(b.conn);
+      const room = this.newRoom();
+      room.ranked = true;
+      room.config = { map: MAP_IDS[Math.floor(this.rng() * MAP_IDS.length)], format: '1v1', difficulty: 'normal' };
+      for (const w of [a, b]) this.sit(w.conn, room, room.add(w.profile, w.conn, w.account.id)!);
+      room.startMatch();
+      i = -1; // the queue changed: start over
+    }
+  }
+
+  private newRoom(): Room {
+    const room = new Room(this.newCode(), this.rng, (r) => this.rooms.delete(r.code), this.services);
+    this.rooms.set(room.code, room);
+    return room;
+  }
+
   private newCode(): string {
     for (;;) {
       const code = String(Math.floor(this.rng() * 900000) + 100000);
@@ -145,23 +248,24 @@ function token(): string {
 
 export class Room {
   players: Player[] = [];
+  ranked = false;
   hostId = -1;
   config: RoomConfig = { map: 'hills', format: '1v1', difficulty: 'normal' };
   match: ServerMatch | null = null;
   private nextId = 0;
   private emptyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(readonly code: string, private rng: Rng, private onClose: (r: Room) => void) {}
+  constructor(readonly code: string, private rng: Rng, private onClose: (r: Room) => void, readonly services: Services | null = null) {}
 
   get capacity(): number {
     return TEAM_SIZE[this.config.format];
   }
 
-  add(profile: Profile, conn: Conn): Player | null {
+  add(profile: Profile, conn: Conn, accountId: number | null = null): Player | null {
     const counts = [0, 1].map((team) => this.players.filter((p) => p.team === team).length);
     const team = counts[0] <= counts[1] ? 0 : 1;
     if (counts[team] >= this.capacity) return null;
-    const p: Player = { ...profile, id: this.nextId++, team, token: token(), conn, inMatch: false };
+    const p: Player = { ...profile, id: this.nextId++, accountId, team, token: token(), conn, inMatch: false };
     this.players.push(p);
     if (this.hostId < 0) this.hostId = p.id;
     return p;
@@ -177,6 +281,8 @@ export class Room {
 
   handle(p: Player, msg: ClientMsg): void {
     const host = p.id === this.hostId;
+    // a ranked room has no lobby: the queue chose the rules and started it
+    if (this.ranked && ['profile', 'team', 'config', 'start'].includes(msg.t)) return;
     switch (msg.t) {
       case 'profile':
         if (this.match) return;
@@ -206,9 +312,7 @@ export class Room {
       }
       case 'start':
         if (!host || this.match) return;
-        this.match = new ServerMatch(this, this.rng);
-        this.changed();
-        this.match.begin();
+        this.startMatch();
         return;
       case 'resume':
         this.match?.sendView(p);
@@ -222,11 +326,17 @@ export class Room {
     }
   }
 
+  startMatch(): void {
+    this.match = new ServerMatch(this, this.rng);
+    this.changed();
+    this.match.begin();
+  }
+
   view(): RoomView {
     const players: PlayerView[] = this.players.map(({ id, name, loadout, items, team, conn }) => ({
       id, name, loadout, items, team, connected: !!conn,
     }));
-    return { code: this.code, hostId: this.hostId, config: { ...this.config }, players, playing: !!this.match };
+    return { code: this.code, ranked: this.ranked, hostId: this.hostId, config: { ...this.config }, players, playing: !!this.match };
   }
 
   /** Re-broadcast the lobby view, and close the room if nobody is connected for a while. */
@@ -246,9 +356,25 @@ export class Room {
     for (const p of this.players) if (p !== except) p.conn?.send(msg);
   }
 
-  matchEnded(): void {
+  matchEnded(winner: number, accountOf: { accountId: number | null; name: string; team: number }[]): void {
     this.match = null;
     this.changed();
+    if (this.services) void this.record(winner, accountOf);
+  }
+
+  /** Save the result, then tell each signed-in player their new numbers. */
+  private async record(winner: number, players: { accountId: number | null; name: string; team: number }[]): Promise<void> {
+    const s = this.services!;
+    try {
+      const delta = await s.record({ ranked: this.ranked, map: this.config.map, format: this.config.format, winner, players });
+      for (const p of this.players) {
+        if (p.accountId === null || !p.conn) continue;
+        const view = await s.accountView(p.accountId);
+        if (view) p.conn.send({ t: 'account', account: view, ratingChange: this.ranked ? delta.get(p.accountId) ?? 0 : undefined });
+      }
+    } catch (err) {
+      console.error('recording a match failed', err);
+    }
   }
 
   private error(p: Player, msg: string): void {
@@ -269,6 +395,8 @@ export class ServerMatch {
   readonly config: RoomConfig;
   /** tank id → player id, or null for a bot (including a seat whose player left). */
   readonly owner: (number | null)[];
+  /** Who played each tank, kept even if they leave mid-match (for the record). */
+  private seatOf: { accountId: number | null; name: string; team: number }[] = [];
   phase: 'aim' | 'resolving' | 'over' = 'aim';
   private mods: TurnMods = freshMods();
   private turnStartX = 0;
@@ -288,12 +416,16 @@ export class ServerMatch {
     for (const team of [0, 1]) {
       const humans = room.players.filter((p) => p.team === team);
       for (const p of humans) {
-        roster.push({ name: p.name, team, isBot: false, loadout: p.loadout, items: [...p.items] });
+        // ranked is skill only: equipment stats stay off
+        const loadout = room.ranked ? { ...p.loadout, equip: { ...DEFAULT_EQUIPMENT } } : p.loadout;
+        roster.push({ name: p.name, team, isBot: false, loadout, items: [...p.items] });
+        this.seatOf.push({ accountId: p.accountId, name: p.name, team });
         this.owner.push(p.id);
       }
       for (let i = humans.length; i < TEAM_SIZE[this.config.format]; i++) {
         roster.push({ name: `บอท ${roster.filter((r) => r.isBot).length + 1}`, team, isBot: true, loadout: randomLoadout(this.rng), items: this.botItems() });
         this.owner.push(null);
+        this.seatOf.push({ accountId: null, name: roster[roster.length - 1].name, team });
       }
     }
     this.world = createWorld(terrain, buildTanks(this.config.map, terrain, roster));
@@ -422,7 +554,7 @@ export class ServerMatch {
     if (winner !== null) {
       this.phase = 'over';
       this.room.broadcast({ t: 'over', winner, tanks: this.world.tanks });
-      this.room.matchEnded();
+      this.room.matchEnded(winner, this.seatOf);
       return;
     }
     this.nextTurn();
