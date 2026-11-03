@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { WeaponId } from '../core/data';
 import { EquipSlot, FashionSlot, Loadout, equipDef, lookId } from '../core/gear';
+import { DRAWERS, HAIR_BACK, SETS, drawFace, drawHead } from './drawnPieces';
 import { LOOK_RES, painted, paintedHand, paintedLook, paintedPiece } from './look';
 
-// Placeholder chibi art drawn with Graphics and baked into textures at 2x
-// (displayed at 0.5 scale). Original designs: big head, thick outline, bright
-// colours. Everyone is the same plain chibi; fashion pieces are drawn in layers
-// (see drawLook) and the whole look is baked into one texture per combination.
+// Placeholder art drawn with Graphics and baked into textures at 2x (displayed at
+// 0.5 scale). The character and its pieces are drawn in drawnPieces.ts (tough
+// cartoon style); a whole look is baked into one texture per combination.
 // Once painted layers exist (look.ts) they replace the drawn look entirely.
 
 export const ART_SCALE = 0.5;
@@ -14,8 +14,6 @@ export const CHIBI_W = 128;
 export const CHIBI_H = 148;
 
 const INK = 0x2a1e1a;
-const LINE = 5;
-const SKIN = 0xf6d1ad;
 
 type G = Phaser.GameObjects.Graphics;
 
@@ -49,22 +47,21 @@ export const lookRes = () => (painted() ? 1 / LOOK_RES : 1);
 /** Where the weapon is held, relative to the feet in unscaled px facing right; null = the drawn chibi's spot. */
 export const lookHand = () => (painted() ? paintedHand() : null);
 
-/** Back to front: back item, hair behind the head, outfit, head, eyes, face, hair, glasses, hat. */
+/** Back to front: back item, hair behind the head, outfit, head, eyes, attitude, face, hair, glasses, hat. */
 function drawLook(g: G, l: Loadout): void {
   const v = l.look;
-  const bear = v.set === 'bear';
-  BACK[v.back]?.(g);
-  if (!bear) HAIR_BACK[v.hair]?.(g);
-  if (bear) bearSuit(g);
-  else CLOTH[v.cloth]?.(g);
-  head(g, SKIN);
-  EYES[v.eyes]?.(g);
-  mouth(g);
-  FACE[v.face]?.(g);
-  if (bear) bearHood(g);
-  else HAIR[v.hair]?.(g);
-  if (!l.hide.glasses) GLASSES[v.glasses]?.(g);
-  if (!bear && !l.hide.hat) HAT[v.hat]?.(g);
+  const set = v.set !== 'none' ? SETS[v.set] : undefined;
+  DRAWERS.back[v.back]?.(g);
+  if (!set) HAIR_BACK[v.hair]?.(g);
+  (set?.suit ?? DRAWERS.cloth[v.cloth])?.(g);
+  drawHead(g);
+  DRAWERS.eyes[v.eyes]?.(g);
+  drawFace(g);
+  DRAWERS.face[v.face]?.(g);
+  if (set) set.hood(g);
+  else DRAWERS.hair[v.hair]?.(g);
+  if (!l.hide.glasses) DRAWERS.glasses[v.glasses]?.(g);
+  if (!set && !l.hide.hat) DRAWERS.hat[v.hat]?.(g);
 }
 
 /** One fashion piece on its own, for wardrobe tiles. Null for an empty choice. */
@@ -74,15 +71,20 @@ export function pieceTexture(scene: Phaser.Scene, slot: FashionSlot, id: string)
   if (art) return art;
   const key = `piece-${slot}-${id}`;
   bake(scene, key, CHIBI_W, CHIBI_H, (g) => {
-    const onHead = slot === 'eyes' || slot === 'face' || slot === 'hair' || slot === 'glasses';
+    if (slot === 'set') {
+      SETS[id]?.suit(g);
+      drawHead(g);
+      DRAWERS.eyes.glare(g);
+      drawFace(g);
+      SETS[id]?.hood(g);
+      return;
+    }
+    const onHead = slot === 'eyes' || slot === 'face' || slot === 'hair' || slot === 'glasses' || slot === 'hat';
     if (slot === 'hair') HAIR_BACK[id]?.(g);
-    if (onHead) head(g, SKIN);
-    if (slot === 'face' || slot === 'glasses') EYES.round(g);
-    const draw: Record<FashionSlot, Draw | undefined> = {
-      hat: HAT[id], glasses: GLASSES[id], hair: HAIR[id], face: FACE[id], cloth: CLOTH[id], eyes: EYES[id], back: BACK[id],
-      set: (gg) => { bearSuit(gg); head(gg, SKIN); EYES.round(gg); mouth(gg); bearHood(gg); },
-    };
-    draw[slot]?.(g);
+    if (onHead) drawHead(g);
+    if (slot !== 'eyes' && onHead) DRAWERS.eyes.glare(g);
+    DRAWERS[slot][id]?.(g);
+    if (slot === 'eyes') drawFace(g);
   });
   return key;
 }
@@ -130,337 +132,6 @@ export function equipTexture(scene: Phaser.Scene, slot: EquipSlot, id: string): 
     g.fillCircle(slot === 'ring' ? 43 : 43, slot === 'ring' ? 23 : slot === 'necklace' ? 61 : 47, 4);
   });
   return key;
-}
-
-// ------------------------------------------------------------------ shared parts
-
-function filled(g: G, color: number, shape: () => void, stroke = true): void {
-  g.fillStyle(color, 1);
-  shape();
-  if (stroke) {
-    g.lineStyle(LINE, INK, 1);
-  }
-}
-
-function body(g: G, cloth: number, hand: number): void {
-  // feet
-  g.fillStyle(INK, 1);
-  g.fillEllipse(48, 140, 28, 14);
-  g.fillEllipse(80, 140, 28, 14);
-  // torso
-  filled(g, cloth, () => g.fillRoundedRect(36, 94, 56, 46, 16));
-  g.strokeRoundedRect(36, 94, 56, 46, 16);
-  // hands
-  for (const x of [32, 96]) {
-    g.fillStyle(hand, 1);
-    g.fillCircle(x, 118, 10);
-    g.lineStyle(4, INK, 1);
-    g.strokeCircle(x, 118, 10);
-  }
-}
-
-function head(g: G, skin: number, cy = 60, r = 44): void {
-  g.fillStyle(skin, 1);
-  g.fillCircle(64, cy, r);
-  g.lineStyle(LINE, INK, 1);
-  g.strokeCircle(64, cy, r);
-}
-
-function mouth(g: G): void {
-  g.lineStyle(3, INK, 1);
-  g.beginPath();
-  g.arc(72, 78, 6, 0.15 * Math.PI, 0.85 * Math.PI);
-  g.strokePath();
-}
-
-// ------------------------------------------------------------------ fashion layers (eyes look right; flipped for left)
-
-type Draw = (g: G) => void;
-
-const EYE_X = [56, 86];
-const EYE_Y = 64;
-
-const EYES: Record<string, Draw> = {
-  round: (g) => {
-    for (const x of EYE_X) {
-      g.fillStyle(INK, 1);
-      g.fillEllipse(x, EYE_Y, 11, 15);
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(x - 2, EYE_Y - 4, 3);
-    }
-  },
-  happy: (g) => {
-    g.lineStyle(4, INK, 1);
-    for (const x of EYE_X) {
-      g.beginPath();
-      g.arc(x, EYE_Y + 3, 7, 1.1 * Math.PI, 1.9 * Math.PI);
-      g.strokePath();
-    }
-  },
-  sharp: (g) => {
-    for (const x of EYE_X) {
-      g.fillStyle(INK, 1);
-      g.fillTriangle(x - 8, EYE_Y - 4, x + 8, EYE_Y - 8, x + 6, EYE_Y + 6);
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(x + 2, EYE_Y - 3, 2);
-    }
-  },
-  star: (g) => {
-    for (const x of EYE_X) {
-      g.fillStyle(INK, 1);
-      g.fillEllipse(x, EYE_Y, 13, 16);
-      g.fillStyle(0xffd23f, 1);
-      g.fillTriangle(x - 5, EYE_Y + 2, x + 5, EYE_Y + 2, x, EYE_Y - 7);
-      g.fillTriangle(x - 5, EYE_Y - 3, x + 5, EYE_Y - 3, x, EYE_Y + 6);
-    }
-  },
-};
-
-const FACE: Record<string, Draw> = {
-  blush: (g) => {
-    g.fillStyle(0xff8fa3, 0.7);
-    g.fillEllipse(46, 80, 16, 9);
-    g.fillEllipse(96, 80, 16, 9);
-  },
-  bandaid: (g) => {
-    g.fillStyle(0xf4c48a, 1);
-    g.fillRoundedRect(34, 74, 24, 10, 4);
-    g.lineStyle(2, INK, 1);
-    g.strokeRoundedRect(34, 74, 24, 10, 4);
-    g.lineBetween(46, 74, 46, 84);
-  },
-  mustache: (g) => {
-    g.fillStyle(0x3b2a20, 1);
-    g.fillEllipse(64, 74, 22, 8);
-    g.fillEllipse(80, 74, 22, 8);
-  },
-};
-
-function hairCap(g: G, color: number): void {
-  g.fillStyle(color, 1);
-  g.beginPath();
-  g.arc(64, 56, 46, Math.PI * 1.02, Math.PI * 1.98);
-  g.closePath();
-  g.fillPath();
-}
-
-const HAIR_BACK: Record<string, Draw> = {
-  ponytail: (g) => {
-    g.fillStyle(0x23202b, 1);
-    g.fillEllipse(22, 64, 30, 56);
-    g.lineStyle(4, INK, 1);
-    g.strokeEllipse(22, 64, 30, 56);
-  },
-  bob: (g) => {
-    g.fillStyle(0xff8fb3, 1);
-    g.fillRoundedRect(16, 40, 96, 60, 26);
-  },
-};
-
-const HAIR: Record<string, Draw> = {
-  short: (g) => {
-    hairCap(g, 0x5b3a29);
-    for (const [x, y] of [[34, 18], [52, 8], [72, 6], [92, 14]]) g.fillTriangle(x - 12, 34, x + 14, 30, x, y);
-    g.fillTriangle(70, 22, 100, 30, 96, 52);
-  },
-  spiky: (g) => {
-    g.fillStyle(0xff8c42, 1);
-    for (const [x, y] of [[24, 6], [44, -4], [66, -8], [88, -2], [106, 14]]) g.fillTriangle(x - 16, 40, x + 16, 36, x, y + 8);
-    hairCap(g, 0xff8c42);
-  },
-  ponytail: (g) => {
-    hairCap(g, 0x23202b);
-    g.fillStyle(0xe63946, 1);
-    g.fillCircle(24, 40, 7); // hair tie
-  },
-  bob: (g) => {
-    hairCap(g, 0xff8fb3);
-    g.fillRect(66, 26, 44, 18); // straight fringe
-  },
-};
-
-const GLASSES: Record<string, Draw> = {
-  round: (g) => {
-    g.lineStyle(4, 0x8b4513, 1);
-    for (const x of EYE_X) g.strokeCircle(x, EYE_Y, 12);
-    g.lineBetween(68, EYE_Y, 74, EYE_Y);
-    g.lineBetween(44, EYE_Y - 2, 26, EYE_Y - 6);
-  },
-  shades: (g) => {
-    g.fillStyle(0x1b2030, 1);
-    for (const x of EYE_X) g.fillRoundedRect(x - 14, EYE_Y - 9, 28, 18, 6);
-    g.lineStyle(4, 0x1b2030, 1);
-    g.lineBetween(64, EYE_Y - 4, 76, EYE_Y - 4);
-    g.fillStyle(0xffffff, 0.5);
-    for (const x of EYE_X) g.fillRect(x - 9, EYE_Y - 6, 6, 3);
-  },
-};
-
-const HAT: Record<string, Draw> = {
-  helm: (g) => {
-    g.fillStyle(0xa9b4c2, 1);
-    g.beginPath();
-    g.arc(64, 52, 46, Math.PI, 0);
-    g.closePath();
-    g.fillPath();
-    g.lineStyle(LINE, INK, 1);
-    g.strokePath();
-    g.fillStyle(0x7d8794, 1);
-    g.fillRoundedRect(14, 46, 100, 12, 6);
-    g.fillRoundedRect(60, 4, 10, 46, 4);
-    g.fillStyle(0xffffff, 0.45);
-    g.fillEllipse(44, 26, 18, 10);
-  },
-  aviator: (g) => {
-    g.fillStyle(0x8b5a2b, 1);
-    g.beginPath();
-    g.arc(64, 56, 47, Math.PI * 1.05, Math.PI * 1.95);
-    g.closePath();
-    g.fillPath();
-    g.fillRoundedRect(16, 50, 20, 34, 8);
-    g.lineStyle(4, INK, 1);
-    g.strokeRoundedRect(16, 50, 20, 34, 8);
-    g.lineStyle(6, 0x3a2c25, 1);
-    g.lineBetween(20, 38, 108, 34);
-    for (const x of [56, 86]) {
-      g.fillStyle(0x7fd6ff, 1);
-      g.fillCircle(x, 34, 12);
-      g.lineStyle(4, INK, 1);
-      g.strokeCircle(x, 34, 12);
-      g.fillStyle(0xffffff, 0.8);
-      g.fillCircle(x - 4, 30, 3);
-    }
-  },
-  crown: (g) => {
-    g.fillStyle(0xffd23f, 1);
-    g.fillRect(32, 10, 64, 16);
-    for (const x of [32, 52, 72, 92]) g.fillTriangle(x - 2, 12, x + 10, 12, x + 4, -4);
-    g.lineStyle(3, INK, 1);
-    g.strokeRect(32, 10, 64, 16);
-    g.fillStyle(0xe63946, 1);
-    g.fillCircle(64, 18, 4);
-  },
-  beanie: (g) => {
-    g.fillStyle(0x3a86ff, 1);
-    g.beginPath();
-    g.arc(64, 46, 44, Math.PI, 0);
-    g.closePath();
-    g.fillPath();
-    g.fillStyle(0xffffff, 1);
-    g.fillRoundedRect(18, 38, 92, 14, 7);
-    g.fillCircle(64, 4, 10);
-    g.lineStyle(3, INK, 1);
-    g.strokeRoundedRect(18, 38, 92, 14, 7);
-  },
-};
-
-const CLOTH: Record<string, Draw> = {
-  tee: (g) => {
-    body(g, 0x5fa8ff, SKIN);
-    g.fillStyle(0xffffff, 1);
-    g.fillRect(38, 112, 52, 6);
-  },
-  armor: (g) => {
-    body(g, 0xa47148, SKIN);
-    g.lineStyle(3, 0x6b4426, 1);
-    for (const y of [106, 118, 130]) g.lineBetween(40, y, 88, y);
-    g.fillStyle(0xc0c7d1, 1);
-    for (const x of [44, 84]) g.fillCircle(x, 100, 3);
-  },
-  robe: (g) => {
-    g.fillStyle(INK, 1);
-    g.fillEllipse(48, 142, 26, 10);
-    g.fillEllipse(80, 142, 26, 10);
-    g.fillStyle(0x7b4bc4, 1);
-    g.fillTriangle(30, 144, 98, 144, 64, 92);
-    g.fillRoundedRect(38, 92, 52, 30, 14);
-    g.lineStyle(LINE, INK, 1);
-    g.strokeTriangle(30, 144, 98, 144, 64, 92);
-    g.fillStyle(0xffd23f, 1);
-    g.fillTriangle(64, 108, 58, 124, 70, 124);
-    g.fillTriangle(58, 114, 70, 114, 64, 130);
-    hands(g);
-  },
-  ninja: (g) => {
-    body(g, 0x2f3545, SKIN);
-    g.fillStyle(0xe63946, 1);
-    g.fillRect(36, 118, 56, 8);
-    g.fillTriangle(40, 122, 30, 136, 44, 132);
-  },
-  dress: (g) => {
-    g.fillStyle(INK, 1);
-    g.fillEllipse(50, 142, 22, 10);
-    g.fillEllipse(78, 142, 22, 10);
-    g.fillStyle(0xff5d8f, 1);
-    g.fillRoundedRect(42, 92, 44, 26, 12);
-    g.fillTriangle(28, 138, 100, 138, 64, 104);
-    g.lineStyle(4, INK, 1);
-    g.strokeTriangle(28, 138, 100, 138, 64, 104);
-    g.fillStyle(0xffffff, 1);
-    for (const x of [40, 56, 72, 88]) g.fillCircle(x, 134, 3);
-    hands(g);
-  },
-};
-
-function hands(g: G): void {
-  for (const x of [32, 96]) {
-    g.fillStyle(SKIN, 1);
-    g.fillCircle(x, 118, 10);
-    g.lineStyle(4, INK, 1);
-    g.strokeCircle(x, 118, 10);
-  }
-}
-
-const BACK: Record<string, Draw> = {
-  backpack: (g) => {
-    g.fillStyle(0x4f7942, 1);
-    g.fillRoundedRect(14, 92, 30, 44, 10);
-    g.lineStyle(4, INK, 1);
-    g.strokeRoundedRect(14, 92, 30, 44, 10);
-    g.fillStyle(0x3b5d31, 1);
-    g.fillRoundedRect(18, 112, 22, 12, 4);
-  },
-  wings: (g) => {
-    for (const [x, y, s] of [[22, 96, 1], [30, 84, 0.8]] as const) {
-      g.fillStyle(0xbde0fe, 1);
-      g.fillEllipse(x, y, 34 * s, 22 * s);
-      g.fillEllipse(x - 8 * s, y + 10 * s, 26 * s, 16 * s);
-      g.lineStyle(3, INK, 1);
-      g.strokeEllipse(x, y, 34 * s, 22 * s);
-    }
-  },
-  cape: (g) => {
-    g.fillStyle(0xc1121f, 1);
-    g.fillTriangle(40, 92, 10, 144, 60, 144);
-    g.lineStyle(4, INK, 1);
-    g.strokeTriangle(40, 92, 10, 144, 60, 144);
-  },
-};
-
-/** "Set" outfits replace the clothes and the hair/hat in one go. */
-function bearSuit(g: G): void {
-  body(g, 0x9c6b43, 0x9c6b43);
-  g.fillStyle(0xe8cba8, 1);
-  g.fillEllipse(64, 120, 30, 30);
-}
-
-function bearHood(g: G): void {
-  for (const x of [26, 102]) {
-    g.fillStyle(0x9c6b43, 1);
-    g.fillCircle(x, 22, 16);
-    g.fillStyle(0xe8cba8, 1);
-    g.fillCircle(x, 22, 8);
-    g.lineStyle(4, INK, 1);
-    g.strokeCircle(x, 22, 16);
-  }
-  g.lineStyle(14, 0x9c6b43, 1);
-  g.beginPath();
-  g.arc(64, 60, 46, Math.PI * 0.75, Math.PI * 2.25);
-  g.strokePath();
-  g.lineStyle(4, INK, 1);
-  g.beginPath();
-  g.arc(64, 60, 53, Math.PI * 0.78, Math.PI * 2.22);
-  g.strokePath();
 }
 
 // ------------------------------------------------------------------ guns (pivot at x≈10, y=20)
