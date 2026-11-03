@@ -1,7 +1,17 @@
 import Phaser from 'phaser';
 
-/** Sky, clouds and a strip of hills for the menu screens. */
+/**
+ * Background for the menu screens: the painted menu scene (art/sprites/menu-bg.jpg) when
+ * it exists, else the painted hills from the battle maps, else drawn sky and hills.
+ * Painted art is scaled to cover the screen, cropping the sides.
+ */
 export function menuBackdrop(scene: Phaser.Scene): void {
+  const key = ['art-menu-bg', 'art-bg-hills'].find((k) => scene.textures.exists(k));
+  if (key) {
+    const img = scene.add.image(960, 540, key);
+    img.setScale(Math.max(1920 / img.width, 1080 / img.height));
+    return;
+  }
   const g = scene.add.graphics();
   g.fillGradientStyle(0x7cc6f2, 0x7cc6f2, 0xd7f0ff, 0xd7f0ff, 1);
   g.fillRect(0, 0, 1920, 1080);

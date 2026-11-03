@@ -582,7 +582,13 @@ export function loadArt(scene: Phaser.Scene): void {
   for (const m of ['hills', 'islands', 'mine']) scene.load.image(`art-bg-${m}`, `${base}bg-${m}.jpg`);
   scene.load.image('art-dirt', `${base}dirt.png`);
   scene.load.image('art-grass', `${base}grass.png`);
+  // first screen (optional; drawn fallbacks in MenuScene)
+  scene.load.image('art-menu-bg', `${base}menu-bg.jpg`);
+  scene.load.image('art-logo', `${base}logo.png`);
+  for (const i of MENU_ICONS) scene.load.image(`art-menu-${i}`, `${base}menu-${i}.png`);
 }
+
+export const MENU_ICONS = ['bot', 'friends', 'ranked', 'shop', 'pass', 'coin', 'gem'] as const;
 
 export const hasArt = (scene: Phaser.Scene, key: string) => scene.textures.exists(key);
 
