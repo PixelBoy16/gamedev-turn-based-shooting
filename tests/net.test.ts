@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Lobby, Room } from '../server/rooms';
+import { Lobby, Room, setPublished } from '../server/rooms';
 import { generateMap } from '../src/core/Maps';
 import { ShotRun, buildTanks, runShot } from '../src/core/Match';
 import { createRng } from '../src/core/rng';
@@ -8,7 +8,7 @@ import { createWorld } from '../src/core/World';
 import { freshMods } from '../src/core/Actions';
 import { WEAPONS } from '../src/core/data';
 import { DEFAULT_LOADOUT } from '../src/core/gear';
-import { BUNDLED, applyConfig } from '../src/core/config';
+import { BUNDLED, applyConfig, currentConfig } from '../src/core/config';
 import { ClientMsg, ServerMsg } from '../src/net/protocol';
 
 class FakeConn {
@@ -191,14 +191,34 @@ describe('friend rooms', () => {
 });
 
 describe('server game config', () => {
-  afterEach(() => applyConfig(BUNDLED));
+  afterEach(() => {
+    setPublished(BUNDLED);
+    applyConfig(BUNDLED);
+  });
+
+  const withHp = (maxHp: number) => ({ ...structuredClone(BUNDLED), rules: { ...BUNDLED.rules, maxHp } });
 
   it('sends its numbers with the match, and the client simulates with them', () => {
-    applyConfig({ ...structuredClone(BUNDLED), rules: { ...BUNDLED.rules, maxHp: 1234 } });
+    setPublished(withHp(1234));
     const { a, send } = setup();
+    expect(a.last('joined')!.game.rules.maxHp).toBe(1234);
     send(a, { t: 'start' });
     const view = a.last('match')!.match;
     expect(view.game.rules.maxHp).toBe(1234);
     expect(view.tanks[0].maxHp).toBe(1234);
+  });
+
+  it('keeps a running match on the numbers it started with after a publish', () => {
+    const { a, b, send, room } = setup();
+    send(a, { t: 'start' });
+    const before = room.match!.game;
+    setPublished(withHp(1500));
+    const conns = new Map([[room.players[0].id, a], [room.players[1].id, b]]);
+    fireActive(room, conns, send);
+    expect(room.match!.game).toBe(before);
+    expect(currentConfig()).toBe(before); // the match switched the globals back to its own
+    send(a, { t: 'settled', turn: 1 });
+    send(b, { t: 'settled', turn: 1 });
+    expect(b.last('turn')!.turn.turnNumber).toBe(2);
   });
 });

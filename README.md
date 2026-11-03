@@ -52,13 +52,25 @@ How it works:
 
 The free server sleeps after 15 idle minutes; the first player after that waits about a minute.
 
-## Game config (for game masters)
+## Admin page (for game masters)
+
+`/admin.html` on the game's site edits the server's config without touching files.
+
+- Sign in with your name and the shared `ADMIN_PASSWORD` (set on the server; without it the page is off). Your name goes into the history.
+- Tabs: rules, weapons, skills and items, equipment (with a give/cost balance per piece), fashion, history.
+- Changed fields are highlighted; the bar at the bottom lists every change, errors (which block publishing) and warnings.
+- Publish saves a new version (`DATA_DIR/config/v<n>.json`, default `./data`). New matches use it at once; matches in progress finish on the numbers they started with. If someone else published first you are asked to reload.
+- History: load any old version as a draft and publish it again to roll back.
+
+Locally: `ADMIN_PASSWORD=<something> npm run server`, then open http://localhost:5173/admin.html.
+
+## Game config file
 
 Every number and name players see lives in `config/game.json`: rules (`rules`), per-match limits (`limits`), weapons, skills, items and their values, equipment (stats must give and cost the same points) and the fashion list.
 
 1. Edit the file.
 2. `npm run check-config`: lists mistakes in Thai and exits non-zero if the file can't be used.
-3. Restart the server (on Render: push, or Manual Deploy). The server refuses to start with a broken config, and sends its numbers to every client at match start, so online matches always agree. Bot mode uses the numbers built into the game.
+3. Restart the server (on Render: push, or Manual Deploy). Or skip all this and use the admin page below. The server refuses to start with a broken config, and sends its numbers to every client at match start, so online matches always agree. Bot mode uses the numbers built into the game.
 
 ## Controls
 

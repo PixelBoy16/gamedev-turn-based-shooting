@@ -96,9 +96,9 @@ export const currentConfig = (): GameConfig => current;
 
 const color = (hex: string) => parseInt(hex.slice(1), 16);
 
-/** Make `cfg` the live config. Call only with a config that validateConfig() passed. */
+/** Make `cfg` the live config. Call only with a config that validateConfig() passed; don't change it afterwards. */
 export function applyConfig(cfg: GameConfig): void {
-  current = structuredClone(cfg);
+  current = cfg;
   const c = current;
   Object.assign(TUNING, structuredClone(c.rules));
   Object.assign(LIMITS, c.limits);
@@ -119,6 +119,11 @@ export function applyConfig(cfg: GameConfig): void {
 }
 
 applyConfig(BUNDLED);
+
+/** applyConfig, skipped when `cfg` is already live: cheap to call on every entry point. */
+export function useConfig(cfg: GameConfig): void {
+  if (current !== cfg) applyConfig(cfg);
+}
 
 // ------------------------------------------------------------------ validation
 

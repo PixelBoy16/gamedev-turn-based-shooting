@@ -4,28 +4,36 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { GameConfig, applyConfig, validateConfig } from '../src/core/config';
 import { ClientMsg, DEFAULT_PORT, ServerMsg } from '../src/net/protocol';
-import { Conn, Lobby } from './rooms';
+import { adminApi } from './admin';
+import { ConfigStore } from './configStore';
+import { Conn, Lobby, setPublished } from './rooms';
 
 // Room server: `npm run server`. One JSON message per WebSocket frame.
 
-// Game numbers are read from disk at start (GAME_CONFIG overrides the path), so a
-// deployed server picks up an edited config on restart without a rebuild. Every
-// match carries them to the clients.
+// The seed config is read from disk at start (GAME_CONFIG overrides the path), so a
+// deployed server picks up an edited file on restart without a rebuild. Versions
+// published from the admin page are kept in DATA_DIR and win over the seed.
 const configFile = process.env.GAME_CONFIG ?? fileURLToPath(new URL('../config/game.json', import.meta.url));
-const game: unknown = JSON.parse(readFileSync(configFile, 'utf8'));
-const report = validateConfig(game);
+const seed: unknown = JSON.parse(readFileSync(configFile, 'utf8'));
+const report = validateConfig(seed);
 for (const w of report.warnings) console.warn(`config: ${w}`);
 if (report.errors.length) {
   for (const e of report.errors) console.error(`config: ${e}`);
   console.error(`${configFile} has errors; not starting`);
   process.exit(1);
 }
-applyConfig(game as GameConfig);
+const store = new ConfigStore(process.env.DATA_DIR ?? fileURLToPath(new URL('../data', import.meta.url)), seed as GameConfig);
+applyConfig(store.latest.config);
+setPublished(store.latest.config);
+console.log(`game config v${store.latest.version} (${store.latest.by})`);
+const admin = adminApi({ store, password: process.env.ADMIN_PASSWORD, onPublish: setPublished });
+if (!process.env.ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not set: the admin page is off');
 
 const port = Number(process.env.PORT ?? DEFAULT_PORT);
 const lobby = new Lobby();
 // Plain HTTP answers the host's health check; WebSockets upgrade on the same port.
 const http = createServer((req, res) => {
+  if (admin(req, res)) return;
   res.writeHead(req.url === '/health' ? 200 : 404, { 'content-type': 'text/plain' });
   res.end(req.url === '/health' ? 'ok' : 'not found');
 });

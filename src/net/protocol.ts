@@ -90,7 +90,7 @@ export type ClientMsg =
   | { t: 'needTerrain' };
 
 export type ServerMsg =
-  | { t: 'joined'; code: string; token: string; you: number }
+  | { t: 'joined'; code: string; token: string; you: number; game: GameConfig }
   | { t: 'room'; room: RoomView }
   | { t: 'error'; msg: string }
   | { t: 'left' }

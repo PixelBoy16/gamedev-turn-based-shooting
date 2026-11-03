@@ -1,6 +1,6 @@
 import { TurnMods, freshMods, useItem, useSkill } from '../src/core/Actions';
 import { ShotPlanner, chooseAttackItem, chooseSupport } from '../src/core/BotAI';
-import { currentConfig } from '../src/core/config';
+import { GameConfig, currentConfig, useConfig } from '../src/core/config';
 import { ITEM_IDS, ItemId, LIMITS, WEAPONS } from '../src/core/data';
 import { cleanLoadout, randomLoadout } from '../src/core/gear';
 import { skillOf } from '../src/core/Actions';
@@ -43,6 +43,18 @@ interface Player extends Profile {
   inMatch: boolean;
 }
 
+// The server runs every match on one set of global game numbers (src/core/config).
+// A match keeps the config it started with, so an admin publishing new numbers never
+// changes a match in progress: each entry point below re-applies the config it runs
+// under (useConfig is a no-op when it is already live). New matches and the lobby use
+// the latest published one.
+let published: GameConfig = currentConfig();
+
+/** New matches (and the lobby) use `config` from now on. */
+export function setPublished(config: GameConfig): void {
+  published = config;
+}
+
 export class Lobby {
   readonly rooms = new Map<string, Room>();
   private seats = new Map<Conn, { room: Room; player: Player }>();
@@ -50,6 +62,7 @@ export class Lobby {
   constructor(private rng: Rng = Math.random) {}
 
   handle(conn: Conn, msg: ClientMsg): void {
+    useConfig(published); // a match's own handler switches to its config
     const seat = this.seats.get(conn);
     switch (msg.t) {
       case 'create': {
@@ -100,7 +113,7 @@ export class Lobby {
   private sit(conn: Conn, room: Room, p: Player): void {
     this.seats.set(conn, { room, player: p });
     p.conn = conn;
-    conn.send({ t: 'joined', code: room.code, token: p.token, you: p.id });
+    conn.send({ t: 'joined', code: room.code, token: p.token, you: p.id, game: published });
     room.changed();
   }
 
@@ -263,8 +276,11 @@ export class ServerMatch {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private settled = new Set<number>();
   private missStreak = new Map<number, number>();
+  /** The game numbers this match started with and keeps to the end. */
+  readonly game = published;
 
   constructor(private room: Room, private rng: Rng) {
+    this.use();
     this.config = { ...room.config };
     const terrain = generateMap(this.config.map, rng);
     const roster: RosterEntry[] = [];
@@ -284,7 +300,13 @@ export class ServerMatch {
     this.turns = new TurnManager(this.world, rng);
   }
 
+  /** Switch the global game numbers to this match's. */
+  private use(): void {
+    useConfig(this.game);
+  }
+
   begin(): void {
+    this.use();
     // The first turn travels inside each player's match view.
     this.nextTurn(false);
     for (const p of this.room.players) this.sendView(p);
@@ -300,7 +322,7 @@ export class ServerMatch {
     p.inMatch = true;
     const view: MatchView = {
       config: this.config,
-      game: currentConfig(),
+      game: this.game,
       tanks: this.world.tanks,
       terrain: encodeMask(this.world.terrain),
       turn: this.turnInfo(),
@@ -311,6 +333,7 @@ export class ServerMatch {
 
   /** A player left the room mid-match: a bot takes over their tank. */
   abandon(p: Player): void {
+    this.use();
     const id = this.owner.indexOf(p.id);
     if (id < 0) return;
     this.owner[id] = null;
@@ -320,6 +343,7 @@ export class ServerMatch {
   }
 
   handle(p: Player, msg: ClientMsg): void {
+    this.use();
     switch (msg.t) {
       case 'settled':
         if (msg.turn === this.turns.turnNumber) this.settled.add(p.id);
@@ -355,6 +379,7 @@ export class ServerMatch {
 
   /** Everyone still watching has finished animating the shot: on to the next turn. */
   checkSettled(): void {
+    this.use();
     if (this.phase !== 'resolving') return;
     const waiting = this.room.players.filter((p) => p.conn && p.inMatch && !this.settled.has(p.id));
     if (waiting.length === 0) this.advance();
@@ -390,6 +415,7 @@ export class ServerMatch {
   }
 
   private advance(): void {
+    this.use();
     if (this.phase !== 'resolving') return;
     if (this.timer) clearTimeout(this.timer);
     const winner = this.turns.winner();
@@ -411,6 +437,7 @@ export class ServerMatch {
     const id = ++this.turnId;
     if (announce) this.room.broadcast({ t: 'turn', turn: this.turnInfo(), tanks: this.world.tanks, hash: terrainHash(this.world.terrain) });
     this.timer = setTimeout(() => {
+      this.use();
       if (this.phase === 'aim' && this.turnId === id) this.resolve(); // nobody fired in time
     }, TUNING.turnSeconds * 1000 + TIMING.turnGrace);
     if (this.owner[t.id] === null) void this.runBot(id);
@@ -429,7 +456,11 @@ export class ServerMatch {
 
   /** Same decisions as the offline bot, paced in real time so players can watch. */
   private async runBot(id: number): Promise<void> {
-    const stale = () => this.turnId !== id || this.phase !== 'aim';
+    // after every await another match may have switched the numbers: re-apply before acting
+    const stale = () => {
+      this.use();
+      return this.turnId !== id || this.phase !== 'aim';
+    };
     const bot = this.turns.active;
     const difficulty = this.config.difficulty;
     await sleep(TIMING.botThink);

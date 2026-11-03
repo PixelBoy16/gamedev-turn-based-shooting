@@ -1,20 +1,13 @@
 import Phaser from 'phaser';
 import { applyConfig } from '../core/config';
-import { ClientMsg, DEFAULT_PORT, MatchView, RoomView, ServerMsg } from './protocol';
+import { ClientMsg, MatchView, RoomView, ServerMsg } from './protocol';
+import { serverUrl } from './serverUrl';
 
 // One WebSocket to the room server, shared by the lobby and battle scenes.
 // Reconnects on its own and re-claims the seat with the token the server gave us,
 // kept in sessionStorage so a reload rejoins but a second tab is a second player.
 
 const SEAT_KEY = 'crater-clash:seat';
-
-function serverUrl(): string {
-  const env = import.meta.env.VITE_SERVER_URL as string | undefined;
-  // a bare host (what a hosting dashboard hands out) gets a secure WebSocket scheme
-  if (env) return /^wss?:\/\//.test(env) ? env : `wss://${env}`;
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.hostname || 'localhost'}:${DEFAULT_PORT}`;
-}
 
 class NetClient extends Phaser.Events.EventEmitter {
   room: RoomView | null = null;
@@ -96,6 +89,7 @@ class NetClient extends Phaser.Events.EventEmitter {
   private receive(msg: ServerMsg): void {
     switch (msg.t) {
       case 'joined':
+        applyConfig(msg.game); // names and limits in the room's wardrobe match the server's
         this.you = msg.you;
         this.seat = { code: msg.code, token: msg.token };
         try {

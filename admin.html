@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Crater Clash Admin</title>
+    <style>
+      :root {
+        --bg: #f4f5f8; --panel: #ffffff; --ink: #1b2030; --muted: #667089; --line: #dde1ea;
+        --accent: #3355dd; --accent-ink: #ffffff; --changed: #fff4d6; --changed-line: #e0a400;
+        --bad: #c62828; --bad-bg: #fdecec; --warn: #9a6400; --warn-bg: #fff6e0; --ok: #2f7d32;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #10131c; --panel: #1a1f2e; --ink: #e6ecff; --muted: #97a1bd; --line: #2c3448;
+          --accent: #7f9cff; --accent-ink: #10131c; --changed: #3a3016; --changed-line: #e0b84a;
+          --bad: #ff8a80; --bad-bg: #3a1c1c; --warn: #ffd166; --warn-bg: #3a3016; --ok: #8be28f;
+          color-scheme: dark;
+        }
+      }
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, "Noto Sans Thai", sans-serif; }
+      button, input, select, textarea { font: inherit; color: inherit; }
+      button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px 14px; min-height: 40px; }
+      button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+      button:disabled { opacity: 0.45; cursor: default; }
+      input, select, textarea { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 10px; min-height: 40px; }
+      input[type="color"] { width: 40px; padding: 2px; }
+      .changed { background: var(--changed); border-color: var(--changed-line); }
+
+      #login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+      #login form { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px; width: min(380px, 100%); display: grid; gap: 14px; }
+      #login h1 { margin: 0; font-size: 22px; }
+      .error, #login-error { color: var(--bad); min-height: 1.5em; margin: 0; }
+
+      header { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); }
+      .top { display: flex; align-items: center; gap: 12px; padding: 10px 16px; flex-wrap: wrap; }
+      .top h1 { font-size: 18px; margin: 0; }
+      #live { color: var(--muted); font-size: 14px; flex: 1; min-width: 200px; }
+      #tabs { display: flex; gap: 4px; padding: 0 12px; overflow-x: auto; }
+      #tabs button { border: none; border-bottom: 3px solid transparent; border-radius: 0; background: none; white-space: nowrap; }
+      #tabs button.on { border-bottom-color: var(--accent); font-weight: 600; }
+
+      main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 180px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+      .card h2 { margin: 0 0 12px; font-size: 17px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; }
+      .field { display: grid; gap: 4px; align-content: start; }
+      .field.wide { grid-column: 1 / -1; }
+      .field .name { font-size: 14px; font-weight: 600; }
+      .field small, .hint { color: var(--muted); font-size: 13px; font-weight: 400; }
+      .note { color: var(--muted); margin: 0 0 12px; }
+      .muted { color: var(--muted); }
+
+      .table { display: grid; gap: 8px; margin-bottom: 12px; }
+      .row { display: grid; gap: 8px; align-items: center; }
+      .row.eq { grid-template-columns: 1fr 1.6fr repeat(4, 0.8fr) 92px 64px 44px; }
+      .row.fa { grid-template-columns: 1fr 2fr 44px; }
+      .row.hist { grid-template-columns: 56px 1.4fr 2fr 130px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+      .row.head { color: var(--muted); font-size: 13px; }
+      .row .field .name { display: none; }
+      .colors { display: flex; gap: 6px; }
+      .balance { font-size: 14px; color: var(--ok); }
+      .balance.warn { color: var(--warn); font-weight: 600; }
+      button.icon { padding: 0; width: 40px; }
+      button.add { border-style: dashed; }
+      .pill { background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 2px 10px; font-size: 13px; justify-self: start; }
+      @media (max-width: 760px) {
+        .row.head { display: none; }
+        .row.eq, .row.fa { grid-template-columns: 1fr 1fr; padding: 10px 0; border-bottom: 1px solid var(--line); }
+        .row .field .name { display: block; }
+        .row.hist { grid-template-columns: 1fr; }
+      }
+
+      footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; background: var(--panel); border-top: 1px solid var(--line); }
+      .bar { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      #summary { font-weight: 600; }
+      #summary.bad { color: var(--bad); }
+      #note { flex: 1; min-width: 180px; }
+      #details { max-width: 1100px; margin: 0 auto; padding: 0 16px 8px; max-height: 40vh; overflow: auto; font-size: 14px; }
+      #details h3 { font-size: 14px; margin: 8px 0 4px; }
+      #details ul { margin: 0; padding-left: 20px; }
+      #details .errors { background: var(--bad-bg); color: var(--bad); border-radius: 8px; padding: 4px 12px 8px; margin-top: 8px; }
+      #details .warnings { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 4px 12px 8px; margin-top: 8px; }
+
+      .toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 9; background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+      .toast.bad { background: var(--bad); color: #fff; }
+    </style>
+  </head>
+  <body>
+    <div id="login" hidden>
+      <form id="login-form">
+        <h1>Crater Clash · หน้าจัดการเกม</h1>
+        <label class="field"><span class="name">ชื่อของคุณ (บันทึกในประวัติ)</span><input id="login-name" autocomplete="username" required /></label>
+        <label class="field"><span class="name">รหัสผ่าน</span><input id="login-pass" type="password" autocomplete="current-password" required /></label>
+        <button class="primary" type="submit">เข้าสู่ระบบ</button>
+        <p id="login-error"></p>
+      </form>
+    </div>
+
+    <div id="app" hidden>
+      <header>
+        <div class="top">
+          <h1>หน้าจัดการเกม</h1>
+          <span id="live"></span>
+          <span id="me"></span>
+          <button id="logout">ออกจากระบบ</button>
+        </div>
+        <nav id="tabs"></nav>
+      </header>
+      <main id="main"></main>
+      <footer>
+        <div id="details" hidden></div>
+        <div class="bar">
+          <span id="summary"></span>
+          <button id="details-toggle">ดูรายละเอียด</button>
+          <input id="note" placeholder="บันทึกสั้นๆ ว่าแก้อะไร เช่น บัฟค้อนหิน" maxlength="200" />
+          <button id="discard">ทิ้งที่แก้</button>
+          <button id="publish" class="primary">เผยแพร่</button>
+        </div>
+      </footer>
+    </div>
+    <script type="module" src="/src/admin/main.ts"></script>
+  </body>
+</html>

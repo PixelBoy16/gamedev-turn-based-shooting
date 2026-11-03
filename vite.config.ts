@@ -34,4 +34,8 @@ function lookAlign(): Plugin {
   };
 }
 
-export default defineConfig({ plugins: [lookAlign()] });
+export default defineConfig({
+  plugins: [lookAlign()],
+  // two pages: the game, and the game masters' admin page
+  build: { rollupOptions: { input: { main: 'index.html', admin: 'admin.html' } } },
+});
