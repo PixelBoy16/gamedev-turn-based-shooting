@@ -147,6 +147,23 @@ Core numbers: `TUNING` in `src/core/World.ts`. Weapons, skills, items: `src/core
 
 ## Art
 
-Generated source sheets live in `art-src/{characters,weapons,backgrounds,terrain,icons}/` (outside `public/`, so they are not shipped).
-`python3 tools/prepare_art.py` (needs Pillow) slices and cleans them into `public/art/sprites/`, which the game loads.
-Re-run it after replacing a sheet. Anything missing falls back to the drawn placeholders in `src/art/chibi.ts`.
+The look is a tough cartoon: thick dark outlines, saturated colour, a squarish head about
+2/5 of the height, broad shoulders, frowning brows and a smirk (see
+`docs/superpowers/specs/2026-11-03-fierce-theme-design.md`). Until painted art exists, the
+drawn stand-ins in `src/art/drawnPieces.ts` show that style.
+
+**Character layers** go in `src/art/look/`, one transparent PNG per piece, all on the same
+canvas and pose as `body.png` (front facing, arms down). Names: `body.png`, then
+`<slot>-<id>.png` for every piece in `config/game.json`; hair comes as `hair-<id>-back.png` and
+`hair-<id>-front.png`, a set as `set-<id>-body.png` and `set-<id>-hood.png`. Open the game with
+`?lab` (dev only) to line them up; offsets save to `align.json`. Layers painted for the old
+chibi proportions no longer fit.
+
+**Menu art** goes in `public/art/sprites/`: `menu-bg.jpg` (dusk battlefield, 16:9), `logo.png`,
+and `menu-{bot,friends,ranked,shop,pass,coin,gem}.png` icons. Each is optional; a missing
+file falls back to a drawn stand-in.
+
+**Battle art** (weapons, icons, map backgrounds, terrain): source sheets live in
+`art-src/{characters,weapons,backgrounds,terrain,icons}/` (outside `public/`, so they are not
+shipped). `python3 tools/prepare_art.py` (needs Pillow) slices and cleans them into
+`public/art/sprites/`. Re-run it after replacing a sheet.
