@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createRng } from '../src/core/rng';
 import { Terrain } from '../src/core/Terrain';
 import { TUNING, World, createTank, createWorld, explode, isSettled, stepTank, tankCentre, walk } from '../src/core/World';
-import { TurnManager } from '../src/core/TurnManager';
+import { TurnManager, turnCost } from '../src/core/TurnManager';
+import { DELAY } from '../src/core/config';
 import { ShotPlanner, chooseShot, scoreImpacts, simulateShot } from '../src/core/BotAI';
 import { VolleyEvent, fireVolley, stepVolley, volleyDone } from '../src/core/Shot';
 import { LIMITS, MAIN_WEAPONS, WEAPONS, WeaponDef } from '../src/core/data';
@@ -319,6 +320,46 @@ describe('TurnManager', () => {
     expect(world.waterY).toBe(Infinity);
     tm.next();
     expect(world.waterY).toBe(800 - TUNING.waterRisePerTurn);
+  });
+});
+
+describe('delay turn order', () => {
+  const shot = { fired: 'cannon' as const, item: null, skill: false, moved: 0, seconds: 0 };
+
+  it('a turn costs its shot, item, skill, walking and time', () => {
+    expect(turnCost({ fired: null, item: null, skill: false, moved: 0, seconds: 0 })).toBe(DELAY.pass);
+    expect(turnCost({ fired: 'hammer', item: 'double', skill: true, moved: 100, seconds: 10 })).toBe(
+      DELAY.shot + DELAY.weapons.hammer + DELAY.items.double + DELAY.skill + 100 * DELAY.perPx + 10 * DELAY.perSecond,
+    );
+  });
+
+  it('the lowest delay plays next, so a heavy turn waits longer', () => {
+    const world = flatWorld();
+    world.tanks.push(createTank(2, 'P2', 0, false, 500, world.terrain), createTank(3, 'Bot2', 1, true, 1700, world.terrain));
+    const tm = new TurnManager(world, createRng(3));
+    expect(tm.next().id).toBe(0);
+    // tank 0 walks far and uses an item: everyone else gets a turn before it again
+    expect(tm.next({ ...shot, item: 'double', moved: 400, seconds: 20 }).id).toBe(1);
+    const order = [tm.next(shot).id, tm.next(shot).id, tm.next(shot).id];
+    expect(order).toEqual([2, 3, 1]);
+    expect(tm.lastCost).toEqual({ id: 3, delay: turnCost(shot) });
+  });
+
+  it('ties go to the team that did not just play, and the dead are skipped', () => {
+    const world = flatWorld();
+    world.tanks.push(createTank(2, 'P2', 0, false, 500, world.terrain), createTank(3, 'Bot2', 1, true, 1700, world.terrain));
+    const tm = new TurnManager(world, createRng(3));
+    expect([1, 2, 3, 4].map(() => tm.next(shot).id)).toEqual([0, 1, 2, 3]);
+    world.tanks[0].alive = false;
+    expect([1, 2, 3].map(() => tm.next(shot).id)).toEqual([1, 2, 3]);
+  });
+
+  it('order() lists the living from next to last after the active one', () => {
+    const world = flatWorld();
+    world.tanks.push(createTank(2, 'Bot2', 1, true, 1700, world.terrain));
+    const tm = new TurnManager(world, createRng(3));
+    tm.next();
+    expect(tm.order().map((t) => t.id)).toEqual([0, 1, 2]);
   });
 });
 

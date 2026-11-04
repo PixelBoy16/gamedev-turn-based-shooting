@@ -1,4 +1,7 @@
-import { GameConfig, SKILL_IDS, WEAPON_IDS, validateConfig } from '../core/config';
+import '@fontsource/kanit/400.css';
+import '@fontsource/kanit/600.css';
+import '@fontsource/kanit/800.css';
+import { DEFAULT_PIECES, GameConfig, SKILL_IDS, WEAPON_IDS, validateConfig } from '../core/config';
 import { serverHttpUrl } from '../net/serverUrl';
 import {
   EQUIP_SLOT_LABEL, FASHION_SLOT_LABEL, FIELDS, RULE_GROUPS, SKILL_LABEL, STAT_LABEL, WEAPON_EXTRA, WEAPON_FIELDS,
@@ -27,7 +30,11 @@ const TABS = [
 type Tab = (typeof TABS)[number][0];
 const STATS = ['hp', 'atk', 'def', 'move'] as const;
 const OPTIONAL_SLOTS = ['hat', 'glasses', 'face', 'set', 'back'];
-const DEFAULT_PIECES = ['hair/short', 'cloth/tee', 'eyes/round'];
+/** The config sections each tab edits, so a tab can show that it has unpublished edits. */
+const TAB_KEYS: Partial<Record<Tab, (keyof GameConfig)[]>> = {
+  rules: ['rules', 'limits', 'delay'], weapons: ['weapons'], items: ['skills', 'items', 'itemValues'],
+  equipment: ['statPoint', 'equipment'], fashion: ['fashion'], pass: ['economy', 'season'],
+};
 
 let token = load(TOKEN_KEY);
 let me = load(`${TOKEN_KEY}:name`);
@@ -210,11 +217,11 @@ function livePath(path: Path): Path {
 function renderAll(): void {
   const nav = $('tabs');
   nav.replaceChildren(...TABS.map(([id, name]) => h('button', {
-    class: id === tab ? 'on' : '', onclick: () => {
+    class: id === tab ? 'on' : '', 'aria-current': id === tab ? 'page' : undefined, onclick: () => {
       tab = id;
       renderAll();
     },
-  }, name)));
+  }, name, h('span', { class: 'dot', title: 'มีค่าที่แก้ยังไม่เผยแพร่' }))));
   $('live').textContent = `ใช้อยู่: v${live.version} โดย ${live.by} · ${when(live.at)}${live.note ? ` · ${live.note}` : ''}`;
   const main = $('main');
   main.replaceChildren();
@@ -391,7 +398,7 @@ function renderFashion(): HTMLElement {
         h('div', { class: 'table' },
           h('div', { class: 'row head fa' }, h('span', {}, 'id'), h('span', {}, 'ชื่อ'), h('span', {}, 'ราคา'), h('span', {})),
           ...rows.map(({ f, i }) => {
-            const locked = f.id === 'none' || DEFAULT_PIECES.includes(`${slot}/${f.id}`);
+            const locked = f.id === 'none' || DEFAULT_PIECES[slot as keyof typeof DEFAULT_PIECES] === f.id;
             return h('div', { class: 'row fa' },
               textField(['fashion', i, 'id'], 'id', { disabled: locked }),
               textField(['fashion', i, 'name'], 'ชื่อ'),
@@ -573,6 +580,7 @@ const dirty = () => !!live && JSON.stringify(live.config) !== JSON.stringify(dra
 
 function labelOf(path: Path): string {
   const key = path.join('.');
+  if (path[0] === 'delay') return `ดีเลย์ ${FIELDS[key]?.label ?? key}`;
   if (FIELDS[key]) return FIELDS[key].label;
   if (path[0] === 'season' && path[1] === 'tiers') return `Battle Pass ขั้น ${Number(path[2]) + 1} ${path[3] === 'premium' ? 'พรีเมียม' : 'ฟรี'}`;
   if (path[0] === 'weapons') {
@@ -637,6 +645,11 @@ function changed(): void {
     ? `แก้ ${list.length} จุด${report.errors.length ? ` · ผิด ${report.errors.length}` : ''}${report.warnings.length ? ` · เตือน ${report.warnings.length}` : ''}`
     : 'ยังไม่ได้แก้อะไร';
   $('summary').className = report.errors.length ? 'bad' : '';
+  document.body.classList.toggle('dirty', list.length > 0);
+  for (const [i, [id]] of TABS.entries()) {
+    const keys = TAB_KEYS[id] ?? [];
+    $('tabs').children[i]?.classList.toggle('edited', keys.some((k) => JSON.stringify(live.config[k]) !== JSON.stringify(draft[k])));
+  }
   ($('publish') as HTMLButtonElement).disabled = !list.length || report.errors.length > 0;
   ($('discard') as HTMLButtonElement).disabled = !list.length;
   const parts: (HTMLElement | null)[] = [

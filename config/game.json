@@ -4,13 +4,13 @@
     "windAccel": 18,
     "maxWind": 5,
     "launchSpeedPerPower": 9.5,
-    "walkSpeed": 70,
-    "fuelPerTurn": 150,
+    "walkSpeed": 90,
+    "fuelPerTurn": 220,
     "safeFall": 120,
     "fallDamagePerPx": 1.5,
     "maxHp": 1000,
     "turnSeconds": 20,
-    "chargeSeconds": 1.5,
+    "chargeSeconds": 2.5,
     "wall": {
       "height": 80,
       "width": 24,
@@ -24,6 +24,27 @@
     "skillCooldown": 3,
     "stormSplit": 5,
     "itemsPerMatch": 3
+  },
+  "delay": {
+    "shot": 600,
+    "pass": 450,
+    "skill": 100,
+    "perSecond": 8,
+    "perPx": 1,
+    "weapons": {
+      "cannon": 0,
+      "hammer": 100,
+      "splitter": 50,
+      "shovel": 0,
+      "drill": 150
+    },
+    "items": {
+      "double": 300,
+      "power": 150,
+      "warp": 150,
+      "heal": 100,
+      "armor": 100
+    }
   },
   "weapons": {
     "cannon": {

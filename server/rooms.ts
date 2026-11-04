@@ -9,7 +9,7 @@ import { MAP_IDS, generateMap } from '../src/core/Maps';
 import { RosterEntry, ShotRun, buildTanks, runShot, stepTanks } from '../src/core/Match';
 import { Rng } from '../src/core/rng';
 import { encodeMask, terrainHash } from '../src/core/Terrain';
-import { TurnManager } from '../src/core/TurnManager';
+import { PASSED, TurnManager, TurnRecord } from '../src/core/TurnManager';
 import { TUNING, World, createWorld, tankCentre, walk } from '../src/core/World';
 import {
   AccountView, ClientMsg, FireMsg, MatchView, PlayerView, Profile, RoomConfig, RoomView, ServerMsg, TEAM_SIZE, TurnInfo,
@@ -412,6 +412,9 @@ export class ServerMatch {
   phase: 'aim' | 'resolving' | 'over' = 'aim';
   private mods: TurnMods = freshMods();
   private turnStartX = 0;
+  private turnStartAt = 0;
+  /** What the current turn did so far; charged as its delay when the next turn starts. */
+  private turnRecord: TurnRecord = { ...PASSED };
   private turnId = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private settled = new Set<number>();
@@ -512,7 +515,10 @@ export class ServerMatch {
         const res = useSkill(this.world, t, this.mods);
         if (!res) return;
         this.room.broadcast({ t: 'skill', id: t.id });
-        if (res.endsTurn) this.resolve();
+        if (res.endsTurn) {
+          this.endRecord(null);
+          this.resolve();
+        }
         return;
       }
       case 'fire':
@@ -543,11 +549,21 @@ export class ServerMatch {
     Object.assign(t, { x: shot.x, y: shot.y, facing: shot.facing, angle: shot.angle });
     const weapon = shot.drill ? WEAPONS.drill : WEAPONS[t.loadout.weapon];
     if (shot.drill) t.drillLeft--;
+    this.endRecord(weapon.id);
     this.room.broadcast({ t: 'shot', id: t.id, ...shot });
     const run = new ShotRun(this.world, t, weapon, shot.power, this.mods);
     runShot(run);
     if (t.isBot) this.missStreak.set(t.id, run.damage > 0 ? 0 : (this.missStreak.get(t.id) ?? 0) + 1);
     this.resolve();
+  }
+
+  /** The active tank acted (fired, or ended the turn with a skill): fix what its turn costs. */
+  private endRecord(fired: TurnRecord['fired']): void {
+    const t = this.turns.active;
+    this.turnRecord = {
+      fired, item: this.mods.item, skill: this.mods.skillUsed, moved: Math.abs(t.x - this.turnStartX),
+      seconds: Math.min(TUNING.turnSeconds, (Date.now() - this.turnStartAt) / 1000),
+    };
   }
 
   private resolve(): void {
@@ -573,9 +589,12 @@ export class ServerMatch {
   }
 
   private nextTurn(announce = true): void {
-    const t = this.turns.next();
+    // a turn that timed out never set its record: it passed after the full clock
+    const t = this.turns.next(this.turnRecord);
     this.mods = freshMods();
+    this.turnRecord = { ...PASSED, seconds: TUNING.turnSeconds };
     this.turnStartX = t.x;
+    this.turnStartAt = Date.now();
     this.settled.clear();
     this.phase = 'aim';
     const id = ++this.turnId;
@@ -595,6 +614,7 @@ export class ServerMatch {
       wind: w.wind,
       waterY: Number.isFinite(w.waterY) ? w.waterY : null,
       timeLeft: TUNING.turnSeconds,
+      cost: this.turns.lastCost,
     };
   }
 
@@ -616,7 +636,10 @@ export class ServerMatch {
         const res = useSkill(this.world, bot, this.mods);
         if (!res) continue;
         this.room.broadcast({ t: 'skill', id: bot.id });
-        if (res.endsTurn) return this.resolve();
+        if (res.endsTurn) {
+          this.endRecord(null);
+          return this.resolve();
+        }
       }
       await sleep(TIMING.botAction);
       if (stale()) return;

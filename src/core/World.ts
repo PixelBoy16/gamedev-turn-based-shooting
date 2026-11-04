@@ -32,6 +32,7 @@ export interface Tank {
   skillCooldown: number; // own turns until the skill is ready
   items: (ItemId | null)[]; // null = used
   drillLeft: number;
+  delay: number; // turn order: lowest plays next (TurnManager)
 }
 
 export interface BlastSpec {
@@ -70,6 +71,7 @@ export function createTank(
     skillCooldown: 0,
     items: [...items],
     drillLeft: LIMITS.drillUses,
+    delay: 0,
   };
 }
 

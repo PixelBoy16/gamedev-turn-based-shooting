@@ -4,7 +4,7 @@ import { ITEMS, SKILLS, WEAPONS, WeaponId } from '../core/data';
 import { skillOf } from '../core/Actions';
 import { TUNING, tankCentre } from '../core/World';
 import { Button, FONT, INK, TEAM_COLORS, label } from '../ui/widgets';
-import BattleScene, { hpColor } from './BattleScene';
+import BattleScene, { AIM_HOLD_MS, hpColor } from './BattleScene';
 import { isMuted, setMuted } from '../audio/sfx';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
@@ -61,7 +61,7 @@ export default class HudScene extends Phaser.Scene {
       help: label(this, 1900, 1066, '', 17).setOrigin(1, 1).setAlign('right'),
       banner: label(this, 960, 380, '', 72).setOrigin(0.5).setAlpha(0),
     };
-    this.t.help.setText('←→ เดิน  ↑↓ มุม (Shift ละเอียด)  Space ค้าง=ชาร์จ\n1-2 อาวุธ  3-5 ไอเท็ม  E สกิล  คลิกขวาลาก=ดูแผนที่  C กล้อง  M เสียง  Esc เมนู');
+    this.t.help.setText('←→ เดิน/หัน  ↑↓ มุม (แตะ=1° ค้าง=เร็ว Shift=ช้า)  Space ค้าง=ชาร์จ\n1-2 อาวุธ  3-5 ไอเท็ม  E สกิล  คลิกขวาลาก=ดูแผนที่  C กล้อง  M เสียง  Esc เมนู');
     for (let i = 0; i <= 100; i += 10) {
       this.add.text(POWER.x + (POWER.w * i) / 100, POWER.y - 8, `${i}`, {
         fontFamily: FONT, fontSize: '15px', color: '#ffffff', stroke: '#1b2030', strokeThickness: 4,
@@ -281,10 +281,13 @@ export default class HudScene extends Phaser.Scene {
     const human = b.isLocal(active);
     this.t.net.setText(b.net && !net.connected ? 'หลุดการเชื่อมต่อ กำลังต่อใหม่…' : b.phase === 'wait' && b.isLocal(active) ? 'รอเซิร์ฟเวอร์…' : '');
 
-    if (this.aimHold.dir && time - this.aimHold.since > 300) b.touch.aim = this.aimHold.dir;
+    if (this.aimHold.dir && time - this.aimHold.since > AIM_HOLD_MS) b.touch.aim = this.aimHold.dir;
     this.soundBtn.setLabel(isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด');
 
-    // HP panels
+    // HP panels, with each character's place in the delay queue
+    const order = b.turns.order();
+    const waiting = order.filter((t) => t !== active);
+    const base = waiting.length ? Math.min(...waiting.map((t) => t.delay)) : 0;
     for (const t of b.world.tanks) {
       const p = this.panels.get(t.id)!;
       const w = 300;
@@ -298,7 +301,9 @@ export default class HudScene extends Phaser.Scene {
         g.lineStyle(4, 0xffd166, 1);
         g.strokeRoundedRect(bx - 6, p.y + 28, w + 12, 24, 8);
       }
-      const tags = [t.alive ? `${t.hp}` : 'ออกแล้ว', t.armored ? 'เกราะ' : '', t.burrowed ? 'มุดดิน' : ''].filter(Boolean);
+      const pos = waiting.indexOf(t);
+      const queue = !t.alive || b.phase === 'over' ? '' : t === active ? 'ตานี้' : pos === 0 ? 'ตาถัดไป' : `คิว ${pos + 1} (ดีเลย์ +${t.delay - base})`;
+      const tags = [t.alive ? `${t.hp}` : 'ออกแล้ว', queue, t.armored ? 'เกราะ' : '', t.burrowed ? 'มุดดิน' : ''].filter(Boolean);
       p.hp.setText(tags.join(' · '));
     }
 
@@ -324,7 +329,7 @@ export default class HudScene extends Phaser.Scene {
     this.drawOffscreenArrows(g);
   }
 
-  /** Power bar: green→yellow→red fill, 10-step ticks, a marker for last shot's power. */
+  /** Power bar: green→yellow→red fill, 10-step ticks, bold quarters, a marker for last shot's power. */
   private drawPower(g: Phaser.GameObjects.Graphics, activeId: number): void {
     const b = this.battle;
     const { x, y, w, h } = POWER;
@@ -347,8 +352,13 @@ export default class HudScene extends Phaser.Scene {
     g.fillStyle(0xffffff, 0.18);
     g.fillRect(x, y + 3, fw, h * 0.3); // gloss
     for (let i = 1; i < 10; i++) {
-      g.fillStyle(0xffffff, i === 5 ? 0.5 : 0.25);
+      g.fillStyle(0xffffff, 0.2);
       g.fillRect(x + (w * i) / 10 - 1, y, 2, h);
+    }
+    // quarters, for eyeballing a fixed power
+    for (let i = 1; i < 4; i++) {
+      g.fillStyle(0xffffff, 0.65);
+      g.fillRect(x + (w * i) / 4 - 2, y - 3, 4, h + 6);
     }
     const last = b.lastPower.get(activeId);
     if (last !== undefined) {

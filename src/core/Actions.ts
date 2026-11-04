@@ -12,11 +12,12 @@ export interface TurnMods {
   /** Split-rocket fragments this turn ("storm"); undefined = the weapon's own count. */
   splitCount?: number;
   itemUsed: boolean;
+  item: ItemId | null; // for the turn's delay cost
   skillUsed: boolean;
 }
 
 export function freshMods(): TurnMods {
-  return { dmgScale: 1, shots: 1, warp: false, noWind: false, itemUsed: false, skillUsed: false };
+  return { dmgScale: 1, shots: 1, warp: false, noWind: false, itemUsed: false, item: null, skillUsed: false };
 }
 
 /** One item per turn. Returns the item used, or null if not allowed. */
@@ -25,6 +26,7 @@ export function useItem(t: Tank, slot: number, mods: TurnMods): ItemId | null {
   if (!item || mods.itemUsed || !t.alive) return null;
   t.items[slot] = null;
   mods.itemUsed = true;
+  mods.item = item;
   switch (item) {
     case 'double':
       mods.shots = 2;

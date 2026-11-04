@@ -32,6 +32,20 @@ export interface Limits {
   itemsPerMatch: number;
 }
 
+/**
+ * Turn order: everyone has a delay, the lowest plays next, and each turn adds its cost.
+ * A heavy turn (big weapon, an item, a long walk, a slow aim) waits longer for the next one.
+ */
+export interface DelayRules {
+  shot: number; // a turn that fired
+  pass: number; // a turn that did not fire (timeout, burrow)
+  skill: number; // extra when a skill was used
+  perSecond: number; // per second spent before acting
+  perPx: number; // per px walked
+  weapons: Record<WeaponId, number>; // extra per weapon fired
+  items: Record<ItemId, number>; // extra per item used
+}
+
 export interface ItemValues {
   doubleScale: number;
   powerScale: number;
@@ -65,6 +79,7 @@ export interface Season {
 export interface GameConfig {
   rules: Rules;
   limits: Limits;
+  delay: DelayRules;
   weapons: Record<WeaponId, Omit<WeaponDef, 'id'>>;
   skills: Record<SkillId, { name: string; desc: string }>;
   items: Record<ItemId, { name: string; desc: string }>;
@@ -87,7 +102,7 @@ const FASHION_SLOT_IDS: FashionSlot[] = ['hat', 'glasses', 'hair', 'face', 'clot
 /** Slots that must offer "none" (the rest always show something). */
 const OPTIONAL_SLOTS: FashionSlot[] = ['hat', 'glasses', 'face', 'set', 'back'];
 /** Ids the default look starts in, so they must stay. */
-const DEFAULT_PIECES: Partial<Record<FashionSlot, string>> = { hair: 'buzz', cloth: 'tank', eyes: 'glare' };
+export const DEFAULT_PIECES: Partial<Record<FashionSlot, string>> = { hair: 'buzz', cloth: 'tank', eyes: 'glare' };
 
 // ------------------------------------------------------------------ live values
 
@@ -101,11 +116,12 @@ export const TUNING = {
   tankRadius: 20, // hit circle around the character's centre
   tankCentreOffset: 22, // centre is this far above the feet
   muzzleLength: 30,
-  maxClimb: 8, // px step-up while walking
+  maxClimb: 12, // px step-up while walking
   ...structuredClone(BUNDLED.rules),
 };
 
 export const LIMITS: Limits = { ...BUNDLED.limits };
+export const DELAY: DelayRules = structuredClone(BUNDLED.delay);
 export const WEAPONS = {} as Record<WeaponId, WeaponDef>;
 export const SKILLS = {} as Record<SkillId, { name: string; desc: string }>;
 export const ITEMS = {} as Record<ItemId, { name: string; desc: string }>;
@@ -128,6 +144,7 @@ export function applyConfig(cfg: GameConfig): void {
   const c = current;
   Object.assign(TUNING, structuredClone(c.rules));
   Object.assign(LIMITS, c.limits);
+  Object.assign(DELAY, structuredClone(c.delay));
   Object.assign(ITEM_VALUES, c.itemValues);
   Object.assign(STAT_POINT, c.statPoint);
   for (const id of WEAPON_IDS) {
@@ -188,7 +205,7 @@ export function validateConfig(raw: unknown): ConfigReport {
 
   const root = obj('config', raw);
   if (!root) return { errors, warnings };
-  keys('config', root, ['rules', 'limits', 'weapons', 'skills', 'items', 'itemValues', 'statPoint', 'equipment', 'fashion', 'economy', 'season']);
+  keys('config', root, ['rules', 'limits', 'delay', 'weapons', 'skills', 'items', 'itemValues', 'statPoint', 'equipment', 'fashion', 'economy', 'season']);
   /** A price in one currency: whole coins or gems; `coinsOnly` for equipment. */
   const price = (path: string, v: unknown, coinsOnly: boolean) => {
     if (v === undefined) return;
@@ -234,6 +251,22 @@ export function validateConfig(raw: unknown): ConfigReport {
     int('limits.skillCooldown', l.skillCooldown, 0, 20);
     int('limits.stormSplit', l.stormSplit, 1, 12);
     int('limits.itemsPerMatch', l.itemsPerMatch, 0, ITEM_IDS.length);
+  }
+
+  const d = obj('delay', root.delay);
+  if (d) {
+    keys('delay', d, ['shot', 'pass', 'skill', 'perSecond', 'perPx', 'weapons', 'items']);
+    for (const k of ['shot', 'pass', 'skill', 'perSecond', 'perPx']) num(`delay.${k}`, d[k], 0, 5000);
+    const dw = obj('delay.weapons', d.weapons);
+    if (dw) {
+      keys('delay.weapons', dw, WEAPON_IDS);
+      for (const id of WEAPON_IDS) num(`delay.weapons.${id}`, dw[id], 0, 5000);
+    }
+    const di = obj('delay.items', d.items);
+    if (di) {
+      keys('delay.items', di, ITEM_IDS);
+      for (const id of ITEM_IDS) num(`delay.items.${id}`, di[id], 0, 5000);
+    }
   }
 
   const ws = obj('weapons', root.weapons);

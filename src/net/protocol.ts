@@ -73,6 +73,8 @@ export interface TurnInfo {
   wind: number;
   waterY: number | null; // null = no water yet
   timeLeft: number; // seconds
+  /** Delay the previous turn added (the order itself travels as each tank's `delay`). */
+  cost: { id: number; delay: number } | null;
 }
 
 export interface MatchView {

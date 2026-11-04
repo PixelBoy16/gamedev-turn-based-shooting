@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ART_SCALE, Pose, gunLook, hasArt, lookHand, lookRes, lookTexture, shellKey } from '../art/chibi';
 import { Rng, createRng } from '../core/rng';
-import { TurnManager } from '../core/TurnManager';
+import { PASSED, TurnManager, TurnRecord } from '../core/TurnManager';
 import { BotAction, ShotPlanner, Shot, chooseAttackItem, chooseSupport } from '../core/BotAI';
 import { TurnMods, freshMods, skillOf, useItem, useSkill } from '../core/Actions';
 import { ITEMS, ITEM_IDS, ItemId, LIMITS, SKILLS, WEAPONS, WeaponDef } from '../core/data';
@@ -80,6 +80,13 @@ export default class BattleScene extends Phaser.Scene {
 
   private rng!: Rng;
   private acc = 0;
+  // the current turn, for its delay cost (offline; online the server charges it)
+  private turnStartX = 0;
+  private turnStartAt = 0;
+  private turnRecord: TurnRecord = { ...PASSED };
+  // aim keys: a tap is 1°, holding repeats after a pause
+  private aimRepeat = 0;
+  private blockedAt = 0;
   private hitStopMs = 0;
   private slowMoMs = 0;
 
@@ -393,6 +400,7 @@ export default class BattleScene extends Phaser.Scene {
     this.keys.FOUR.on('down', () => this.useItemSlot(1));
     this.keys.FIVE.on('down', () => this.useItemSlot(2));
     this.keys.E.on('down', () => this.useSkillNow());
+    for (const [key, d] of [['UP', 1], ['W', 1], ['DOWN', -1], ['S', -1]] as const) this.keys[key].on('down', () => this.nudgeAngle(d));
     this.keys.C.on('down', () => this.recenter());
     this.keys.R.on('down', () => {
       if (!this.net) this.scene.restart();
@@ -500,6 +508,7 @@ export default class BattleScene extends Phaser.Scene {
     else sfx.powerUp();
     if (res.wall) this.dust(res.wall.x + res.wall.w / 2, res.wall.y + res.wall.h - 40);
     if (res.endsTurn) {
+      this.endRecord(t, null);
       this.dust(t.x, t.y);
       this.lastShotText = '';
       this.beginSettle();
@@ -510,11 +519,33 @@ export default class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------- turn flow
 
   private startTurn(): void {
-    this.beginTurn(this.turns.next());
+    const t = this.turns.next(this.turnRecord);
+    this.showCost(this.turns.lastCost);
+    this.beginTurn(t);
+  }
+
+  /** The active tank acted: fix what its turn costs (a timeout keeps the default, a full-clock pass). */
+  private endRecord(t: Tank, fired: TurnRecord['fired']): void {
+    this.turnRecord = {
+      fired, item: this.mods.item, skill: this.mods.skillUsed, moved: Math.abs(t.x - this.turnStartX),
+      seconds: Math.min(TUNING.turnSeconds, (this.time.now - this.turnStartAt) / 1000),
+    };
+  }
+
+  /** "+N" over the character whose turn just ended: how much longer it waits. */
+  private showCost(cost: TurnInfo['cost']): void {
+    const t = cost && this.world.tanks[cost.id];
+    if (!t || !t.alive) return;
+    const c = tankCentre(t);
+    this.floatText(c.x, c.y - 100, `ดีเลย์ +${cost.delay}`, '#ffc23d');
   }
 
   private beginTurn(t: Tank): void {
     this.mods = freshMods();
+    this.turnRecord = { ...PASSED, seconds: TUNING.turnSeconds };
+    this.turnStartX = t.x;
+    this.turnStartAt = this.time.now;
+    this.aimRepeat = 0;
     this.useDrill = false;
     this.power = 0;
     this.charging = false;
@@ -626,7 +657,9 @@ export default class BattleScene extends Phaser.Scene {
     tm.current = info.active;
     tm.turnNumber = info.turnNumber;
     tm.timeLeft = info.timeLeft;
+    tm.lastCost = info.cost;
     tm.fuel = TUNING.fuelPerTurn * tm.active.move;
+    this.showCost(info.cost);
     this.world.wind = info.wind;
     this.world.waterY = info.waterY ?? Infinity;
     this.beginTurn(tm.active);
@@ -664,6 +697,7 @@ export default class BattleScene extends Phaser.Scene {
     this.lastAngle.set(t.id, t.angle);
     this.shotWeapon = this.useDrill ? WEAPONS.drill : WEAPONS[t.loadout.weapon];
     if (this.useDrill) t.drillLeft--;
+    this.endRecord(t, this.shotWeapon.id);
     this.charging = false;
     this.stats.get(t.id)!.shots++;
     this.volleyDamage = 0;
@@ -781,13 +815,26 @@ export default class BattleScene extends Phaser.Scene {
     if (!this.charging) {
       const kbMove = (k.RIGHT.isDown || k.D.isDown ? 1 : 0) - (k.LEFT.isDown || k.A.isDown ? 1 : 0);
       const dir = kbMove || this.touch.move;
-      if (dir !== 0 && this.turns.fuel > 0) {
-        this.turns.fuel = Math.max(0, this.turns.fuel - walk(this.world, t, dir > 0 ? 1 : -1));
-        this.manualCam = false;
+      if (dir !== 0) {
+        const d = dir > 0 ? 1 : -1;
+        if (!t.airborne) t.facing = d; // turning around is free, even with no walking left
+        if (this.turns.fuel > 0) {
+          const moved = walk(this.world, t, d);
+          this.turns.fuel = Math.max(0, this.turns.fuel - moved);
+          this.manualCam = false;
+          if (moved === 0 && !t.airborne && this.time.now - this.blockedAt > 1500) {
+            this.blockedAt = this.time.now;
+            this.floatText(t.x + d * 40, t.y - 60, 'ชันเกินไป', '#ffffff');
+          }
+        }
       }
-      const speed = k.SHIFT.isDown ? 6 : 30; // deg/s
-      const aim = (k.UP.isDown || k.W.isDown ? 1 : 0) - (k.DOWN.isDown || k.S.isDown ? 1 : 0) || this.touch.aim;
-      t.angle = Phaser.Math.Clamp(t.angle + aim * speed * dt, 0, 90);
+      // A tap moved exactly 1° (key handlers / HUD); holding repeats in whole degrees after a pause.
+      const held = (a: Phaser.Input.Keyboard.Key, b: Phaser.Input.Keyboard.Key) => Math.max(a.getDuration(), b.getDuration()) > AIM_HOLD_MS;
+      const aim = (held(k.UP, k.W) ? 1 : 0) - (held(k.DOWN, k.S) ? 1 : 0) || this.touch.aim;
+      if (aim) {
+        this.aimRepeat += (k.SHIFT.isDown ? 5 : 24) * dt; // degrees per second
+        for (; this.aimRepeat >= 1; this.aimRepeat--) t.angle = Phaser.Math.Clamp(Math.round(t.angle) + aim, 0, 90);
+      } else this.aimRepeat = 0;
     }
     if (k.SPACE.isDown || this.touch.fire) {
       this.charging = true;
@@ -1246,10 +1293,53 @@ export default class BattleScene extends Phaser.Scene {
     g.strokeTriangle(tip.x, tip.y, l.x, l.y, r.x, r.y);
     const lbl = pt(t.angle, AIM_R + 52);
     this.aimLabel.setText(`${Math.round(t.angle)}°`).setPosition(lbl.x, lbl.y);
+    this.drawGuide(t);
+  }
+
+  /**
+   * Dots along the first stretch of the shot's path, ignoring wind: at the power being
+   * charged, otherwise at last shot's power. Reading the wind is still the player's job.
+   */
+  private drawGuide(t: Tank): void {
+    const g = this.aimGfx;
+    const w = this.useDrill && t === this.active ? WEAPONS.drill : WEAPONS[t.loadout.weapon];
+    const power = this.power > 0 ? this.power : (this.lastPower.get(t.id) ?? 50);
+    const m = muzzle(t);
+    const speed = power * TUNING.launchSpeedPerPower * (w.speedMul ?? 1);
+    const rad = (Math.round(t.angle) * Math.PI) / 180;
+    let x = m.x;
+    let y = m.y;
+    let vx = Math.cos(rad) * speed * t.facing;
+    let vy = -Math.sin(rad) * speed;
+    let travelled = 0;
+    let next = 0;
+    const dt = TUNING.dt / 2;
+    for (let i = 0; i < 2000 && travelled < GUIDE_LEN; i++) {
+      vy += TUNING.gravity * w.gravityMul * dt;
+      const nx = x + vx * dt;
+      const ny = y + vy * dt;
+      travelled += Math.hypot(nx - x, ny - y);
+      x = nx;
+      y = ny;
+      if (this.world.terrain.isSolid(x, y)) break;
+      // starts past the aim arrow, which already shows the launch direction
+      if (travelled >= next && travelled > AIM_R + 40) {
+        const a = 1 - 0.6 * (travelled / GUIDE_LEN);
+        g.fillStyle(0x1b2030, 0.6 * a);
+        g.fillCircle(x, y, 7);
+        g.fillStyle(0xffffff, a);
+        g.fillCircle(x, y, 4.5);
+      }
+      if (travelled >= next) next += 24;
+    }
   }
 }
 
 const AIM_R = 100;
+/** Holding an aim key this long starts repeating (ms); the HUD's touch buttons use the same pause. */
+export const AIM_HOLD_MS = 300;
+/** Length of the aim guide: the first stretch of the path, without wind (px). */
+const GUIDE_LEN = 460;
 
 export function hpColor(hp: number, max: number): number {
   const k = hp / max;

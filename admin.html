@@ -7,123 +7,229 @@
     <title>Black Boom Admin</title>
     <style>
       :root {
-        --bg: #f4f5f8; --panel: #ffffff; --ink: #1b2030; --muted: #667089; --line: #dde1ea;
-        --accent: #3355dd; --accent-ink: #ffffff; --changed: #fff4d6; --changed-line: #e0a400;
-        --bad: #c62828; --bad-bg: #fdecec; --warn: #9a6400; --warn-bg: #fff6e0; --ok: #2f7d32;
-        color-scheme: light;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #10131c; --panel: #1a1f2e; --ink: #e6ecff; --muted: #97a1bd; --line: #2c3448;
-          --accent: #7f9cff; --accent-ink: #10131c; --changed: #3a3016; --changed-line: #e0b84a;
-          --bad: #ff8a80; --bad-bg: #3a1c1c; --warn: #ffd166; --warn-bg: #3a3016; --ok: #8be28f;
-          color-scheme: dark;
-        }
+        --bg: #0b0d12; --panel: #161a22; --plate: #1e232d; --well: #0f1218; --line: #2c323e; --edge: #3a404d;
+        --ink: #eef1f6; --muted: #98a1b3; --fire: #ff7a1a; --fire-hot: #ff9a45; --fire-ink: #1c0c00;
+        --gold: #ffc23d; --changed: rgba(255, 194, 61, 0.1); --bad: #ff6f5e; --bad-bg: rgba(214, 58, 42, 0.16);
+        --warn: #ffc23d; --warn-bg: rgba(255, 194, 61, 0.1); --ok: #7ad26f;
+        --font: "Kanit", system-ui, "Noto Sans Thai", sans-serif;
+        --side: 244px;
+        --plate-cut: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
+        color-scheme: dark;
       }
       * { box-sizing: border-box; }
       [hidden] { display: none !important; }
-      body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, "Noto Sans Thai", sans-serif; }
+      html { background: var(--bg); }
+      body {
+        margin: 0; color: var(--ink); font: 15px/1.55 var(--font);
+        background:
+          radial-gradient(120% 60% at 50% 120%, rgba(255, 122, 26, 0.12), transparent 60%),
+          repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.012) 0 2px, transparent 2px 9px),
+          var(--bg);
+        background-attachment: fixed;
+      }
       button, input, select, textarea { font: inherit; color: inherit; }
-      button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px 14px; min-height: 40px; }
-      button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
-      button:disabled { opacity: 0.45; cursor: default; }
-      input, select, textarea { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 10px; min-height: 40px; }
-      input[type="color"] { width: 40px; padding: 2px; }
-      .changed { background: var(--changed); border-color: var(--changed-line); }
+      :focus-visible { outline: 2px solid var(--fire); outline-offset: 2px; }
 
-      #login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
-      #login form { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px; width: min(380px, 100%); display: grid; gap: 14px; }
-      #login h1 { margin: 0; font-size: 22px; }
+      /* Steel buttons with cut corners, like the plates in the game. */
+      button {
+        cursor: pointer; border: 0; background: var(--edge); color: var(--ink); font-weight: 600;
+        padding: 8px 16px; min-height: 40px; white-space: nowrap;
+        clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -3px 0 rgba(0, 0, 0, 0.35);
+        transition: background-color 0.12s, transform 0.06s;
+      }
+      button:hover:not(:disabled) { background: #4a5162; }
+      button:active:not(:disabled) { transform: translateY(1px); }
+      button:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--fire); }
+      button.primary { background: var(--fire); color: var(--fire-ink); font-weight: 800; }
+      button.primary:hover:not(:disabled) { background: var(--fire-hot); }
+      button:disabled { opacity: 0.4; cursor: default; }
+      button.icon { padding: 0; width: 40px; color: var(--muted); background: transparent; box-shadow: none; }
+      button.icon:hover:not(:disabled) { color: var(--bad); background: var(--bad-bg); }
+      button.add { background: transparent; color: var(--fire); box-shadow: inset 0 0 0 1px rgba(255, 122, 26, 0.5); }
+      button.add:hover:not(:disabled) { background: rgba(255, 122, 26, 0.1); }
+
+      input, select, textarea {
+        width: 100%; min-height: 40px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 3px;
+        background: var(--well); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+        font-variant-numeric: tabular-nums;
+      }
+      input:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled) { border-color: var(--edge); }
+      input:focus, select:focus, textarea:focus { border-color: var(--fire); outline: none; box-shadow: 0 0 0 3px rgba(255, 122, 26, 0.18); }
+      input:disabled, select:disabled, textarea:disabled { opacity: 0.55; }
+      input[type="color"] { width: 40px; padding: 3px; }
+      textarea { resize: vertical; }
+      .changed, .sale.changed select, .sale.changed input { border-color: var(--gold); background-color: var(--changed); }
+      .sale.changed { box-shadow: -3px 0 0 var(--gold); }
+
+      /* Sign in */
+      #login { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+      #login form { width: min(400px, 100%); display: grid; gap: 16px; }
+      #login .plate { display: grid; gap: 14px; padding: 26px; }
+      #login h1 { margin: 0 0 4px; text-align: center; }
+      #login h1 .logo { font-size: clamp(44px, 12vw, 64px); }
+      #login h1 small { display: block; color: var(--muted); font-size: 15px; font-weight: 400; margin-top: 6px; }
+      #login button.primary { min-height: 48px; font-size: 17px; }
       .error, #login-error { color: var(--bad); min-height: 1.5em; margin: 0; }
 
-      header { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); }
-      .top { display: flex; align-items: center; gap: 12px; padding: 10px 16px; flex-wrap: wrap; }
-      .top h1 { font-size: 18px; margin: 0; }
-      #live { color: var(--muted); font-size: 14px; flex: 1; min-width: 200px; }
-      #tabs { display: flex; gap: 4px; padding: 0 12px; overflow-x: auto; }
-      #tabs button { border: none; border-bottom: 3px solid transparent; border-radius: 0; background: none; white-space: nowrap; }
-      #tabs button.on { border-bottom-color: var(--accent); font-weight: 600; }
+      .logo {
+        display: block; font-weight: 800; line-height: 0.95; letter-spacing: -0.01em;
+        color: #23262f; -webkit-text-stroke: 0.09em var(--gold); paint-order: stroke fill;
+        text-shadow: 0 0.06em 0 #7a1d00, 0 0 0.6em rgba(255, 122, 26, 0.35);
+      }
 
-      main { max-width: 1280px; margin: 0 auto; padding: 16px 16px 180px; }
-      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-      .card h2 { margin: 0 0 12px; font-size: 17px; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; }
-      .field { display: grid; gap: 4px; align-content: start; }
+      .plate {
+        position: relative; background: linear-gradient(180deg, var(--plate), var(--panel));
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        clip-path: var(--plate-cut);
+      }
+
+      /* Signed in: sidebar + content */
+      #app { display: grid; grid-template-columns: var(--side) minmax(0, 1fr); min-height: 100vh; }
+      header {
+        position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 18px;
+        padding: 22px 14px 18px; background: rgba(13, 15, 21, 0.92); border-right: 1px solid var(--line);
+      }
+      .brand { padding: 0 8px; }
+      .brand .logo { font-size: 30px; white-space: nowrap; }
+      .brand h1 { margin: 8px 0 0; font-size: 14px; font-weight: 400; color: var(--muted); }
+      #tabs { display: grid; gap: 2px; align-content: start; }
+      #tabs button {
+        clip-path: none; box-shadow: none; background: transparent; color: var(--muted); font-weight: 600;
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        text-align: left; padding: 9px 12px 9px 14px; border-left: 3px solid transparent; border-radius: 0 3px 3px 0;
+      }
+      #tabs button:hover { background: rgba(255, 255, 255, 0.04); color: var(--ink); }
+      #tabs button.on { color: var(--ink); background: linear-gradient(90deg, rgba(255, 122, 26, 0.16), transparent); border-left-color: var(--fire); }
+      #tabs button:focus-visible { box-shadow: inset 0 0 0 2px var(--fire); }
+      #tabs .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); visibility: hidden; flex: none; }
+      #tabs .edited .dot { visibility: visible; }
+      .who { margin-top: auto; display: grid; gap: 10px; padding: 12px 8px 0; border-top: 1px solid var(--line); }
+      #live { color: var(--muted); font-size: 13px; line-height: 1.45; }
+      .me-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      #me { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #logout { min-height: 34px; padding: 4px 12px; font-size: 14px; }
+
+      main { width: 100%; max-width: 1240px; padding: 28px 28px 200px; }
+      .card { margin-bottom: 18px; padding: 20px 22px 22px; position: relative; background: linear-gradient(180deg, var(--plate), var(--panel)); border-top: 1px solid rgba(255, 255, 255, 0.08); clip-path: var(--plate-cut); }
+      .card h2 { margin: 0 0 14px; font-size: 19px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+      .card h2::before { content: ""; width: 4px; height: 1.05em; background: var(--fire); flex: none; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px 18px; }
+      .field { display: grid; gap: 5px; align-content: start; }
       .field.wide { grid-column: 1 / -1; }
-      .field .name { font-size: 14px; font-weight: 600; }
-      .field small, .hint { color: var(--muted); font-size: 13px; font-weight: 400; }
-      .note { color: var(--muted); margin: 0 0 12px; }
+      .field .name { font-size: 14px; font-weight: 600; color: #d3d8e2; }
+      .field .name small { color: var(--muted); font-weight: 400; }
+      .field small, .hint { color: var(--muted); font-size: 13px; font-weight: 400; line-height: 1.4; }
+      .note { color: var(--muted); margin: -4px 0 16px; max-width: 72ch; }
       .muted { color: var(--muted); }
 
-      .table { display: grid; gap: 8px; margin-bottom: 12px; }
+      .table { display: grid; gap: 6px; margin-bottom: 14px; }
       .row { display: grid; gap: 8px; align-items: center; }
-      .row.eq { grid-template-columns: 1fr 1.6fr repeat(4, 0.7fr) 92px 56px 1.6fr 44px; }
-      .row.fa { grid-template-columns: 1fr 2fr 1.6fr 44px; }
-      .row.tier { grid-template-columns: 56px 1fr 1fr; }
+      .row.eq { grid-template-columns: 1fr 1.6fr repeat(4, 0.7fr) 92px 64px 1.6fr 40px; }
+      .row.fa { grid-template-columns: 1fr 2fr 1.6fr 40px; }
+      .row.tier { grid-template-columns: 52px 1fr 1fr; }
+      .row.tier > strong {
+        display: grid; place-items: center; height: 40px; background: var(--well); border: 1px solid var(--line);
+        border-radius: 3px; color: var(--gold); font-variant-numeric: tabular-nums;
+      }
+      .row.head { color: var(--muted); font-size: 13px; padding: 0 0 4px; border-bottom: 1px solid var(--line); }
+      .row .field .name { display: none; }
       .bar-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
       .bar-inline input { max-width: 320px; }
-      .sale { display: flex; gap: 6px; border-radius: 8px; }
+      .sale { display: flex; gap: 6px; }
       .sale select { flex: 1.2; }
       .sale input { flex: 1; min-width: 70px; }
-      .row.hist { grid-template-columns: 56px 1.4fr 2fr 130px; padding: 8px 0; border-bottom: 1px solid var(--line); }
-      .row.head { color: var(--muted); font-size: 13px; }
-      .row .field .name { display: none; }
+      .row.hist { grid-template-columns: 64px 1.4fr 2fr 140px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+      .row.hist:last-child { border-bottom: 0; }
+      .row.hist > :first-child { font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
       .colors { display: flex; gap: 6px; }
-      .balance { font-size: 14px; color: var(--ok); }
+      .balance { font-size: 13px; color: var(--ok); font-variant-numeric: tabular-nums; }
       .balance.warn { color: var(--warn); font-weight: 600; }
-      button.icon { padding: 0; width: 40px; }
-      button.add { border-style: dashed; }
-      .pill { background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 2px 10px; font-size: 13px; justify-self: start; }
+      .pill { background: var(--ok); color: #0b1a09; border-radius: 3px; padding: 3px 10px; font-size: 13px; font-weight: 800; justify-self: start; }
+
+      /* Publish bar: hazard stripe appears once something is edited, since publishing changes live matches. */
+      footer { position: fixed; left: var(--side); right: 0; bottom: 0; z-index: 3; background: rgba(13, 15, 21, 0.96); border-top: 1px solid var(--line); backdrop-filter: blur(6px); }
+      footer::before { content: ""; position: absolute; left: 0; right: 0; top: -6px; height: 6px; display: none;
+        background: repeating-linear-gradient(-45deg, var(--fire) 0 10px, #111 10px 20px); }
+      body.dirty footer::before { display: block; }
+      .bar { max-width: 1240px; padding: 12px 28px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      #summary { font-weight: 600; color: var(--muted); }
+      body.dirty #summary { color: var(--gold); }
+      #summary.bad, body.dirty #summary.bad { color: var(--bad); }
+      #note { flex: 1; min-width: 180px; }
+      #publish { min-width: 120px; }
+      #details { max-width: 1240px; padding: 12px 28px 4px; max-height: 40vh; overflow: auto; font-size: 14px; }
+      #details h3 { font-size: 14px; margin: 6px 0 4px; }
+      #details ul { margin: 0; padding-left: 20px; }
+      #details .errors, #details .warnings { border-left: 3px solid; padding: 4px 12px 8px; margin-bottom: 8px; }
+      #details .errors { background: var(--bad-bg); color: var(--bad); }
+      #details .warnings { background: var(--warn-bg); color: var(--warn); }
+
+      .toast {
+        position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 9; max-width: calc(100% - 32px);
+        background: var(--ok); color: #0b1a09; font-weight: 600; padding: 10px 20px;
+        clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+        animation: drop 0.18s ease-out;
+      }
+      .toast.bad { background: var(--bad); color: #210400; }
+      @keyframes drop { from { transform: translate(-50%, -12px); opacity: 0; } }
+
+      @media (max-width: 900px) {
+        #app { grid-template-columns: 1fr; }
+        header { position: sticky; z-index: 4; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px 0; border-right: 0; border-bottom: 1px solid var(--line); }
+        .brand { padding: 0; }
+        .brand .logo { font-size: 22px; }
+        .brand h1 { display: none; }
+        .who { order: 2; margin: 0 0 0 auto; padding: 0; border: 0; }
+        #live { display: none; }
+        #tabs { order: 3; flex-basis: 100%; display: flex; overflow-x: auto; margin: 0 -16px; padding: 0 12px; }
+        #tabs button { border-left: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 8px 12px; }
+        #tabs button.on { border-bottom-color: var(--fire); background: none; }
+        main { padding: 18px 16px 220px; }
+        footer { left: 0; }
+        .bar, #details { padding-left: 16px; padding-right: 16px; }
+      }
       @media (max-width: 760px) {
         .row.head { display: none; }
         .row.eq, .row.fa { grid-template-columns: 1fr 1fr; padding: 10px 0; border-bottom: 1px solid var(--line); }
         .row .field .name { display: block; }
         .row.hist { grid-template-columns: 1fr; }
       }
-
-      footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; background: var(--panel); border-top: 1px solid var(--line); }
-      .bar { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-      #summary { font-weight: 600; }
-      #summary.bad { color: var(--bad); }
-      #note { flex: 1; min-width: 180px; }
-      #details { max-width: 1100px; margin: 0 auto; padding: 0 16px 8px; max-height: 40vh; overflow: auto; font-size: 14px; }
-      #details h3 { font-size: 14px; margin: 8px 0 4px; }
-      #details ul { margin: 0; padding-left: 20px; }
-      #details .errors { background: var(--bad-bg); color: var(--bad); border-radius: 8px; padding: 4px 12px 8px; margin-top: 8px; }
-      #details .warnings { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 4px 12px 8px; margin-top: 8px; }
-
-      .toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 9; background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
-      .toast.bad { background: var(--bad); color: #fff; }
+      @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
     </style>
   </head>
   <body>
     <div id="login" hidden>
       <form id="login-form">
-        <h1>Black Boom · หน้าจัดการเกม</h1>
-        <label class="field"><span class="name">ชื่อของคุณ (บันทึกในประวัติ)</span><input id="login-name" autocomplete="username" required /></label>
-        <label class="field"><span class="name">รหัสผ่าน</span><input id="login-pass" type="password" autocomplete="current-password" required /></label>
-        <button class="primary" type="submit">เข้าสู่ระบบ</button>
-        <p id="login-error"></p>
+        <h1><span class="logo">BLACK BOOM</span><small>ห้องควบคุมเกม</small></h1>
+        <div class="plate">
+          <label class="field"><span class="name">ชื่อของคุณ (บันทึกในประวัติ)</span><input id="login-name" autocomplete="username" required /></label>
+          <label class="field"><span class="name">รหัสผ่าน</span><input id="login-pass" type="password" autocomplete="current-password" required /></label>
+          <button class="primary" type="submit">เข้าสู่ระบบ</button>
+          <p id="login-error" role="alert"></p>
+        </div>
       </form>
     </div>
 
     <div id="app" hidden>
       <header>
-        <div class="top">
-          <h1>หน้าจัดการเกม</h1>
-          <span id="live"></span>
-          <span id="me"></span>
-          <button id="logout">ออกจากระบบ</button>
+        <div class="brand">
+          <span class="logo">BLACK BOOM</span>
+          <h1>ห้องควบคุมเกม</h1>
         </div>
-        <nav id="tabs"></nav>
+        <nav id="tabs" aria-label="หมวด"></nav>
+        <div class="who">
+          <span id="live"></span>
+          <div class="me-row"><span id="me"></span><button id="logout">ออกจากระบบ</button></div>
+        </div>
       </header>
       <main id="main"></main>
       <footer>
         <div id="details" hidden></div>
         <div class="bar">
-          <span id="summary"></span>
+          <span id="summary" aria-live="polite"></span>
           <button id="details-toggle">ดูรายละเอียด</button>
-          <input id="note" placeholder="บันทึกสั้นๆ ว่าแก้อะไร เช่น บัฟค้อนหิน" maxlength="200" />
+          <input id="note" placeholder="บันทึกสั้นๆ ว่าแก้อะไร เช่น บัฟค้อนหิน" maxlength="200" aria-label="บันทึกการเผยแพร่" />
           <button id="discard">ทิ้งที่แก้</button>
           <button id="publish" class="primary">เผยแพร่</button>
         </div>
