@@ -5,7 +5,7 @@ import {
 } from '../core/gear';
 import { ItemKind, itemKey, owns, priceOf, priceText } from '../core/shop';
 import { account } from '../net/account';
-import { Button, INK, confirmBox, label, walletText } from '../ui/widgets';
+import { Button, FONT, INK, confirmBox, fit, label, walletText } from '../ui/widgets';
 import { menuBackdrop } from './backdrop';
 import { loadSetup, saveSetup } from './setup';
 
@@ -67,7 +67,7 @@ export default class ShopScene extends Phaser.Scene {
     if (this.tab === 'equip') {
       return EQUIPMENT.filter((e) => e.price).map((e) => ({
         kind: 'equip' as const, slot: e.slot, id: e.id, name: e.name, exclusive: false,
-        body: `${EQUIP_SLOT_NAME[e.slot]}\n${(Object.keys(e.stats) as (keyof Stats)[]).map((k) => `${STAT_NAME[k]} ${e.stats[k]! > 0 ? '+' : ''}${e.stats[k]}${k === 'hp' ? '' : '%'}`).join(' ')}`,
+        body: `${EQUIP_SLOT_NAME[e.slot]}\n${(Object.keys(e.stats) as (keyof Stats)[]).map((k) => `${STAT_NAME[k]}\u00a0${e.stats[k]! > 0 ? '+' : ''}${e.stats[k]}${k === 'hp' ? '' : '%'}`).join(' ')}`,
       }));
     }
     return FASHION.filter((f) => f.slot === this.tab && (f.price || f.exclusive)).map((f) => ({
@@ -128,15 +128,20 @@ export default class ShopScene extends Phaser.Scene {
       }));
       b.setSelected(this.trying?.kind === p.kind && this.trying.slot === p.slot && this.trying.id === p.id);
       const key = this.texture(p);
+      // picture, name, details, price: each in its own band so long Thai text never runs into the next
       if (key) {
-        const img = this.add.image(0, -60, key);
-        img.setScale(130 / Math.max(img.width, img.height));
+        const img = this.add.image(0, -72, key);
+        img.setScale(110 / Math.max(img.width, img.height));
         b.add(img);
       }
-      b.add(label(this, 0, 28, p.name, 24).setOrigin(0.5, 0));
-      if (p.body) b.add(label(this, 0, 66, p.body, 18, '#cfd8ff').setOrigin(0.5, 0));
+      b.add(fit(label(this, 0, -6, p.name, 24).setOrigin(0.5, 0), 196, 36));
+      if (p.body) {
+        b.add(fit(this.add.text(0, 34, p.body, {
+          fontFamily: FONT, fontSize: '17px', color: '#cfd8ff', align: 'center', wordWrap: { width: 196 }, lineSpacing: -2,
+        }).setOrigin(0.5, 0), 200, 74));
+      }
       const tag = has ? '✓ มีแล้ว' : p.exclusive || !price ? 'Battle Pass' : priceText(price);
-      b.add(label(this, 0, 130, tag, 24, has ? '#7CFC9A' : '#ffd166').setOrigin(0.5, 1));
+      b.add(fit(label(this, 0, 140, tag, 24, has ? '#7CFC9A' : '#ffd166').setOrigin(0.5, 1), 196, 34));
     });
     if (!list.length) this.add_(label(this, 1200, 480, 'ไม่มีของขายในหมวดนี้', 30).setOrigin(0.5));
   }

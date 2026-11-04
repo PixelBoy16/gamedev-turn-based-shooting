@@ -10,6 +10,11 @@ export function label(scene: Phaser.Scene, x: number, y: number, str: string, si
   return scene.add.text(x, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, stroke: '#0d0f15', strokeThickness: Math.max(3, size / 6) });
 }
 
+/** Shrink a text (about its origin) until it fits w×h; never enlarges. Thai in Kanit runs tall, so card text needs this. */
+export function fit<T extends Phaser.GameObjects.Text>(t: T, w: number, h: number): T {
+  return t.setScale(Math.min(1, w / t.width, h / t.height));
+}
+
 export interface ButtonOpts {
   fill?: number;
   size?: number; // font px

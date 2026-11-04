@@ -13,7 +13,7 @@ import { DIFF_LABEL, FORMAT_LABEL } from './setup';
 // Screen-space HUD, run in parallel with BattleScene so it never moves with the camera.
 // Reads the battle's public state each frame and calls its command methods.
 
-const POWER = { x: 560, y: 1000, w: 800, h: 34 };
+const POWER = { x: 560, y: 1000, w: 720, h: 34 };
 const WIND = { x: 960, y: 88, r: 36 };
 const DIAL = { x: 430, y: 1002, r: 64 };
 const SLOT_NAME: Record<WeaponId, string> = { cannon: 'ปืนใหญ่', hammer: 'ค้อนหิน', splitter: 'จรวดแตก', shovel: 'พลั่ว', drill: 'สว่าน' };
@@ -99,7 +99,7 @@ export default class HudScene extends Phaser.Scene {
 
   private createSlots(): void {
     const b = this.battle;
-    const y = 935;
+    const y = 912;
     const mk = (x: number, w: number, onClick: () => void) => {
       const btn = new Button(this, x, y, w, 72, '', { size: 21, onClick });
       btn.text.setLineSpacing(-2);

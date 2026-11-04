@@ -7,7 +7,7 @@ import {
 } from '../core/gear';
 import { MAPS, MAP_IDS } from '../core/Maps';
 import { Difficulty } from '../core/BotAI';
-import { Button, FONT, INK, confirmBox, label, walletText } from '../ui/widgets';
+import { Button, FONT, INK, confirmBox, fit, label, walletText } from '../ui/widgets';
 import { account } from '../net/account';
 import { ItemKind, enforceOwned, itemKey, owns, priceOf, priceText } from '../core/shop';
 import { menuBackdrop } from './backdrop';
@@ -294,16 +294,17 @@ export default class SetupScene extends Phaser.Scene {
       }).setDepth(52));
       if (o.lock) card.setAlpha(0.85);
       card.setSelected(o.on);
+      // picture, name, details, price: each in its own band so long Thai text never runs into the next
       if (o.key) {
-        const img = this.add.image(0, -60, o.key);
-        img.setScale(130 / Math.max(img.width, img.height));
+        const img = this.add.image(0, -72, o.key);
+        img.setScale(110 / Math.max(img.width, img.height));
         card.add(img);
-      } else card.add(label(this, 0, -60, '—', 60, '#5d6a8f').setOrigin(0.5));
-      card.add(label(this, 0, 30, o.title, 24, o.on ? '#ffd166' : '#ffffff').setOrigin(0.5, 0));
-      if (o.lock) card.add(label(this, 0, 118, o.lock, 22, '#ffd166').setOrigin(0.5, 1));
-      card.add(this.add.text(0, 66, o.body, {
-        fontFamily: FONT, fontSize: '18px', color: '#cfd8ff', align: 'center', wordWrap: { width: 180 }, lineSpacing: 4,
-      }).setOrigin(0.5, 0));
+      } else card.add(label(this, 0, -72, '—', 60, '#5d6a8f').setOrigin(0.5));
+      card.add(fit(label(this, 0, -6, o.title, 24, o.on ? '#ffd166' : '#ffffff').setOrigin(0.5, 0), 180, 36));
+      if (o.lock) card.add(fit(label(this, 0, 140, o.lock, 22, '#ffd166').setOrigin(0.5, 1), 180, 32));
+      card.add(fit(this.add.text(0, 34, o.body, {
+        fontFamily: FONT, fontSize: '17px', color: '#cfd8ff', align: 'center', wordWrap: { width: 176 }, lineSpacing: -2,
+      }).setOrigin(0.5, 0), 180, o.lock ? 72 : 106));
     });
     add(new Button(this, 960 + w / 2 - 40, 330, 52, 52, '✕', { size: 26, onClick: () => this.closePicker() }).setDepth(53));
   }

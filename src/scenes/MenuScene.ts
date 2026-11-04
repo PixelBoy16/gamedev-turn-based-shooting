@@ -52,9 +52,19 @@ export default class MenuScene extends Phaser.Scene {
       logo.setScale(Math.min(960 / logo.width, 380 / logo.height));
     } else {
       // black letters with a hot orange rim and a burst of light behind them
-      const glow = this.add.container(HERO_X, 220);
-      for (let i = 0; i < 16; i++) glow.add(this.add.ellipse(0, 0, 680 - i * 34, 300 - i * 15, 0xff9a30, 0.03).setBlendMode(Phaser.BlendModes.ADD));
-      this.tweens.add({ targets: glow, scale: 1.1, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      // one smooth radial gradient: stacked shapes showed their edges as rings on some screens
+      if (!this.textures.exists('logo-glow')) {
+        const tex = this.textures.createCanvas('logo-glow', 256, 256)!;
+        const g = tex.context.createRadialGradient(128, 128, 0, 128, 128, 128);
+        g.addColorStop(0, 'rgba(255,154,48,0.42)');
+        g.addColorStop(0.5, 'rgba(255,122,26,0.16)');
+        g.addColorStop(1, 'rgba(255,122,26,0)');
+        tex.context.fillStyle = g;
+        tex.context.fillRect(0, 0, 256, 256);
+        tex.refresh();
+      }
+      const glow = this.add.image(HERO_X, 220, 'logo-glow').setDisplaySize(760, 320).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: glow, scaleX: glow.scaleX * 1.1, scaleY: glow.scaleY * 1.1, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       const t = this.add.text(HERO_X, 220, 'BLACK BOOM', {
         fontFamily: FONT, fontSize: '150px', fontStyle: '900', color: '#1b1d26', stroke: '#ffb020', strokeThickness: 18,
         padding: { x: 20, y: 20 },

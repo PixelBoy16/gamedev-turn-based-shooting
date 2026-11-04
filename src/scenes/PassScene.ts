@@ -4,12 +4,12 @@ import { Reward, currentConfig } from '../core/config';
 import { EquipSlot, FashionSlot } from '../core/gear';
 import { Track, claimKey, parseItemKey, rewardText, seasonOver, tierOf } from '../core/shop';
 import { account } from '../net/account';
-import { Button, INK, confirmBox, label, walletText } from '../ui/widgets';
+import { Button, FONT, INK, confirmBox, fit, label, walletText } from '../ui/widgets';
 import { menuBackdrop } from './backdrop';
 
 const COL = 170; // width of one tier column
 const STRIP_X = 330; // where tier 1 starts
-const STRIP_W = 1540; // visible width of the tier strip
+const STRIP_W = 1460; // visible width of the tier strip (the › button sits past it)
 
 /**
  * The season's Battle Pass: XP from matches climbs the tiers; each tier has a free
@@ -122,9 +122,11 @@ export default class PassScene extends Phaser.Scene {
     // the tiers, clipped to the strip
     const strip = this.add_(this.add.container(STRIP_X - this.scroll, 0));
     this.strip = strip;
+    // Phaser 4 masks are filters (the old geometry mask does nothing in WebGL)
     const mask = this.make.graphics({}, false);
-    mask.fillRect(STRIP_X - 10, 300, STRIP_W + 10, 640);
-    strip.setMask(mask.createGeometryMask());
+    mask.fillStyle(0xffffff, 1);
+    mask.fillRect(STRIP_X - 8, 300, STRIP_W + 16, 640);
+    strip.enableFilters().filters!.external.addMask(mask);
     season.tiers.forEach((t, i) => {
       const n = i + 1;
       const x = i * COL + COL / 2;
@@ -136,7 +138,7 @@ export default class PassScene extends Phaser.Scene {
       }
     });
     this.add_(new Button(this, 290, 640, 64, 120, '‹', { size: 48, onClick: () => this.scrollBy(-COL * 4) }).setDepth(5));
-    this.add_(new Button(this, 1850, 640, 64, 120, '›', { size: 48, onClick: () => this.scrollBy(COL * 4) }).setDepth(5));
+    this.add_(new Button(this, 1836, 640, 64, 120, '›', { size: 48, onClick: () => this.scrollBy(COL * 4) }).setDepth(5));
   }
 
   private rewardCard(x: number, y: number, tier: number, track: Track, r: Reward, reached: boolean): Phaser.GameObjects.Container {
@@ -155,9 +157,9 @@ export default class PassScene extends Phaser.Scene {
       img.setScale(90 / Math.max(img.width, img.height));
       b.add(img);
     } else b.add(label(this, 0, -40, 'coins' in r ? '🪙' : '💎', 56).setOrigin(0.5));
-    b.add(this.add.text(0, 30, rewardText(r), {
-      fontFamily: 'system-ui, "Noto Sans Thai", sans-serif', fontSize: '20px', color: '#ffffff', align: 'center', wordWrap: { width: COL - 30 },
-    }).setOrigin(0.5, 0));
+    b.add(fit(this.add.text(0, 24, rewardText(r), {
+      fontFamily: FONT, fontSize: '20px', color: '#ffffff', align: 'center', wordWrap: { width: COL - 34 }, lineSpacing: -2,
+    }).setOrigin(0.5, 0), COL - 30, 56));
     b.add(label(this, 0, 108, claimed ? '✓ รับแล้ว' : ready ? 'แตะเพื่อรับ' : unlocked ? '' : '🔒', 20, claimed ? '#7CFC9A' : '#ffd166').setOrigin(0.5, 1));
     return b;
   }
