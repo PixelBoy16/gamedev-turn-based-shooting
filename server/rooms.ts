@@ -1,4 +1,4 @@
-import { TurnMods, freshMods, useItem, useSkill } from '../src/core/Actions';
+import { TurnMods, freshMods, shotWeapon, useItem, useSkill } from '../src/core/Actions';
 import { ShotPlanner, chooseAttackItem, chooseSupport } from '../src/core/BotAI';
 import { GameConfig, currentConfig, useConfig } from '../src/core/config';
 import { ITEM_IDS, ItemId, LIMITS, WEAPONS } from '../src/core/data';
@@ -645,7 +645,7 @@ export class ServerMatch {
       if (stale()) return;
     }
     const opts = () => ({
-      weapon: WEAPONS[bot.loadout.weapon], noWind: this.mods.noWind, dmgScale: this.mods.dmgScale * bot.atk, splitCount: this.mods.splitCount,
+      weapon: shotWeapon(WEAPONS[bot.loadout.weapon], this.mods), noWind: this.mods.noWind, dmgScale: this.mods.dmgScale * bot.atk, splitCount: this.mods.splitCount,
     });
     let planner = new ShotPlanner(this.world, bot, this.rng, opts(), SAMPLES[difficulty]);
     planner.work(SAMPLES[difficulty]);

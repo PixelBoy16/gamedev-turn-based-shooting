@@ -273,16 +273,24 @@ export default class SetupScene extends Phaser.Scene {
     // the dim layer swallows clicks so nothing behind the window reacts; tapping it closes
     add(this.add.rectangle(960, 540, 1920, 1080, 0x000000, 0.55).setInteractive().setDepth(50))
       .on('pointerdown', () => this.closePicker());
-    const w = Math.max(700, opts.length * 220 + 60);
+    // up to five cards a row; more wrap to a second row
+    const perRow = Math.min(5, opts.length);
+    const rows = Math.ceil(opts.length / perRow);
+    const w = Math.max(700, perRow * 220 + 60);
+    const h = 140 + rows * 320;
+    const top = 540 - h / 2;
     const panel = add(this.add.graphics().setDepth(51));
     panel.fillStyle(INK, 0.97);
-    panel.fillRoundedRect(960 - w / 2, 300, w, 460, 26);
+    panel.fillRoundedRect(960 - w / 2, top, w, h, 26);
     panel.lineStyle(5, 0xffd166, 1);
-    panel.strokeRoundedRect(960 - w / 2, 300, w, 460, 26);
-    add(label(this, 960, 318, title, 34, '#ffd166').setOrigin(0.5, 0).setDepth(52));
+    panel.strokeRoundedRect(960 - w / 2, top, w, h, 26);
+    add(label(this, 960, top + 18, title, 34, '#ffd166').setOrigin(0.5, 0).setDepth(52));
     opts.forEach((o, i) => {
-      const x = 960 - ((opts.length - 1) * 220) / 2 + i * 220;
-      const card = add(new Button(this, x, 560, 200, 300, '', {
+      const row = Math.floor(i / perRow);
+      const inRow = Math.min(perRow, opts.length - row * perRow);
+      const x = 960 - ((inRow - 1) * 220) / 2 + (i % perRow) * 220;
+      const y = top + 260 + row * 320;
+      const card = add(new Button(this, x, y, 200, 300, '', {
         radius: 18, onClick: () => {
           this.closePicker();
           if (o.lock) o.buy?.();
@@ -306,7 +314,7 @@ export default class SetupScene extends Phaser.Scene {
         fontFamily: FONT, fontSize: '17px', color: '#cfd8ff', align: 'center', wordWrap: { width: 176 }, lineSpacing: -2,
       }).setOrigin(0.5, 0), 180, o.lock ? 72 : 106));
     });
-    add(new Button(this, 960 + w / 2 - 40, 330, 52, 52, '✕', { size: 26, onClick: () => this.closePicker() }).setDepth(53));
+    add(new Button(this, 960 + w / 2 - 40, top + 30, 52, 52, '✕', { size: 26, onClick: () => this.closePicker() }).setDepth(53));
   }
 
   private closePicker(): void {

@@ -193,6 +193,71 @@ function guns(scene: Phaser.Scene): void {
     g.lineStyle(2, 0x7d8590, 1);
     for (let x = 50; x < 84; x += 10) g.lineBetween(x, 20 - (92 - x) * 0.28, x + 6, 20 + (92 - x) * 0.28);
   });
+  bake(scene, gunKey('bouncer'), GUN_W, GUN_H, (g) => {
+    g.fillStyle(0x2f9e6e, 1);
+    g.fillRoundedRect(6, 12, 60, 16, 7);
+    g.fillStyle(0x1f6b4a, 1);
+    g.fillCircle(76, 20, 15); // the drum
+    g.lineStyle(4, INK, 1);
+    g.strokeRoundedRect(6, 12, 60, 16, 7);
+    g.strokeCircle(76, 20, 15);
+    g.lineStyle(3, 0xffd23f, 1);
+    g.beginPath();
+    g.arc(76, 20, 8, Math.PI * 0.2, Math.PI * 1.6);
+    g.strokePath();
+  });
+  bake(scene, gunKey('beam'), GUN_W, GUN_H, (g) => {
+    g.fillStyle(0x2a2f38, 1);
+    g.fillRoundedRect(6, 11, 72, 18, 6);
+    g.fillStyle(0x47c6ff, 1);
+    for (const x of [22, 36, 50]) g.fillRect(x, 13, 6, 14); // coils
+    g.fillStyle(0x9aa0a6, 1);
+    g.fillTriangle(76, 9, 92, 20, 76, 31);
+    g.lineStyle(4, INK, 1);
+    g.strokeRoundedRect(6, 11, 72, 18, 6);
+    g.fillStyle(0xd8f6ff, 1);
+    g.fillCircle(88, 20, 3);
+  });
+  bake(scene, gunKey('mortar'), GUN_W, GUN_H, (g) => {
+    g.fillStyle(0x6b7280, 1);
+    g.fillRoundedRect(6, 14, 30, 12, 5);
+    g.fillStyle(0x4b5563, 1);
+    g.fillRoundedRect(32, 5, 54, 30, 6); // fat, short tube
+    g.lineStyle(4, INK, 1);
+    g.strokeRoundedRect(32, 5, 54, 30, 6);
+    g.fillStyle(0xff7a1a, 1);
+    g.fillRect(44, 5, 6, 30);
+    g.fillRect(62, 5, 6, 30);
+  });
+  bake(scene, gunKey('magnet'), GUN_W, GUN_H, (g) => {
+    g.fillStyle(0x3d4451, 1);
+    g.fillRoundedRect(6, 14, 44, 12, 5);
+    // a horseshoe magnet pointing forward
+    g.lineStyle(12, 0xd63a2a, 1);
+    g.beginPath();
+    g.arc(64, 20, 12, Math.PI * 0.5, Math.PI * 1.5);
+    g.strokePath();
+    g.fillStyle(0xd63a2a, 1);
+    g.fillRect(62, 2, 16, 12);
+    g.fillRect(62, 26, 16, 12);
+    g.fillStyle(0xe5e7eb, 1);
+    g.fillRect(76, 2, 12, 12);
+    g.fillRect(76, 26, 12, 12);
+    g.lineStyle(3, INK, 1);
+    g.strokeRect(62, 2, 26, 12);
+    g.strokeRect(62, 26, 26, 12);
+  });
+  bake(scene, gunKey('dirtbomb'), GUN_W, GUN_H, (g) => {
+    g.fillStyle(0x8b5a2b, 1);
+    g.fillRoundedRect(6, 12, 62, 16, 6);
+    g.fillStyle(0x5c3b1e, 1);
+    g.fillRoundedRect(62, 6, 26, 28, 8);
+    g.lineStyle(4, INK, 1);
+    g.strokeRoundedRect(6, 12, 62, 16, 6);
+    g.strokeRoundedRect(62, 6, 26, 28, 8);
+    g.fillStyle(0xa47148, 1);
+    for (const [x, y] of [[70, 14], [80, 22], [72, 27]]) g.fillCircle(x, y, 3);
+  });
 }
 
 // ------------------------------------------------------------------ shells (drawn pointing right)
@@ -227,6 +292,47 @@ function shells(scene: Phaser.Scene): void {
     g.fillCircle(15, 15, 10);
     g.fillStyle(0xffd23f, 1);
     g.fillCircle(11, 11, 4);
+  });
+  bake(scene, shellKey('bouncer'), 28, 28, (g) => {
+    g.fillStyle(INK, 1);
+    g.fillCircle(14, 14, 12);
+    g.fillStyle(0x2f9e6e, 1);
+    g.fillCircle(14, 14, 9);
+    g.lineStyle(3, 0xffd23f, 1);
+    g.lineBetween(6, 14, 22, 14);
+  });
+  bake(scene, shellKey('beam'), 44, 14, (g) => {
+    g.fillStyle(0x47c6ff, 0.45);
+    g.fillRoundedRect(0, 1, 44, 12, 6);
+    g.fillStyle(0xd8f6ff, 1);
+    g.fillRoundedRect(8, 4, 34, 6, 3);
+  });
+  bake(scene, shellKey('mortar'), 30, 30, (g) => {
+    g.fillStyle(INK, 1);
+    g.fillCircle(15, 15, 13);
+    g.fillStyle(0x4b5563, 1);
+    g.fillCircle(15, 15, 10);
+    g.fillStyle(0xff7a1a, 1);
+    for (const a of [0, 1, 2, 3]) g.fillCircle(15 + Math.cos(a * 1.57) * 5, 15 + Math.sin(a * 1.57) * 5, 2.5);
+  });
+  bake(scene, shellKey('magnet'), 30, 30, (g) => {
+    g.fillStyle(INK, 1);
+    g.fillCircle(15, 15, 13);
+    g.fillStyle(0xd63a2a, 1);
+    g.slice(15, 15, 10, Math.PI * 0.5, Math.PI * 1.5);
+    g.fillPath();
+    g.fillStyle(0x3b5ba8, 1);
+    g.slice(15, 15, 10, Math.PI * 1.5, Math.PI * 0.5);
+    g.fillPath();
+  });
+  bake(scene, shellKey('dirtbomb'), 30, 30, (g) => {
+    g.fillStyle(INK, 1);
+    g.fillCircle(15, 15, 13);
+    g.fillStyle(0x8b5a2b, 1);
+    g.fillCircle(15, 15, 10);
+    g.fillStyle(0x5c3b1e, 1);
+    g.fillCircle(11, 17, 3);
+    g.fillCircle(19, 11, 2.5);
   });
   bake(scene, shellKey('drill'), 40, 22, (g) => {
     g.fillStyle(0xf4a259, 1);

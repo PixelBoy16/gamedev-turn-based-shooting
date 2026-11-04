@@ -1,10 +1,10 @@
-import { TurnMods } from './Actions';
+import { TurnMods, shotWeapon } from './Actions';
 import { ItemId, WeaponDef } from './data';
 import { Loadout } from './gear';
 import { MapId, spawnX } from './Maps';
 import { Volley, fireVolley, stepVolley, volleyDone } from './Shot';
 import { Terrain } from './Terrain';
-import { TUNING, Tank, World, createTank, explode, isSettled, stepTank } from './World';
+import { BlastSpec, TUNING, Tank, World, createTank, explode, isSettled, stepTank } from './World';
 
 // Everything that happens between "fire" and "next turn", as plain functions so the
 // battle scene (one tick per frame, with effects) and the server (run to the end in
@@ -30,10 +30,11 @@ export function buildTanks(map: MapId, terrain: Terrain, roster: RosterEntry[]):
 
 export type ShotEvent =
   | { kind: 'launch' }
-  | { kind: 'impact'; x: number; y: number; hitTank: Tank | null; damaged: { tank: Tank; amount: number }[]; ko: Tank[] }
+  | { kind: 'impact'; x: number; y: number; hitTank: Tank | null; damaged: { tank: Tank; amount: number }[]; ko: Tank[]; frag: boolean }
   | { kind: 'warp'; from: { x: number; y: number }; to: { x: number; y: number } }
   | { kind: 'carve'; x: number; y: number }
   | { kind: 'split'; x: number; y: number }
+  | { kind: 'bounce'; x: number; y: number }
   | { kind: 'volleyEnd' }
   | { kind: 'end' };
 
@@ -48,16 +49,19 @@ export class ShotRun {
   hits: { x: number; y: number }[] = [];
   /** Damage dealt to the shooter's enemies. */
   damage = 0;
+  /** The weapon as fired, with this turn's skill applied. */
+  readonly weapon: WeaponDef;
   private shotsLeft: number;
   private refire = 0;
 
   constructor(
     readonly world: World,
     readonly shooter: Tank,
-    readonly weapon: WeaponDef,
+    weapon: WeaponDef,
     readonly power: number,
     readonly mods: TurnMods,
   ) {
+    this.weapon = shotWeapon(weapon, mods);
     this.shotsLeft = mods.shots;
   }
 
@@ -75,11 +79,12 @@ export class ShotRun {
     }
     const v = this.volley;
     for (const ev of stepVolley(this.world, v)) {
-      if (ev.kind === 'impact') this.impact(ev.x, ev.y, ev.hitTank, out);
+      if (ev.kind === 'impact') this.impact(ev.x, ev.y, ev.hitTank, out, ev.shell.frag);
       else if (ev.kind === 'carve') {
         this.world.terrain.carve(ev.x, ev.y, ev.r);
         out.push({ kind: 'carve', x: ev.x, y: ev.y });
       } else if (ev.kind === 'split') out.push({ kind: 'split', x: ev.x, y: ev.y });
+      else if (ev.kind === 'bounce') out.push({ kind: 'bounce', x: ev.x, y: ev.y });
     }
     if (!volleyDone(v)) return out;
     this.volley = null;
@@ -92,7 +97,7 @@ export class ShotRun {
     return out;
   }
 
-  private impact(x: number, y: number, hitTank: Tank | null, out: ShotEvent[]): void {
+  private impact(x: number, y: number, hitTank: Tank | null, out: ShotEvent[], frag: boolean): void {
     this.hits.push({ x, y });
     const s = this.shooter;
     if (this.mods.warp) {
@@ -106,10 +111,15 @@ export class ShotRun {
       out.push({ kind: 'warp', from, to: { x: s.x, y: s.y } });
       return;
     }
-    const res = explode(this.world, x, y, this.weapon, this.mods.dmgScale * s.atk);
+    const res = explode(this.world, x, y, blastOf(this.weapon, frag), this.mods.dmgScale * s.atk);
     for (const d of res.damaged) if (d.tank.team !== s.team) this.damage += d.amount;
-    out.push({ kind: 'impact', x, y, hitTank, damaged: res.damaged, ko: knockouts(this.world) });
+    out.push({ kind: 'impact', x, y, hitTank, damaged: res.damaged, ko: knockouts(this.world), frag });
   }
+}
+
+/** A shell's blast: a mortar bomblet has its own, smaller one. */
+export function blastOf(w: WeaponDef, frag: boolean): BlastSpec {
+  return frag && w.cluster ? w.cluster : w;
 }
 
 /** Mark tanks at 0 HP as out. Returns the ones that just went out. */

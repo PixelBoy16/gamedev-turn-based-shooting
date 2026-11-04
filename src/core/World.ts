@@ -39,6 +39,10 @@ export interface BlastSpec {
   damage: number;
   radius: number;
   knockback: number;
+  /** Draw characters in instead of only pushing them out (the magnet). */
+  pull?: { force: number; radius: number };
+  /** Pile dirt instead of digging a crater (the dirt bomb). */
+  mound?: { radius: number };
 }
 
 export interface World {
@@ -97,9 +101,10 @@ export interface ExplosionResult {
   damaged: { tank: Tank; amount: number }[];
 }
 
-/** Carve the crater, then damage and knock back every tank in range. `dmgScale` includes the shooter's attack. */
+/** Carve the crater (or pile the mound), then damage and knock back every tank in range. `dmgScale` includes the shooter's attack. */
 export function explode(world: World, x: number, y: number, spec: BlastSpec, dmgScale = 1): ExplosionResult {
-  world.terrain.carve(x, y, spec.radius);
+  if (spec.mound) world.terrain.fillCircle(x, y, spec.mound.radius);
+  else world.terrain.carve(x, y, spec.radius);
   const damaged: ExplosionResult['damaged'] = [];
   for (const t of world.tanks) {
     if (!t.alive || t.burrowed) continue;
@@ -116,7 +121,30 @@ export function explode(world: World, x: number, y: number, spec: BlastSpec, dmg
     t.vy += Math.min(-60, Math.sin(ang) * spec.knockback * falloff) * falloff;
     setAirborne(t);
   }
+  if (spec.pull) pull(world, x, y, spec.pull);
   return { damaged };
+}
+
+/**
+ * Hop every character in range toward the blast. The hop is timed to land at most on
+ * the blast point, so a strong pull drags you into the hole but never flings you past it.
+ */
+function pull(world: World, x: number, y: number, p: { force: number; radius: number }): void {
+  for (const t of world.tanks) {
+    if (!t.alive || t.burrowed) continue;
+    const c = tankCentre(t);
+    const dx = x - c.x;
+    const d = Math.hypot(dx, y - c.y);
+    if (d >= p.radius || Math.abs(dx) < 1) continue;
+    const falloff = 1 - d / p.radius;
+    const lift = 80 + 160 * falloff;
+    const air = (2 * lift) / TUNING.gravity;
+    const reach = p.force * falloff;
+    // aim a little short: the blast's own crater makes the fall longer than the hop
+    t.vx += Math.max(-reach, Math.min(reach, (dx / air) * 0.75));
+    t.vy = Math.min(t.vy, -lift);
+    setAirborne(t);
+  }
 }
 
 /** Mason's skill: a dirt wall just in front of the tank. Returns the wall rect. */

@@ -93,8 +93,8 @@ export interface GameConfig {
 }
 
 // Ids the code has behaviour for: their numbers and names are config, the set is not.
-export const WEAPON_IDS: WeaponId[] = ['cannon', 'hammer', 'splitter', 'shovel', 'drill'];
-export const SKILL_IDS: SkillId[] = ['calm', 'wall', 'storm', 'burrow'];
+export const WEAPON_IDS: WeaponId[] = ['cannon', 'hammer', 'splitter', 'shovel', 'drill', 'bouncer', 'beam', 'mortar', 'magnet', 'dirtbomb'];
+export const SKILL_IDS: SkillId[] = ['calm', 'wall', 'storm', 'burrow', 'rebound', 'pierce', 'barrage', 'vortex', 'landslide'];
 export const ITEM_IDS: ItemId[] = ['double', 'power', 'warp', 'heal', 'armor'];
 const STAT_KEYS: (keyof Stats)[] = ['hp', 'atk', 'def', 'move'];
 const EQUIP_SLOT_IDS: EquipSlot[] = ['necklace', 'ring', 'bracelet', 'charm'];
@@ -282,7 +282,7 @@ export function validateConfig(raw: unknown): ConfigReport {
       num(`${p}.radius`, w.radius, 4, 200);
       num(`${p}.knockback`, w.knockback, 0, 2000);
       num(`${p}.windMul`, w.windMul, 0, 5);
-      num(`${p}.gravityMul`, w.gravityMul, 0.1, 5);
+      num(`${p}.gravityMul`, w.gravityMul, 0, 5);
       if (w.speedMul !== undefined) num(`${p}.speedMul`, w.speedMul, 0.3, 3);
       if (w.split !== undefined) {
         const s = obj(`${p}.split`, w.split);
@@ -298,11 +298,31 @@ export function validateConfig(raw: unknown): ConfigReport {
           num(`${p}.drill.carveRadius`, d.carveRadius, 2, 60);
         }
       }
+      const part = (key: string, ranges: Record<string, [number, number, boolean?]>) => {
+        if (w[key] === undefined) return;
+        const o = obj(`${p}.${key}`, w[key]);
+        if (!o) return;
+        keys(`${p}.${key}`, o, Object.keys(ranges));
+        for (const [k, [min, max, whole]] of Object.entries(ranges)) (whole ? int : num)(`${p}.${key}.${k}`, o[k], min, max);
+      };
+      part('bounce', { count: [1, 8, true], keep: [0.1, 1], boost: [0, 8, true] });
+      if (w.pierce !== undefined) num(`${p}.pierce`, w.pierce, 0, 1000);
+      part('cluster', {
+        count: [1, 12, true], boostCount: [1, 12, true], damage: [0, 5000], radius: [4, 200], knockback: [0, 2000],
+        spreadVx: [0, 500], lift: [0, 1500],
+      });
+      part('pull', { force: [0, 2000], radius: [10, 800], boostRadius: [10, 800] });
+      part('mound', { radius: [4, 200], boostRadius: [4, 200] });
+      const needs: Partial<Record<WeaponId, [string, string]>> = {
+        splitter: ['split', 'จรวดแตกต้องมีค่าการแตก'], drill: ['drill', 'สว่านต้องมีค่าการเจาะ'],
+        bouncer: ['bounce', 'ลูกเด้งต้องมีค่าการเด้ง'], beam: ['pierce', 'ปืนลำแสงต้องมีระยะทะลวง'],
+        mortar: ['cluster', 'ครกต้องมีค่าลูกปราย'], magnet: ['pull', 'ระเบิดแม่เหล็กต้องมีค่าการดูด'], dirtbomb: ['mound', 'ระเบิดดินต้องมีขนาดเนินดิน'],
+      };
+      const need = needs[id];
+      if (need && w[need[0]] === undefined) errors.push(`${p}.${need[0]}: ${need[1]}`);
       const main = id !== 'drill';
       if (main && !SKILL_IDS.includes(w.skill as SkillId)) errors.push(`${p}.skill: ต้องเป็นหนึ่งใน ${SKILL_IDS.join(', ')}`);
       if (!main && w.skill !== undefined) errors.push(`${p}.skill: สว่านเป็นอาวุธรอง ไม่มีสกิล`);
-      if (id === 'splitter' && w.split === undefined) errors.push(`${p}.split: จรวดแตกต้องมีค่าการแตก`);
-      if (id === 'drill' && w.drill === undefined) errors.push(`${p}.drill: สว่านต้องมีค่าการเจาะ`);
     }
   }
 

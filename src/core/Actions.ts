@@ -1,4 +1,4 @@
-import { ITEM_VALUES, ItemId, LIMITS, SkillId, WEAPONS } from './data';
+import { ITEM_VALUES, ItemId, LIMITS, SkillId, WEAPONS, WeaponDef } from './data';
 import { Tank, World, raiseWall } from './World';
 
 // Item and skill rules, shared by the human controls and the bot.
@@ -14,10 +14,24 @@ export interface TurnMods {
   itemUsed: boolean;
   item: ItemId | null; // for the turn's delay cost
   skillUsed: boolean;
+  /** The weapon's own skill is on this turn (rebound, pierce, barrage, vortex, landslide): see shotWeapon(). */
+  boost: boolean;
 }
 
 export function freshMods(): TurnMods {
-  return { dmgScale: 1, shots: 1, warp: false, noWind: false, itemUsed: false, item: null, skillUsed: false };
+  return { dmgScale: 1, shots: 1, warp: false, noWind: false, itemUsed: false, item: null, skillUsed: false, boost: false };
+}
+
+/** The weapon as it fires this turn: with its skill on, each new weapon's own trick grows. */
+export function shotWeapon(w: WeaponDef, mods: TurnMods): WeaponDef {
+  if (!mods.boost) return w;
+  const out = structuredClone(w);
+  if (out.bounce) out.bounce.count += out.bounce.boost;
+  if (out.pierce) out.drill = { length: out.pierce, carveRadius: 8 };
+  if (out.cluster) out.cluster.count = out.cluster.boostCount;
+  if (out.pull) out.pull.radius = out.pull.boostRadius;
+  if (out.mound) out.mound.radius = out.mound.boostRadius;
+  return out;
 }
 
 /** One item per turn. Returns the item used, or null if not allowed. */
@@ -76,6 +90,13 @@ export function useSkill(world: World, t: Tank, mods: TurnMods): SkillResult | n
       return { skill, endsTurn: false };
     case 'storm':
       mods.splitCount = LIMITS.stormSplit;
+      return { skill, endsTurn: false };
+    case 'rebound':
+    case 'pierce':
+    case 'barrage':
+    case 'vortex':
+    case 'landslide':
+      mods.boost = true;
       return { skill, endsTurn: false };
   }
 }

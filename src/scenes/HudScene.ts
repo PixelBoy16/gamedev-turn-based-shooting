@@ -16,7 +16,10 @@ import { DIFF_LABEL, FORMAT_LABEL } from './setup';
 const POWER = { x: 560, y: 1000, w: 720, h: 34 };
 const WIND = { x: 960, y: 88, r: 36 };
 const DIAL = { x: 430, y: 1002, r: 64 };
-const SLOT_NAME: Record<WeaponId, string> = { cannon: 'ปืนใหญ่', hammer: 'ค้อนหิน', splitter: 'จรวดแตก', shovel: 'พลั่ว', drill: 'สว่าน' };
+const SLOT_NAME: Record<WeaponId, string> = {
+  cannon: 'ปืนใหญ่', hammer: 'ค้อนหิน', splitter: 'จรวดแตก', shovel: 'พลั่ว', drill: 'สว่าน',
+  bouncer: 'ลูกเด้ง', beam: 'ลำแสง', mortar: 'ครก', magnet: 'แม่เหล็ก', dirtbomb: 'ระเบิดดิน',
+};
 
 interface Panel {
   hp: Phaser.GameObjects.Text;

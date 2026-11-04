@@ -1,6 +1,7 @@
 import { Rng, randRange } from './rng';
 import { ITEM_VALUES, ItemId, SkillId, WeaponDef } from './data';
 import { fireVolley, stepVolley, volleyDone } from './Shot';
+import { blastOf } from './Match';
 import { Tank, World, blastDamage, tankCentre } from './World';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -18,6 +19,7 @@ export interface Shot {
 }
 
 export interface ShotOptions {
+  /** As fired this turn: pass it through shotWeapon() so a skill's boost is planned for. */
   weapon: WeaponDef;
   noWind?: boolean;
   /** Includes the shooter's attack multiplier. */
@@ -25,21 +27,28 @@ export interface ShotOptions {
   splitCount?: number;
 }
 
+/** Where a shell landed; `frag` marks a mortar bomblet, which has its own blast. */
+export interface Hit {
+  x: number;
+  y: number;
+  frag?: boolean;
+}
+
 /**
  * Where every shell of a shot would land, using the exact same step function as
  * the real volley (so wind, hills and split rockets are accounted for). Dry run:
  * the terrain is not touched.
  */
-export function simulateShot(world: World, shooter: Tank, shot: Shot, opts: ShotOptions, maxFrames = 600): { x: number; y: number }[] {
+export function simulateShot(world: World, shooter: Tank, shot: Shot, opts: ShotOptions, maxFrames = 600): Hit[] {
   const saved = { angle: shooter.angle, facing: shooter.facing };
   shooter.angle = shot.angle;
   shooter.facing = shot.facing;
   const v = fireVolley(shooter, opts.weapon, shot.power, opts.noWind, opts.splitCount);
   shooter.angle = saved.angle;
   shooter.facing = saved.facing;
-  const hits: { x: number; y: number }[] = [];
+  const hits: Hit[] = [];
   for (let f = 0; f < maxFrames && !volleyDone(v); f++) {
-    for (const ev of stepVolley(world, v)) if (ev.kind === 'impact') hits.push({ x: ev.x, y: ev.y });
+    for (const ev of stepVolley(world, v)) if (ev.kind === 'impact') hits.push({ x: ev.x, y: ev.y, frag: ev.shell.frag });
   }
   return hits;
 }
@@ -49,14 +58,13 @@ export function simulateShot(world: World, shooter: Tank, shot: Shot, opts: Shot
  * ourselves and allies. A shot that hurts no one scores by how close it got, so
  * any damaging shot beats any miss.
  */
-export function scoreImpacts(world: World, bot: Tank, hits: { x: number; y: number }[], opts: ShotOptions): number {
-  const spec = opts.weapon;
+export function scoreImpacts(world: World, bot: Tank, hits: Hit[], opts: ShotOptions): number {
   const scale = opts.dmgScale ?? 1;
   const taken = new Map<Tank, number>();
   for (const h of hits) {
     for (const t of world.tanks) {
       if (!t.alive || t.burrowed) continue;
-      const dmg = blastDamage(t, h.x, h.y, spec) * scale * t.def * (t.armored ? ITEM_VALUES.armorScale : 1);
+      const dmg = blastDamage(t, h.x, h.y, blastOf(opts.weapon, !!h.frag)) * scale * t.def * (t.armored ? ITEM_VALUES.armorScale : 1);
       if (dmg > 0) taken.set(t, (taken.get(t) ?? 0) + dmg);
     }
   }
@@ -154,7 +162,10 @@ export function chooseSupport(world: World, bot: Tank, skill: SkillId | null, di
     if (skill === 'burrow' && hard && bot.hp < 300) return [{ kind: 'skill', skill }];
     if (skill === 'calm' && Math.abs(world.wind) >= (hard ? 2 : 4)) actions.push({ kind: 'skill', skill });
     if (skill === 'wall' && bot.hp < (hard ? 700 : 450)) actions.push({ kind: 'skill', skill });
-    if (skill === 'storm') actions.push({ kind: 'skill', skill }); // more fragments is never worse
+    // more fragments, hops, reach or dirt is never worse
+    if (skill === 'storm' || skill === 'rebound' || skill === 'pierce' || skill === 'barrage' || skill === 'vortex' || skill === 'landslide') {
+      actions.push({ kind: 'skill', skill });
+    }
   }
   const heal = has('heal');
   const armor = has('armor');

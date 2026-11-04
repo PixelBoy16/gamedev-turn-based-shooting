@@ -36,7 +36,12 @@
       "hammer": 100,
       "splitter": 50,
       "shovel": 0,
-      "drill": 150
+      "drill": 150,
+      "bouncer": 50,
+      "beam": 100,
+      "mortar": 100,
+      "magnet": 100,
+      "dirtbomb": 50
     },
     "items": {
       "double": 300,
@@ -104,6 +109,81 @@
         "length": 240,
         "carveRadius": 13
       }
+    },
+    "bouncer": {
+      "name": "ลูกเด้ง",
+      "desc": "กระดอนพื้น 2 ครั้งแล้วค่อยระเบิด ยิงอ้อมเนินได้",
+      "damage": 260,
+      "radius": 36,
+      "knockback": 240,
+      "windMul": 1,
+      "gravityMul": 1,
+      "bounce": {
+        "count": 2,
+        "keep": 0.65,
+        "boost": 2
+      },
+      "skill": "rebound"
+    },
+    "beam": {
+      "name": "ปืนลำแสง",
+      "desc": "พุ่งเกือบตรง ตกช้ามาก ไม่โดนลม แต่ข้ามเนินสูงไม่ได้",
+      "damage": 200,
+      "radius": 22,
+      "knockback": 180,
+      "windMul": 0,
+      "gravityMul": 0.2,
+      "speedMul": 1.4,
+      "pierce": 80,
+      "skill": "pierce"
+    },
+    "mortar": {
+      "name": "ครกลูกปราย",
+      "desc": "ตกพื้นแล้วแตกเป็นลูกย่อย 5 ลูก",
+      "damage": 120,
+      "radius": 26,
+      "knockback": 120,
+      "windMul": 1,
+      "gravityMul": 1,
+      "cluster": {
+        "count": 5,
+        "boostCount": 8,
+        "damage": 80,
+        "radius": 22,
+        "knockback": 90,
+        "spreadVx": 60,
+        "lift": 260
+      },
+      "skill": "barrage"
+    },
+    "magnet": {
+      "name": "ระเบิดแม่เหล็ก",
+      "desc": "ดูดศัตรูเข้าหาจุดระเบิด ดึงลงหลุมหรือตกขอบได้",
+      "damage": 150,
+      "radius": 32,
+      "knockback": 0,
+      "windMul": 1,
+      "gravityMul": 1,
+      "pull": {
+        "force": 380,
+        "radius": 150,
+        "boostRadius": 300
+      },
+      "skill": "vortex"
+    },
+    "dirtbomb": {
+      "name": "ระเบิดดิน",
+      "desc": "เสกเนินดินแทนหลุม ใช้ฝังหรือบังศัตรู",
+      "damage": 90,
+      "radius": 24,
+      "knockback": 60,
+      "windMul": 1,
+      "gravityMul": 1,
+      "mound": {
+        "radius": 46,
+        "boostRadius": 80
+      },
+      "skill": "landslide"
     }
   },
   "skills": {
@@ -122,6 +202,26 @@
     "burrow": {
       "name": "มุดดิน",
       "desc": "หลบใต้ดิน ไม่โดนดาเมจจนถึงตาถัดไป (จบเทิร์นทันที)"
+    },
+    "rebound": {
+      "name": "เด้งเพิ่ม",
+      "desc": "นัดนี้กระดอนเพิ่มอีก 2 ครั้ง"
+    },
+    "pierce": {
+      "name": "ทะลวง",
+      "desc": "นัดนี้ทะลุดินได้ 80 px"
+    },
+    "barrage": {
+      "name": "ปรายหนัก",
+      "desc": "นัดนี้แตก 8 ลูกแทน 5"
+    },
+    "vortex": {
+      "name": "สนามดูด",
+      "desc": "นัดนี้ดูดไกลขึ้น 2 เท่า"
+    },
+    "landslide": {
+      "name": "ดินถล่ม",
+      "desc": "นัดนี้เนินดินใหญ่ขึ้นเกือบ 2 เท่า"
     }
   },
   "items": {

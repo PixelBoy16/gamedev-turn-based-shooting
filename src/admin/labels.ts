@@ -14,7 +14,10 @@ export const RULE_GROUPS: { title: string; fields: string[] }[] = [
   { title: 'กำแพงดิน (สกิลค้อนหิน)', fields: ['rules.wall.height', 'rules.wall.width', 'rules.wall.gap'] },
   { title: 'ช่วงท้ายเกม', fields: ['rules.suddenDeathTurn', 'rules.waterRisePerTurn'] },
   { title: 'ดีเลย์ (ลำดับเทิร์น)', fields: ['delay.shot', 'delay.pass', 'delay.skill', 'delay.perSecond', 'delay.perPx'] },
-  { title: 'ดีเลย์เพิ่มตามอาวุธ', fields: ['delay.weapons.cannon', 'delay.weapons.hammer', 'delay.weapons.splitter', 'delay.weapons.shovel', 'delay.weapons.drill'] },
+  {
+    title: 'ดีเลย์เพิ่มตามอาวุธ',
+    fields: ['cannon', 'hammer', 'splitter', 'shovel', 'drill', 'bouncer', 'beam', 'mortar', 'magnet', 'dirtbomb'].map((w) => `delay.weapons.${w}`),
+  },
   { title: 'ดีเลย์เพิ่มตามไอเท็ม', fields: ['delay.items.double', 'delay.items.power', 'delay.items.warp', 'delay.items.heal', 'delay.items.armor'] },
   { title: 'จำกัดต่อแมตช์', fields: ['limits.drillUses', 'limits.skillCooldown', 'limits.stormSplit', 'limits.itemsPerMatch'] },
 ];
@@ -44,6 +47,11 @@ export const FIELDS: Record<string, FieldLabel> = {
   'delay.weapons.cannon': { label: 'ปืนใหญ่' },
   'delay.weapons.hammer': { label: 'ค้อนหิน' },
   'delay.weapons.splitter': { label: 'จรวดแตก' },
+  'delay.weapons.bouncer': { label: 'ลูกเด้ง' },
+  'delay.weapons.beam': { label: 'ปืนลำแสง' },
+  'delay.weapons.mortar': { label: 'ครกลูกปราย' },
+  'delay.weapons.magnet': { label: 'ระเบิดแม่เหล็ก' },
+  'delay.weapons.dirtbomb': { label: 'ระเบิดดิน' },
   'delay.weapons.shovel': { label: 'พลั่วระเบิด' },
   'delay.weapons.drill': { label: 'สว่านเจาะ' },
   'delay.items.double': { label: 'ยิงคู่' },
@@ -82,6 +90,22 @@ export const WEAPON_FIELDS: { key: string; label: string; unit?: string; hint?: 
 export const WEAPON_EXTRA: Record<string, { key: string; label: string; unit?: string }[]> = {
   splitter: [{ key: 'split.count', label: 'แตกเป็น', unit: 'ลูก' }, { key: 'split.spreadVx', label: 'แตกกว้าง' }],
   drill: [{ key: 'drill.length', label: 'เจาะลึก', unit: 'px' }, { key: 'drill.carveRadius', label: 'ขนาดรู', unit: 'px' }],
+  bouncer: [
+    { key: 'bounce.count', label: 'เด้ง', unit: 'ครั้ง' }, { key: 'bounce.keep', label: 'แรงที่เหลือหลังเด้ง', unit: '×' },
+    { key: 'bounce.boost', label: 'สกิลเด้งเพิ่ม', unit: 'ครั้ง' },
+  ],
+  beam: [{ key: 'pierce', label: 'สกิลทะลวงดิน', unit: 'px' }],
+  mortar: [
+    { key: 'cluster.count', label: 'ลูกปราย', unit: 'ลูก' }, { key: 'cluster.boostCount', label: 'ลูกปรายตอนใช้สกิล', unit: 'ลูก' },
+    { key: 'cluster.damage', label: 'ดาเมจลูกปราย' }, { key: 'cluster.radius', label: 'รัศมีลูกปราย', unit: 'px' },
+    { key: 'cluster.knockback', label: 'แรงกระเด็นลูกปราย' }, { key: 'cluster.spreadVx', label: 'ปรายกว้าง' },
+    { key: 'cluster.lift', label: 'ปรายสูง' },
+  ],
+  magnet: [
+    { key: 'pull.force', label: 'แรงดูด' }, { key: 'pull.radius', label: 'ระยะดูด', unit: 'px' },
+    { key: 'pull.boostRadius', label: 'ระยะดูดตอนใช้สกิล', unit: 'px' },
+  ],
+  dirtbomb: [{ key: 'mound.radius', label: 'ขนาดเนินดิน', unit: 'px' }, { key: 'mound.boostRadius', label: 'ขนาดเนินตอนใช้สกิล', unit: 'px' }],
 };
 
 export const STAT_LABEL: Record<string, string> = { hp: 'HP', atk: 'โจมตี %', def: 'ป้องกัน %', move: 'เดิน %' };
@@ -92,4 +116,7 @@ export const FASHION_SLOT_LABEL: Record<string, string> = {
   hat: 'หมวก', glasses: 'แว่น', hair: 'ทรงผม', face: 'ใบหน้า', cloth: 'ชุด', eyes: 'ตา', set: 'ชุดเซ็ต', back: 'ติดหลัง',
 };
 
-export const SKILL_LABEL: Record<string, string> = { calm: 'ไร้ลม', wall: 'กำแพงดิน', storm: 'ห่าฝน', burrow: 'มุดดิน' };
+export const SKILL_LABEL: Record<string, string> = {
+  calm: 'ไร้ลม', wall: 'กำแพงดิน', storm: 'ห่าฝน', burrow: 'มุดดิน',
+  rebound: 'เด้งเพิ่ม', pierce: 'ทะลวง', barrage: 'ปรายหนัก', vortex: 'สนามดูด', landslide: 'ดินถล่ม',
+};

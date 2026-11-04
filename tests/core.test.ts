@@ -8,7 +8,7 @@ import { ShotPlanner, chooseShot, scoreImpacts, simulateShot } from '../src/core
 import { VolleyEvent, fireVolley, stepVolley, volleyDone } from '../src/core/Shot';
 import { LIMITS, MAIN_WEAPONS, WEAPONS, WeaponDef } from '../src/core/data';
 import { DEFAULT_LOADOUT, EQUIPMENT, FASHION, STAT_POINT, Stats, cleanLoadout, copyLoadout, lookId, tankStats } from '../src/core/gear';
-import { freshMods, useItem, useSkill } from '../src/core/Actions';
+import { freshMods, shotWeapon, useItem, useSkill } from '../src/core/Actions';
 import { MAP_IDS, generateMap, spawnX } from '../src/core/Maps';
 
 const CANNON = WEAPONS.cannon;
@@ -291,6 +291,79 @@ describe('gear', () => {
     for (let f = 0; f < 3000 && !volleyDone(v); f++) stepVolley(world, v);
     expect(v.shells).toHaveLength(LIMITS.stormSplit);
     expect(tankStats(a.loadout).maxHp).toBe(TUNING.maxHp);
+  });
+});
+
+describe('new weapons', () => {
+  /** The weapon tank 0 would fire after using its skill. */
+  function boosted(world: World, id: WeaponDef['id']): WeaponDef {
+    const a = world.tanks[0];
+    a.loadout = { ...a.loadout, weapon: id };
+    const mods = freshMods();
+    expect(useSkill(world, a, mods)?.skill).toBe(WEAPONS[id].skill);
+    return shotWeapon(WEAPONS[id], mods);
+  }
+
+  it('the bouncer hops twice before it blows, and its skill adds two hops', () => {
+    const plain = fire(flatWorld(), 45, 40, WEAPONS.bouncer);
+    expect(plain.events.filter((e) => e.kind === 'bounce')).toHaveLength(2);
+    expect(plain.impacts).toHaveLength(1);
+    const first = fire(flatWorld(), 45, 40, CANNON).impacts[0];
+    expect(plain.impacts[0].x).toBeGreaterThan(first.x);
+    const world = flatWorld();
+    expect(fire(world, 45, 40, boosted(world, 'bouncer')).events.filter((e) => e.kind === 'bounce')).toHaveLength(4);
+  });
+
+  it('the beam flies nearly flat and ignores wind; a cannon at the same aim drops short', () => {
+    const beam = fire(flatWorld(5), 0, 100, WEAPONS.beam).impacts[0];
+    expect(beam.x).toBe(fire(flatWorld(-5), 0, 100, WEAPONS.beam).impacts[0].x);
+    expect(beam.x).toBeGreaterThan(fire(flatWorld(), 0, 100, CANNON).impacts[0].x + 500);
+  });
+
+  it('the beam stops at a wall, but its skill bores through a thin one', () => {
+    const walled = () => {
+      const w = flatWorld();
+      w.terrain.fillRect(900, 400, 40, 200);
+      return w;
+    };
+    const blocked = fire(walled(), 0, 100, WEAPONS.beam).impacts[0];
+    expect(blocked.x).toBeLessThan(905);
+    const world = walled();
+    expect(fire(world, 0, 100, boosted(world, 'beam')).impacts[0].x).toBeGreaterThan(940);
+  });
+
+  it('the mortar throws 5 bomblets on impact, 8 with its skill', () => {
+    const plain = fire(flatWorld(), 45, 60, WEAPONS.mortar);
+    expect(plain.impacts).toHaveLength(6);
+    expect(plain.impacts.filter((e) => e.shell.frag)).toHaveLength(5);
+    const world = flatWorld();
+    expect(fire(world, 45, 60, boosted(world, 'mortar')).impacts).toHaveLength(9);
+  });
+
+  it('the magnet pulls a character toward the blast without throwing it past', () => {
+    const world = flatWorld();
+    const bot = world.tanks[1];
+    explode(world, 1420, 598, WEAPONS.magnet);
+    for (let i = 0; i < 600 && !isSettled(world); i++) stepTank(world, bot);
+    expect(bot.x).toBeLessThan(1500);
+    expect(bot.x).toBeGreaterThanOrEqual(1420);
+    // out of its normal reach, in reach of the boosted one
+    const far = flatWorld();
+    explode(far, 1300, 598, WEAPONS.magnet);
+    expect(far.tanks[1].vx).toBe(0);
+    explode(far, 1300, 598, boosted(far, 'magnet'));
+    expect(far.tanks[1].vx).toBeLessThan(0);
+  });
+
+  it('the dirt bomb piles dirt instead of digging, bigger with its skill', () => {
+    const world = flatWorld();
+    explode(world, 1000, 598, WEAPONS.dirtbomb);
+    expect(world.terrain.isSolid(1000, 598 - WEAPONS.dirtbomb.mound!.radius + 4)).toBe(true);
+    expect(world.terrain.isSolid(1000, 610)).toBe(true);
+    const big = boosted(world, 'dirtbomb');
+    explode(world, 1400, 598, big);
+    expect(world.terrain.isSolid(1400, 598 - big.mound!.radius + 4)).toBe(true);
+    expect(big.mound!.radius).toBeGreaterThan(WEAPONS.dirtbomb.mound!.radius);
   });
 });
 

@@ -3,11 +3,11 @@ import { ART_SCALE, Pose, gunLook, hasArt, lookHand, lookRes, lookTexture, shell
 import { Rng, createRng } from '../core/rng';
 import { PASSED, TurnManager, TurnRecord } from '../core/TurnManager';
 import { BotAction, ShotPlanner, Shot, chooseAttackItem, chooseSupport } from '../core/BotAI';
-import { TurnMods, freshMods, skillOf, useItem, useSkill } from '../core/Actions';
+import { TurnMods, freshMods, shotWeapon, skillOf, useItem, useSkill } from '../core/Actions';
 import { ITEMS, ITEM_IDS, ItemId, LIMITS, SKILLS, WEAPONS, WeaponDef } from '../core/data';
 import { randomLoadout } from '../core/gear';
 import { MAP_H, MAP_W, MapId, generateMap, spawnX } from '../core/Maps';
-import { ShotEvent, ShotRun, stepTanks } from '../core/Match';
+import { ShotEvent, ShotRun, blastOf, stepTanks } from '../core/Match';
 import { Terrain, decodeMask, terrainHash } from '../core/Terrain';
 import { TUNING, Tank, World, createTank, createWorld, isSettled, muzzle, tankCentre, walk } from '../core/World';
 import { FONT, TEAM_COLORS } from '../ui/widgets';
@@ -362,16 +362,22 @@ export default class BattleScene extends Phaser.Scene {
         ctx.beginPath();
         ctx.arc(ch.x, ch.y, ch.r + 2, 0, Math.PI * 2);
         ctx.stroke();
+      } else if (ch.kind === 'mound') {
+        // a fresh disc of dirt with a dark rim along its top
+        this.dirtFill(ctx, theme, () => {
+          ctx.beginPath();
+          ctx.arc(ch.x, ch.y, ch.r, 0, Math.PI * 2);
+        });
+        ctx.strokeStyle = 'rgba(60, 40, 25, 0.9)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(ch.x, ch.y, ch.r - 2, Math.PI, Math.PI * 2);
+        ctx.stroke();
       } else {
-        const [r, g, b] = theme.dirt;
-        ctx.fillStyle = this.dirtPattern ?? `rgb(${r + 15}, ${g + 10}, ${b + 5})`;
-        ctx.fillRect(ch.x, ch.y, ch.w, ch.h);
-        if (this.dirtPattern) {
-          ctx.globalCompositeOperation = 'multiply';
-          ctx.fillStyle = `rgb(${theme.tint.map((t) => Math.round(Math.min(1, t) * 255)).join(',')})`;
-          ctx.fillRect(ch.x, ch.y, ch.w, ch.h);
-          ctx.globalCompositeOperation = 'source-over';
-        }
+        this.dirtFill(ctx, theme, () => {
+          ctx.beginPath();
+          ctx.rect(ch.x, ch.y, ch.w, ch.h);
+        });
         ctx.strokeStyle = 'rgba(60, 40, 25, 0.9)';
         ctx.lineWidth = 3;
         for (let y = ch.y + 14; y < ch.y + ch.h - 30; y += 16) {
@@ -385,6 +391,21 @@ export default class BattleScene extends Phaser.Scene {
     }
     changes.length = 0;
     this.terrainTex.refresh();
+  }
+
+  /** Fill the current `shape` path with this map's dirt. */
+  private dirtFill(ctx: CanvasRenderingContext2D, theme: (typeof THEMES)[MapId], shape: () => void): void {
+    const [r, g, b] = theme.dirt;
+    shape();
+    ctx.fillStyle = this.dirtPattern ?? `rgb(${r + 15}, ${g + 10}, ${b + 5})`;
+    ctx.fill();
+    if (this.dirtPattern) {
+      ctx.globalCompositeOperation = 'multiply';
+      shape();
+      ctx.fillStyle = `rgb(${theme.tint.map((t) => Math.round(Math.min(1, t) * 255)).join(',')})`;
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
 
   // ---------------------------------------------------------------- input
@@ -863,7 +884,7 @@ export default class BattleScene extends Phaser.Scene {
           if (this.phase !== 'botThink') return; // burrow ended the turn
         }
       }
-      const opts = { weapon: this.mainWeapon, noWind: this.mods.noWind, dmgScale: this.mods.dmgScale * bot.atk, splitCount: this.mods.splitCount };
+      const opts = { weapon: shotWeapon(this.mainWeapon, this.mods), noWind: this.mods.noWind, dmgScale: this.mods.dmgScale * bot.atk, splitCount: this.mods.splitCount };
       this.planner = new ShotPlanner(this.world, bot, this.rng, opts, SAMPLES[difficulty]);
     }
     // Spread the search over frames so the game never hitches.
@@ -909,7 +930,8 @@ export default class BattleScene extends Phaser.Scene {
   private onShotEvent(shooter: Tank, ev: ShotEvent): void {
     switch (ev.kind) {
       case 'launch':
-        sfx.fire(this.shotWeapon.id === 'hammer');
+        if (this.shotWeapon.id === 'beam') sfx.zap();
+        else sfx.fire(this.shotWeapon.id === 'hammer');
         this.trail = [];
         this.recoil(shooter);
         break;
@@ -928,6 +950,10 @@ export default class BattleScene extends Phaser.Scene {
       case 'split':
         this.flash(ev.x, ev.y, 18, 0xffd166);
         sfx.split();
+        break;
+      case 'bounce':
+        this.debris(ev.x, ev.y, 4);
+        sfx.bounce();
         break;
       case 'volleyEnd':
         this.lastTrail.set(shooter.id, this.trail);
@@ -979,7 +1005,7 @@ export default class BattleScene extends Phaser.Scene {
 
   private onImpact(shooter: Tank, ev: Extract<ShotEvent, { kind: 'impact' }>): void {
     const { x, y, damaged } = ev;
-    const w = this.shotWeapon;
+    const w = blastOf(this.run?.weapon ?? this.shotWeapon, ev.frag);
     const st = this.stats.get(shooter.id)!;
     let enemyDmg = 0;
     for (const d of damaged) {
@@ -997,6 +1023,7 @@ export default class BattleScene extends Phaser.Scene {
     sfx.explode(big);
     if (big) this.hitStopMs = 80;
     this.flash(x, y, w.radius, 0xfff1c1, big ? 1.8 : 1.4);
+    if (w.pull) this.ring(x, y, w.pull.radius, 0x7fd1ff);
     this.debris(x, y, big ? 18 : 10);
     for (const t of ev.ko) this.ko(`KO! ${t.name}`);
   }
@@ -1029,6 +1056,12 @@ export default class BattleScene extends Phaser.Scene {
   private flash(x: number, y: number, r: number, color: number, grow = 1.4): void {
     const f = this.add.circle(x, y, r, color, 0.95).setDepth(20);
     this.tweens.add({ targets: f, scale: grow, alpha: 0, duration: 260, ease: 'Quad.easeOut', onComplete: () => f.destroy() });
+  }
+
+  /** A ring closing in on the blast: the magnet's pull. */
+  private ring(x: number, y: number, r: number, color: number): void {
+    const c = this.add.circle(x, y, r).setStrokeStyle(6, color, 0.9).setDepth(20);
+    this.tweens.add({ targets: c, scale: 0.1, alpha: 0, duration: 420, ease: 'Quad.easeIn', onComplete: () => c.destroy() });
   }
 
   private debris(x: number, y: number, count: number): void {
@@ -1116,8 +1149,9 @@ export default class BattleScene extends Phaser.Scene {
       const s = shells[i];
       img.setVisible(!!s);
       if (!s) return;
-      img.setTexture(shellKey(this.shotWeapon.id)).setPosition(s.x, s.y);
-      img.setRotation(this.shotWeapon.id === 'hammer' ? s.frames * 0.25 : Math.atan2(s.vy, s.vx));
+      const id = this.shotWeapon.id;
+      img.setTexture(shellKey(id)).setPosition(s.x, s.y).setScale(ART_SCALE * (s.frag ? 0.8 : 1.4));
+      img.setRotation(id === 'hammer' || id === 'bouncer' ? s.frames * 0.25 : Math.atan2(s.vy, s.vx));
     });
 
     const fx = this.fxGfx;

@@ -108,6 +108,8 @@ export const sfx = {
     burst(0.12, 0.35, 3000, 400);
   },
   split: () => tone('square', 700, 1200, 0.08, 0.12),
+  bounce: () => tone('triangle', 300, 520, 0.09, 0.22),
+  zap: () => tone('sawtooth', 1400, 500, 0.18, 0.12),
   drill: () => {
     const now = performance.now();
     if (now - lastDrill < 90) return; // the drill carves every few frames; don't stack sounds

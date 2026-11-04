@@ -3,7 +3,8 @@
 
 export type TerrainChange =
   | { kind: 'carve'; x: number; y: number; r: number }
-  | { kind: 'fill'; x: number; y: number; w: number; h: number };
+  | { kind: 'fill'; x: number; y: number; w: number; h: number }
+  | { kind: 'mound'; x: number; y: number; r: number };
 
 export class Terrain {
   readonly mask: Uint8Array;
@@ -55,8 +56,19 @@ export class Terrain {
     this.changes.push({ kind: 'fill', x, y, w, h });
   }
 
+  /** Pile a disc of dirt (the dirt bomb). */
+  fillCircle(cx: number, cy: number, r: number): void {
+    this.paintCircle(cx, cy, r, 1);
+    this.changes.push({ kind: 'mound', x: cx, y: cy, r });
+  }
+
   /** Clear a circle of dirt. */
   carve(cx: number, cy: number, r: number): void {
+    this.paintCircle(cx, cy, r, 0);
+    this.changes.push({ kind: 'carve', x: cx, y: cy, r });
+  }
+
+  private paintCircle(cx: number, cy: number, r: number, v: 0 | 1): void {
     const x0 = Math.max(0, Math.floor(cx - r));
     const x1 = Math.min(this.width - 1, Math.ceil(cx + r));
     const y0 = Math.max(0, Math.floor(cy - r));
@@ -66,10 +78,9 @@ export class Terrain {
       const dy = y - cy;
       for (let x = x0; x <= x1; x++) {
         const dx = x - cx;
-        if (dx * dx + dy * dy <= r2) this.mask[y * this.width + x] = 0;
+        if (dx * dx + dy * dy <= r2) this.mask[y * this.width + x] = v;
       }
     }
-    this.changes.push({ kind: 'carve', x: cx, y: cy, r });
   }
 }
 
