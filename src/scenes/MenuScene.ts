@@ -4,8 +4,8 @@ import { sfx } from '../audio/sfx';
 import { DEFAULT_LOADOUT, Loadout } from '../core/gear';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
-import { THEME, drawPlate } from '../ui/theme';
-import { FONT, INK, label } from '../ui/widgets';
+import { THEME, drawPlate, drawRibbon } from '../ui/theme';
+import { FONT, label } from '../ui/widgets';
 import { menuBackdrop } from './backdrop';
 
 const GROUND = 1010; // where the showcase chibis stand
@@ -28,9 +28,10 @@ export default class MenuScene extends Phaser.Scene {
       return;
     }
     menuBackdrop(this);
+    this.atmosphere();
     // a soft shade behind the right column so the cards read on any background
     const shade = this.add.graphics();
-    shade.fillGradientStyle(0x10162a, 0x10162a, 0x10162a, 0x10162a, 0, 0.45, 0, 0.45);
+    shade.fillGradientStyle(0x07080c, 0x07080c, 0x07080c, 0x07080c, 0, 0.5, 0, 0.5);
     shade.fillRect(1060, 0, 860, 1080);
 
     this.logo();
@@ -38,6 +39,51 @@ export default class MenuScene extends Phaser.Scene {
     this.modes();
     this.topBar();
     this.lobLoop(shooter);
+  }
+
+  /**
+   * Mood over the backdrop: a dark ground band for the chibis to stand on, a fire glow at
+   * their feet, darkened corners, and embers drifting up off the battlefield.
+   */
+  private atmosphere(): void {
+    const ground = this.add.graphics();
+    ground.fillGradientStyle(0x07080c, 0x07080c, 0x07080c, 0x07080c, 0, 0, 0.75, 0.75);
+    ground.fillRect(0, 820, 1920, 260);
+    const spot = this.add.graphics({ x: HERO_X, y: GROUND + 4 });
+    spot.fillStyle(THEME.fire, 0.16);
+    spot.fillEllipse(0, 0, 900, 110);
+    spot.fillStyle(0xffb347, 0.14);
+    spot.fillEllipse(0, 0, 560, 60);
+
+    if (!this.textures.exists('menu-vignette')) {
+      const tex = this.textures.createCanvas('menu-vignette', 480, 270)!;
+      const g = tex.context.createRadialGradient(240, 135, 70, 240, 135, 280);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.6)');
+      tex.context.fillStyle = g;
+      tex.context.fillRect(0, 0, 480, 270);
+      tex.refresh();
+    }
+    this.add.image(960, 540, 'menu-vignette').setDisplaySize(1920, 1080);
+
+    if (!this.textures.exists('ember')) {
+      const tex = this.textures.createCanvas('ember', 32, 32)!;
+      const g = tex.context.createRadialGradient(16, 16, 0, 16, 16, 16);
+      g.addColorStop(0, 'rgba(255,230,160,1)');
+      g.addColorStop(0.35, 'rgba(255,140,40,0.8)');
+      g.addColorStop(1, 'rgba(255,90,20,0)');
+      tex.context.fillStyle = g;
+      tex.context.fillRect(0, 0, 32, 32);
+      tex.refresh();
+    }
+    this.add.particles(0, 0, 'ember', {
+      x: { min: 0, max: 1920 }, y: { min: 1000, max: 1100 },
+      lifespan: { min: 4000, max: 7000 },
+      speedY: { min: -150, max: -60 }, speedX: { min: -30, max: 30 },
+      scale: { start: 0.55, end: 0 }, alpha: { start: 0.9, end: 0 },
+      frequency: 140, blendMode: Phaser.BlendModes.ADD,
+      advance: 5000, // already drifting when the menu opens
+    });
   }
 
   private has(key: string): boolean {
@@ -81,8 +127,14 @@ export default class MenuScene extends Phaser.Scene {
     logo.setScale(0);
     this.tweens.add({ targets: logo, scale: s, duration: 600, ease: 'Back.easeOut' });
     this.tweens.add({ targets: logo, y: logo.y + 12, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 600 });
-    const tag = label(this, HERO_X, this.has('art-logo') ? 430 : 350, 'ยิงหนึ่งนัด เปลี่ยนแผนที่ทั้งแผ่น', 40).setOrigin(0.5).setAlpha(0);
-    this.tweens.add({ targets: tag, alpha: 1, duration: 500, delay: 400 });
+    const tagY = this.has('art-logo') ? 430 : 350;
+    const band = this.add.graphics({ x: HERO_X, y: tagY });
+    drawRibbon(band, 640, 62, THEME.steelDark, THEME.fire);
+    const tag = label(this, HERO_X, tagY - 2, 'ยิงหนึ่งนัด เปลี่ยนแผนที่ทั้งแผ่น', 36).setOrigin(0.5);
+    for (const o of [band, tag]) {
+      o.setAlpha(0);
+      this.tweens.add({ targets: o, alpha: 1, duration: 500, delay: 400 });
+    }
   }
 
   /** The same chibi, dressed three ways; they drop in and breathe. Returns the one with the cannon. */
@@ -122,12 +174,23 @@ export default class MenuScene extends Phaser.Scene {
     ];
     cards.forEach(([icon, title, sub, fill, go], i) => {
       const c = new MenuCard(this, 1490, 400 + i * 190, 700, 160, fill, go);
+      const badge = this.add.graphics({ x: -350 + 90, y: 0 });
+      badge.fillStyle(THEME.ink, 0.55);
+      badge.fillCircle(0, 0, 58);
+      badge.lineStyle(4, 0xffffff, 0.18);
+      badge.strokeCircle(0, 0, 58);
+      c.add(badge);
       c.add(this.icon(-350 + 90, 0, icon, ['🤖', '👥', '🏆'][i], 112));
       c.add(this.add.text(-350 + 170, -24, title, { fontFamily: FONT, fontSize: '52px', fontStyle: 'bold', color: '#ffffff', stroke: '#1b2030', strokeThickness: 8 }).setOrigin(0, 0.5));
       c.add(this.add.text(-350 + 172, 36, sub, { fontFamily: FONT, fontSize: '24px', color: '#ffffff' }).setOrigin(0, 0.5).setAlpha(0.92));
-      c.add(this.add.text(320, 0, '›', { fontFamily: FONT, fontSize: '72px', color: '#ffffff', stroke: '#1b2030', strokeThickness: 8 }).setOrigin(0.5));
+      const chevron = this.add.text(316, 0, '›', { fontFamily: FONT, fontSize: '72px', color: '#ffffff', stroke: '#1b2030', strokeThickness: 8 }).setOrigin(0.5);
+      c.add(chevron);
+      this.tweens.add({ targets: chevron, x: 326, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: i * 200 });
       c.x += 700;
-      this.tweens.add({ targets: c, x: 1490, duration: 450, delay: 150 + i * 110, ease: 'Cubic.easeOut' });
+      this.tweens.add({
+        targets: c, x: 1490, duration: 450, delay: 150 + i * 110, ease: 'Cubic.easeOut',
+        onComplete: () => this.shine(1490, 400 + i * 190, 700, 160, 1400 + i * 260),
+      });
     });
 
     // shop and pass under the cards
@@ -141,6 +204,30 @@ export default class MenuScene extends Phaser.Scene {
       c.add(this.add.text(-165 + 116, 0, name, { fontFamily: FONT, fontSize: '36px', fontStyle: 'bold', color: '#ffffff', stroke: '#1b2030', strokeThickness: 6 }).setOrigin(0, 0.5));
       c.setAlpha(0);
       this.tweens.add({ targets: c, alpha: 1, duration: 400, delay: 550 + i * 80 });
+    });
+  }
+
+  /**
+   * A bright diagonal band that sweeps across a card every few seconds. Redrawn each frame
+   * with its corners clamped inside the card, so it never spills past the edge. Started once
+   * the card has slid into place.
+   */
+  private shine(x: number, y: number, w: number, h: number, delay: number): void {
+    const band = this.add.graphics({ x, y }).setBlendMode(Phaser.BlendModes.ADD);
+    const edge = w / 2 - 18; // inside the plate's cut corners
+    const clamp = (v: number) => Phaser.Math.Clamp(v, -edge, edge);
+    this.tweens.addCounter({
+      from: -edge - 80, to: edge + 80, duration: 700, delay, repeatDelay: 4200, repeat: -1, ease: 'Sine.easeInOut',
+      onUpdate: (tw) => {
+        const c = tw.getValue() ?? 0;
+        band.clear();
+        band.fillStyle(0xffffff, 0.16);
+        band.fillPoints([
+          { x: clamp(c + 10), y: -h / 2 }, { x: clamp(c + 80), y: -h / 2 },
+          { x: clamp(c - 10), y: h / 2 }, { x: clamp(c - 80), y: h / 2 },
+        ] as unknown as Phaser.Math.Vector2[], true);
+      },
+      onRepeat: () => band.clear(),
     });
   }
 
@@ -178,9 +265,8 @@ export default class MenuScene extends Phaser.Scene {
 
   /** A rounded counter with an icon; returns its number text. */
   private pill(x: number, icon: string, emoji: string): Phaser.GameObjects.Text {
-    const g = this.add.graphics();
-    g.fillStyle(INK, 0.85);
-    g.fillRoundedRect(x - 110, 50, 220, 64, 32);
+    const g = this.add.graphics({ x, y: 82 });
+    drawPlate(g, 220, 60, THEME.steelDark, { cut: 12 });
     this.icon(x - 76, 82, icon, emoji, 70);
     return this.add.text(x + 86, 82, '', { fontFamily: FONT, fontSize: '32px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(1, 0.5);
   }

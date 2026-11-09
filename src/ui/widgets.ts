@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { sfx } from '../audio/sfx';
-import { THEME, drawPlate } from './theme';
+import { THEME, drawPlate, slantPoints } from './theme';
 
 export const FONT = '"Kanit", system-ui, "Noto Sans Thai", sans-serif';
 export const INK = THEME.panel;
@@ -143,6 +143,18 @@ export function confirmBox(scene: Phaser.Scene, text: string, yes: string, onYes
   parts.push(new Button(scene, 820, 620, 260, 90, yes, { fill: THEME.green, size: 34, onClick: () => { close(); onYes(); } }).setDepth(62));
   parts.push(new Button(scene, 1100, 620, 260, 90, 'ยกเลิก', { size: 32, onClick: close }).setDepth(62));
   return close;
+}
+
+/** A small slanted fire-orange tab that heads a section; `x` is its left edge, `y` its middle. */
+export function sectionTab(scene: Phaser.Scene, x: number, y: number, str: string, fill: number = THEME.fire): Phaser.GameObjects.Container {
+  const t = label(scene, 0, 0, str, 22).setOrigin(0.5);
+  const w = t.width + 40;
+  const g = scene.add.graphics();
+  g.fillStyle(THEME.ink, 0.9);
+  g.fillPoints(slantPoints(w + 8, 40, 8, 4) as unknown as Phaser.Math.Vector2[], true);
+  g.fillStyle(fill, 1);
+  g.fillPoints(slantPoints(w, 34, 8) as unknown as Phaser.Math.Vector2[], true);
+  return scene.add.container(x + w / 2, y, [g, t]);
 }
 
 /** "🪙 500   💎 50" */

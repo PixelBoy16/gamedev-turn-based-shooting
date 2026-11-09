@@ -3,7 +3,8 @@ import { ART_SCALE, gunLook, iconTexture, lookRes, lookTexture } from '../art/ch
 import { ITEMS, SKILLS, WEAPONS, WeaponId } from '../core/data';
 import { skillOf } from '../core/Actions';
 import { TUNING, tankCentre } from '../core/World';
-import { Button, FONT, INK, TEAM_COLORS, label } from '../ui/widgets';
+import { Button, FONT, INK, TEAM_COLORS, fit, label } from '../ui/widgets';
+import { THEME, drawPlate, drawRibbon, platePoints } from '../ui/theme';
 import BattleScene, { AIM_HOLD_MS, hpColor } from './BattleScene';
 import { isMuted, setMuted } from '../audio/sfx';
 import { account } from '../net/account';
@@ -161,19 +162,110 @@ export default class HudScene extends Phaser.Scene {
     this.tweens.add({ targets: b, alpha: 0, delay: 1000, duration: 400 });
   }
 
+  /**
+   * End-of-match card: the screen dims, a slanted title ribbon slams in (sun rays behind it on a
+   * win), then one steel row per tank slides in with its portrait, a damage bar that counts up,
+   * accuracy and HP. The top damage dealer gets an MVP tag.
+   */
   private showResult(winner: number): void {
     this.time.delayedCall(900, () => {
       const b = this.battle;
-      const c = this.add.container(960, 520);
-      const g = this.add.graphics();
-      g.fillStyle(INK, 0.92);
-      g.fillRoundedRect(-480, -330, 960, 660, 28);
       const won = winner === b.myTeam;
-      g.lineStyle(6, won ? 0xffd166 : 0x8899aa, 1);
-      g.strokeRoundedRect(-480, -330, 960, 660, 28);
-      const title = won ? 'ชนะ!' : winner === -1 ? 'เสมอ' : 'แพ้...';
+      const draw = winner === -1;
+      const edge = won ? THEME.gold : draw ? 0x8899aa : THEME.red;
+      const title = won ? 'ชนะ!' : draw ? 'เสมอ' : 'แพ้...';
+
+      const dim = this.add.rectangle(960, 540, 1920, 1080, 0x05060a, 0.62).setInteractive().setAlpha(0);
+      this.tweens.add({ targets: dim, alpha: 1, duration: 300 });
+      const c = this.add.container(960, 545);
+
+      if (won) {
+        // slow sun rays behind the card, fanning out from the title
+        const rays = this.add.graphics({ x: 0, y: -345 }).setAlpha(0);
+        rays.fillStyle(THEME.gold, 0.16);
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          rays.fillTriangle(0, 0, Math.cos(a - 0.12) * 900, Math.sin(a - 0.12) * 900, Math.cos(a + 0.12) * 900, Math.sin(a + 0.12) * 900);
+        }
+        this.tweens.add({ targets: rays, angle: 360, duration: 30000, repeat: -1 });
+        this.tweens.add({ targets: rays, alpha: 1, duration: 500, delay: 300 });
+        c.add(rays);
+      }
+
+      const g = this.add.graphics();
+      drawPlate(g, 1000, 690, THEME.panel, { cut: 34, rivets: true });
+      g.lineStyle(5, edge, 1);
+      g.strokePoints(platePoints(1000, 690, 34) as unknown as Phaser.Math.Vector2[], true, true);
+      c.add(g);
+
+      // title ribbon: a slanted plate with hazard stripes, over the top edge of the card
+      const ribbon = this.add.container(0, -345);
+      const r = this.add.graphics();
+      drawRibbon(r, 580, 132, won ? THEME.fire : draw ? THEME.steel : 0x7a1f17, edge);
+      ribbon.add([r, fit(label(this, 0, -4, title, 104, won ? '#ffe08a' : '#ffffff').setOrigin(0.5), 540, 124)]);
+      ribbon.setScale(2.2).setAlpha(0);
+      this.tweens.add({
+        targets: ribbon, scale: 1, alpha: 1, duration: 320, delay: 150, ease: 'Back.easeOut',
+        onComplete: () => this.cameras.main.shake(160, won ? 0.006 : 0.003),
+      });
+
+      const mode = `${b.net ? `ออนไลน์ ${b.setup.format}` : FORMAT_LABEL[b.setup.format]} · บอท${DIFF_LABEL[b.setup.difficulty]} · ${b.turns.turnNumber} เทิร์น`;
+      c.add(label(this, 0, -248, mode, 24, THEME.muted).setOrigin(0.5));
+
+      // stats table
+      const COL = { name: -330, bar: -110, acc: 290, hp: 395 };
+      const stats = b.world.tanks.map((t) => ({ t, s: b.stats.get(t.id)! }));
+      const top = Math.max(...stats.map(({ s }) => s.damage));
+      const ROW_H = 84;
+      const firstY = -140 + ((4 - stats.length) * ROW_H) / 2; // centre 2–4 rows in the table area
+      const head = (x: number, str: string) => label(this, x, firstY - 52, str, 20, THEME.muted).setOrigin(0.5);
+      c.add([head(COL.bar + 140, 'ดาเมจ'), head(COL.acc, 'แม่น'), head(COL.hp, 'HP')]);
+      stats.forEach(({ t, s }, i) => {
+        const y = firstY + i * ROW_H;
+        const row = this.add.container(0, y);
+        const rg = this.add.graphics();
+        const mine = t.team === b.myTeam;
+        drawPlate(rg, 900, 68, mine ? 0x2c3342 : THEME.steelDark, { cut: 12 });
+        rg.fillStyle(TEAM_COLORS[t.team], 1);
+        rg.fillRect(-446, -26, 10, 52);
+        const portrait = this.add.image(-392, 33, lookTexture(this, t.loadout)).setOrigin(0.5, 1)
+          .setScale(ART_SCALE * 0.95 * lookRes()).setFlipX(t.team !== 0);
+        if (!t.alive) portrait.setTint(0x666666);
+        const name = fit(label(this, COL.name, 0, t.name, 28).setOrigin(0, 0.5), 230, 40);
+        const mvp = top > 0 && s.damage === top;
+        rg.fillStyle(0x0d0f15, 0.9);
+        rg.fillRoundedRect(COL.bar, -7, 220, 14, 7);
+        const bar = this.add.rectangle(COL.bar + 2, 0, 1, 10, mvp ? THEME.gold : TEAM_COLORS[t.team]).setOrigin(0, 0.5);
+        const dmg = label(this, COL.bar + 232, 0, '0', 26).setOrigin(0, 0.5);
+        const acc = s.shots ? Math.round((s.hits / s.shots) * 100) : 0;
+        const hp = t.alive
+          ? label(this, COL.hp, 0, `${t.hp}`, 26, '#7dff8a').setOrigin(0.5)
+          : label(this, COL.hp, 0, 'ออกแล้ว', 22, '#ff8a80').setOrigin(0.5);
+        row.add([rg, portrait, name, bar, dmg, label(this, COL.acc, 0, `${acc}%`, 26).setOrigin(0.5), hp]);
+        if (mvp) {
+          const tag = this.add.container(COL.name + name.displayWidth + 44, 0);
+          const tg = this.add.graphics();
+          drawPlate(tg, 70, 30, THEME.gold, { cut: 8 });
+          tag.add([tg, label(this, 0, 0, 'MVP', 18, '#2a1a00').setStroke('#ffe08a', 2).setOrigin(0.5)]);
+          row.add(tag);
+        }
+        c.add(row);
+        row.setAlpha(0).setX(80);
+        const delay = 450 + i * 110;
+        this.tweens.add({ targets: row, x: 0, alpha: 1, duration: 260, delay, ease: 'Cubic.easeOut' });
+        const full = top > 0 ? (s.damage / top) * 216 : 0;
+        this.tweens.addCounter({
+          from: 0, to: 1, duration: 700, delay: delay + 150, ease: 'Cubic.easeOut',
+          onUpdate: (tw) => {
+            const k = tw.getValue() ?? 0;
+            bar.width = Math.max(1, full * k);
+            dmg.setText(`${Math.round(s.damage * k)}`);
+          },
+        });
+      });
+
       // ranked: the new rating arrives a moment after the result
-      const rating = label(this, 0, 150, 'กำลังคิดคะแนน…', 34, '#ffd166').setOrigin(0.5, 0);
+      const rating = label(this, 0, 188, 'กำลังคิดคะแนน…', 30, '#ffd166').setOrigin(0.5);
       if (!net.room?.ranked) rating.setText('');
       const showRating = () => {
         if (!b.net) return; // offline matches pay nothing
@@ -187,31 +279,26 @@ export default class HudScene extends Phaser.Scene {
       showRating();
       const stop = account.onChange(showRating);
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, stop);
-      const lines = b.world.tanks.map((t) => {
-        const s = b.stats.get(t.id)!;
-        const acc = s.shots ? Math.round((s.hits / s.shots) * 100) : 0;
-        return `${t.name.padEnd(10)} ดาเมจ ${String(s.damage).padStart(4)}   แม่น ${acc}%   ${t.alive ? `HP ${t.hp}` : 'ออกแล้ว'}`;
-      });
-      c.add([
-        g,
-        label(this, 0, -290, title, 96, won ? '#ffd166' : '#ffffff').setOrigin(0.5, 0),
-        label(this, 0, -170, `${b.net ? `ออนไลน์ ${b.setup.format}` : FORMAT_LABEL[b.setup.format]} · บอท${DIFF_LABEL[b.setup.difficulty]} · ${b.turns.turnNumber} เทิร์น`, 26).setOrigin(0.5, 0),
-        this.add.text(0, -110, lines.join('\n'), { fontFamily: FONT, fontSize: '28px', color: '#e6ecff', lineSpacing: 12, align: 'left' }).setOrigin(0.5, 0),
-        ...(b.net && net.room?.ranked
-          ? [rating, new Button(this, 0, 240, 420, 96, 'กลับเมนู', {
-            fill: 0x2f9e44, size: 36, onClick: () => {
-              net.leave();
-              b.scene.start('menu');
-            },
-          })]
-          : b.net
-          ? [rating, new Button(this, 0, 240, 420, 96, 'กลับห้อง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.start('lobby') })]
-          : [
-            new Button(this, -200, 240, 340, 96, 'เล่นอีกครั้ง', { fill: 0x2f9e44, size: 36, onClick: () => b.scene.restart() }),
-            new Button(this, 200, 240, 340, 96, 'เปลี่ยนตัว/ด่าน', { size: 32, onClick: () => b.scene.start('setup') }),
-          ]),
-      ]);
-      c.setScale(0.8).setAlpha(0);
+
+      const buttons = b.net && net.room?.ranked
+        ? [new Button(this, 0, 272, 420, 92, 'กลับเมนู', {
+          fill: THEME.green, size: 36, onClick: () => {
+            net.leave();
+            b.scene.start('menu');
+          },
+        })]
+        : b.net
+        ? [new Button(this, 0, 272, 420, 92, 'กลับห้อง', { fill: THEME.green, size: 36, onClick: () => b.scene.start('lobby') })]
+        : [
+          new Button(this, -200, 272, 360, 92, 'เล่นอีกครั้ง', { fill: THEME.green, size: 36, onClick: () => b.scene.restart() }),
+          new Button(this, 200, 272, 360, 92, 'เปลี่ยนตัว/ด่าน', { size: 32, onClick: () => b.scene.start('setup') }),
+        ];
+      c.add([rating, ...buttons, ribbon]);
+      for (const btn of buttons) {
+        btn.setAlpha(0);
+        this.tweens.add({ targets: btn, alpha: 1, duration: 250, delay: 600 + stats.length * 110 });
+      }
+      c.setScale(0.85).setAlpha(0);
       this.tweens.add({ targets: c, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut' });
     });
   }

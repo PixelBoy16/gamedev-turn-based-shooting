@@ -7,7 +7,8 @@ import {
 } from '../core/gear';
 import { MAPS, MAP_IDS } from '../core/Maps';
 import { Difficulty } from '../core/BotAI';
-import { Button, FONT, INK, confirmBox, fit, label, walletText } from '../ui/widgets';
+import { Button, FONT, confirmBox, fit, label, sectionTab, walletText } from '../ui/widgets';
+import { THEME, drawPlate, drawRibbon } from '../ui/theme';
 import { account } from '../net/account';
 import { ItemKind, enforceOwned, itemKey, owns, priceOf, priceText } from '../core/shop';
 import { menuBackdrop } from './backdrop';
@@ -48,7 +49,9 @@ export default class SetupScene extends Phaser.Scene {
     const shade = this.add.graphics();
     shade.fillStyle(0x10162a, 0.55);
     shade.fillRect(0, 0, 1920, 1080);
-    label(this, 60, 24, 'ตู้เสื้อผ้า', 56, '#ffd166');
+    const ribbon = this.add.graphics({ x: 230, y: 50 });
+    drawRibbon(ribbon, 360, 76, THEME.fire, THEME.gold);
+    label(this, 230, 46, 'ตู้เสื้อผ้า', 50, '#ffe08a').setOrigin(0.5);
     const wallet = label(this, 1860, 36, '', 30).setOrigin(1, 0);
     const showWallet = () => wallet.setText(account.view ? walletText(account.view.coins, account.view.gems) : '');
     showWallet();
@@ -61,7 +64,12 @@ export default class SetupScene extends Phaser.Scene {
 
     this.hint = label(this, 960, 1040, '', 26, '#ffd166').setOrigin(0.5);
     new Button(this, 200, 990, 260, 90, '← กลับ', { size: 34, onClick: () => this.scene.start(this.returnTo ?? 'menu') });
-    new Button(this, 1640, 985, 440, 110, this.online ? 'ตกลง' : 'เริ่มเล่น!', { fill: 0x2f9e44, size: 48, onClick: () => this.start() });
+    // a soft pulsing glow behind the main call to action
+    const glow = this.add.graphics({ x: 1640, y: 985 });
+    drawPlate(glow, 470, 140, 0x7dff8a, { cut: 30 });
+    glow.setAlpha(0.12);
+    this.tweens.add({ targets: glow, alpha: 0.38, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    new Button(this, 1640, 985, 440, 110, this.online ? 'ตกลง' : 'เริ่มเล่น!', { fill: THEME.green, size: 48, onClick: () => this.start() });
     this.refresh();
   }
 
@@ -92,10 +100,12 @@ export default class SetupScene extends Phaser.Scene {
    * far right. Tapping a slot opens a picker with every piece for it.
    */
   private wardrobe(): void {
-    const bg = this.add.graphics();
-    bg.fillStyle(INK, 0.85);
-    bg.fillRoundedRect(60, 100, 1260, 550, 26);
-    this.magicCircle(540, 350);
+    const bg = this.add.graphics({ x: 690, y: 378 });
+    drawPlate(bg, 1260, 540, THEME.panel, { cut: 26, rivets: true });
+    bg.lineStyle(2, 0xffffff, 0.06); // faint dividers between looks, the stage, and stats
+    bg.lineBetween(-375, -230, -375, 230);
+    bg.lineBetween(375, -230, 375, 230);
+    this.turntable(540, 350);
     const zoom = 2.6;
     const avatar = this.add.image(540, 470, '__DEFAULT').setOrigin(0.5, 1);
     const hand = this.add.image(578, 425, '__DEFAULT');
@@ -114,7 +124,7 @@ export default class SetupScene extends Phaser.Scene {
       this.refreshers.push(() => btn.setSelected(this.setup.loadout.hide[k]));
     });
 
-    label(this, 200, 112, 'แฟชั่น (เปลี่ยนแค่หน้าตา)', 20, '#cfd8ff').setOrigin(0.5, 0);
+    sectionTab(this, 80, 112, 'แฟชั่น · แค่หน้าตา');
     FASHION_SLOTS.forEach((slot, i) => {
       this.tile(140 + (i % 2) * 120, 200 + Math.floor(i / 2) * 118, FASHION_SLOT_NAME[slot], () => {
         const id = this.setup.loadout.look[slot];
@@ -122,27 +132,46 @@ export default class SetupScene extends Phaser.Scene {
       }, () => this.pickFashion(slot));
     });
 
-    label(this, 880, 112, 'อุปกรณ์ (ค่าสถานะ)', 20, '#cfd8ff').setOrigin(0.5, 0);
+    sectionTab(this, 770, 112, 'อุปกรณ์ · ค่าสถานะ');
     EQUIP_SLOTS.forEach((slot, i) => {
       this.tile(820 + (i % 2) * 120, 200 + Math.floor(i / 2) * 118, EQUIP_SLOT_NAME[slot], () => {
         const id = this.setup.loadout.equip[slot];
         return { key: equipTexture(this, slot, id), name: id === 'none' ? '' : equipDef(slot, id)!.name };
       }, () => this.pickEquip(slot));
     });
-    const stats = this.add.text(770, 440, '', { fontFamily: FONT, fontSize: '22px', color: '#e6ecff', lineSpacing: 8 });
+    // stat bars: 100% sits two thirds along, so gear that raises a stat visibly pushes past it
+    const STAT_ROWS: { k: keyof Stats; value: (ts: ReturnType<typeof tankStats>) => number; text: (v: number) => string }[] = [
+      { k: 'hp', value: (ts) => ts.maxHp / 1000, text: (v) => `${Math.round(v * 1000)}` },
+      { k: 'atk', value: (ts) => ts.atk, text: (v) => `${Math.round(v * 100)}%` },
+      { k: 'def', value: (ts) => 2 - ts.def, text: (v) => `${Math.round(v * 100)}%` },
+      { k: 'move', value: (ts) => ts.move, text: (v) => `${Math.round(v * 100)}%` },
+    ];
+    const statG = this.add.graphics();
+    const statText = STAT_ROWS.map((_, i) => ({
+      name: label(this, 770, 452 + i * 38, STAT_NAME[STAT_ROWS[i].k], 20, '#cfd8ff').setOrigin(0, 0.5),
+      value: label(this, 975, 452 + i * 38, '', 20).setOrigin(0, 0.5),
+    }));
     this.refreshers.push(() => {
       const ts = tankStats(this.setup.loadout);
       const sum = sumStats(this.setup.loadout);
-      const line = (k: keyof Stats, value: string) => `${STAT_NAME[k]}  ${value}${sum[k] ? `  (${fmt(k, sum[k])})` : ''}`;
-      stats.setText([
-        line('hp', `${ts.maxHp}`),
-        line('atk', `${Math.round(ts.atk * 100)}%`),
-        line('def', `${Math.round((2 - ts.def) * 100)}%`),
-        line('move', `${Math.round(ts.move * 100)}%`),
-      ].join('\n'));
+      statG.clear();
+      STAT_ROWS.forEach((r, i) => {
+        const y = 452 + i * 38;
+        const v = r.value(ts);
+        const up = sum[r.k] > 0;
+        const down = sum[r.k] < 0;
+        statG.fillStyle(THEME.ink, 1);
+        statG.fillRoundedRect(850, y - 7, 115, 14, 7);
+        statG.fillStyle(up ? 0x7dff8a : down ? THEME.red : THEME.fire, 1);
+        statG.fillRoundedRect(851, y - 5, Math.max(6, Math.min(1, v / 1.5) * 113), 10, 5);
+        statG.fillStyle(0xffffff, 0.5);
+        statG.fillRect(850 + 115 * (2 / 3), y - 9, 2, 18); // the 100% mark
+        statText[i].value.setText(`${r.text(v)}${sum[r.k] ? ` (${fmt(r.k, sum[r.k])})` : ''}`)
+          .setColor(up ? '#7dff8a' : down ? '#ff8a80' : '#ffffff');
+      });
     });
 
-    label(this, 1190, 112, 'อาวุธ', 20, '#cfd8ff').setOrigin(0.5, 0);
+    sectionTab(this, 1090, 112, 'อาวุธ', THEME.red);
     this.tile(1190, 230, 'อาวุธหลัก', () => ({ key: gunLook(this, this.setup.loadout.weapon).key, name: WEAPONS[this.setup.loadout.weapon].name }),
       () => this.pickWeapon(), 190);
     const skill = this.add.text(1190, 345, '', {
@@ -156,25 +185,33 @@ export default class SetupScene extends Phaser.Scene {
     this.tile(1250, 570, 'พิเศษ', () => ({ key: null, name: '' }), null);
   }
 
-  private magicCircle(x: number, y: number): void {
-    const g = this.add.graphics().setPosition(x, y);
-    g.fillStyle(0x3a2a6b, 0.55);
+  /** A steel turntable under the character: fire-orange rim, turning tick marks, and a spotlight at the feet. */
+  private turntable(x: number, y: number): void {
+    const g = this.add.graphics({ x, y });
+    g.fillStyle(0xffb347, 0.05); // warm light behind the character
+    for (let r = 120; r <= 200; r += 20) g.fillCircle(0, -10, r);
+    g.fillStyle(THEME.ink, 0.9);
     g.fillCircle(0, 0, 200);
-    g.lineStyle(6, 0xffd166, 0.7);
+    g.fillStyle(THEME.steelDark, 0.95);
+    g.fillCircle(0, 0, 190);
+    g.lineStyle(6, THEME.fire, 0.9);
     g.strokeCircle(0, 0, 190);
-    g.lineStyle(2, 0xffd166, 0.5);
-    g.strokeCircle(0, 0, 160);
-    g.strokeCircle(0, 0, 120);
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      const px = Math.cos(a) * 175;
-      const py = Math.sin(a) * 175;
-      g.fillStyle(0xffd166, 0.8);
-      g.fillTriangle(px, py - 8, px + 6, py, px, py + 8);
-      g.fillTriangle(px, py - 8, px - 6, py, px, py + 8);
+    g.lineStyle(2, 0xffffff, 0.12);
+    g.strokeCircle(0, 0, 150);
+    const ticks = this.add.graphics({ x, y });
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2;
+      const long = i % 3 === 0;
+      ticks.lineStyle(long ? 4 : 2, long ? THEME.fire : 0xffffff, long ? 0.9 : 0.25);
+      ticks.lineBetween(Math.cos(a) * 166, Math.sin(a) * 166, Math.cos(a) * (long ? 182 : 176), Math.sin(a) * (long ? 182 : 176));
     }
-    // a slow turn keeps the circle alive without pulling the eye off the chibi
-    this.tweens.add({ targets: g, angle: 360, duration: 40000, repeat: -1 });
+    // a slow turn keeps the stage alive without pulling the eye off the character
+    this.tweens.add({ targets: ticks, angle: 360, duration: 40000, repeat: -1 });
+    const spot = this.add.graphics({ x, y: y + 120 });
+    spot.fillStyle(THEME.fire, 0.18);
+    spot.fillEllipse(0, 0, 300, 60);
+    spot.fillStyle(0xffd166, 0.22);
+    spot.fillEllipse(0, 0, 180, 34);
   }
 
   /** A square slot: the piece's picture and name, or the faded slot name when empty. */
@@ -279,12 +316,12 @@ export default class SetupScene extends Phaser.Scene {
     const w = Math.max(700, perRow * 220 + 60);
     const h = 140 + rows * 320;
     const top = 540 - h / 2;
-    const panel = add(this.add.graphics().setDepth(51));
-    panel.fillStyle(INK, 0.97);
-    panel.fillRoundedRect(960 - w / 2, top, w, h, 26);
-    panel.lineStyle(5, 0xffd166, 1);
-    panel.strokeRoundedRect(960 - w / 2, top, w, h, 26);
-    add(label(this, 960, top + 18, title, 34, '#ffd166').setOrigin(0.5, 0).setDepth(52));
+    const panel = add(this.add.graphics({ x: 960, y: top + h / 2 }).setDepth(51));
+    drawPlate(panel, w, h, THEME.panel, { cut: 26, rivets: true, selected: true });
+    const ribbon = add(this.add.graphics({ x: 960, y: top + 6 }).setDepth(52));
+    const tw = Math.min(w - 160, 120 + title.length * 22);
+    drawRibbon(ribbon, tw, 64, THEME.fire, THEME.gold);
+    add(fit(label(this, 960, top + 2, title, 32, '#ffe08a').setOrigin(0.5), tw - 40, 56).setDepth(53));
     opts.forEach((o, i) => {
       const row = Math.floor(i / perRow);
       const inRow = Math.min(perRow, opts.length - row * perRow);
@@ -323,9 +360,13 @@ export default class SetupScene extends Phaser.Scene {
   }
 
   private itemPicker(): void {
-    const title = label(this, 60, 670, '', 34);
+    sectionTab(this, 60, 690, 'ไอเท็ม');
+    const title = label(this, 200, 690, '', 26).setOrigin(0, 0.5);
+    const pips = this.add.graphics();
     ITEM_IDS.forEach((id, i) => {
       const x = 180 + i * 230;
+      const card = this.add.graphics({ x, y: 806 });
+      drawPlate(card, 222, 186, THEME.steelDark, { cut: 14 });
       const btn = new Button(this, x, 760, 210, 80, ITEMS[id].name, {
         size: 28,
         onClick: () => {
@@ -343,22 +384,45 @@ export default class SetupScene extends Phaser.Scene {
       }).setOrigin(0.5, 0);
       this.refreshers.push(() => btn.setSelected(this.setup.items.includes(id)));
     });
-    this.refreshers.push(() => title.setText(`ไอเท็ม (เลือก ${LIMITS.itemsPerMatch}) — เลือกแล้ว ${this.setup.items.length}`));
+    this.refreshers.push(() => {
+      const n = this.setup.items.length;
+      title.setText(`เลือก ${n}/${LIMITS.itemsPerMatch}`).setColor(n === LIMITS.itemsPerMatch ? '#ffd166' : '#ffffff');
+      pips.clear();
+      for (let i = 0; i < LIMITS.itemsPerMatch; i++) {
+        const px = title.x + title.width + 26 + i * 26;
+        pips.fillStyle(THEME.ink, 1);
+        pips.fillCircle(px, 690, 10);
+        pips.fillStyle(i < n ? THEME.fire : THEME.steel, 1);
+        pips.fillCircle(px, 690, 7);
+      }
+    });
   }
 
   private rightColumn(): void {
     const cx = 1560;
-    label(this, cx - 200, 110, 'ด่าน', 34);
+    const panel = this.add.graphics({ x: cx + 4, y: 498 });
+    drawPlate(panel, 450, 800, THEME.panel, { cut: 26, rivets: true });
+    sectionTab(this, cx - 215, 112, 'ด่าน');
     const mapDesc = label(this, cx, 410, '', 22, '#cfd8ff').setOrigin(0.5, 0);
     MAP_IDS.forEach((id, i) => {
       const btn = new Button(this, cx, 190 + i * 76, 400, 64, MAPS[id].name, {
         size: 30, onClick: () => { this.setup.map = id; this.refresh(); },
       });
+      // a strip of the map's painted backdrop on the left of its button
+      const art = `art-bg-${id}`;
+      if (this.textures.exists(art)) {
+        const thumb = this.add.image(-140, 0, art);
+        const k = 48 / thumb.height;
+        const cropW = 104 / k;
+        thumb.setScale(k).setCrop((thumb.width - cropW) / 2, 0, cropW, thumb.height);
+        btn.addAt(thumb, 1);
+        btn.text.setX(50);
+      }
       this.refreshers.push(() => btn.setSelected(this.setup.map === id));
     });
     this.refreshers.push(() => mapDesc.setText(MAPS[this.setup.map].desc));
 
-    label(this, cx - 200, 460, 'รูปแบบ', 34);
+    sectionTab(this, cx - 215, 465, 'รูปแบบ');
     FORMATS.forEach((f, i) => {
       const btn = new Button(this, cx, 540 + i * 72, 400, 60, FORMAT_LABEL[f], {
         size: 28, onClick: () => { this.setup.format = f; this.refresh(); },
@@ -366,7 +430,7 @@ export default class SetupScene extends Phaser.Scene {
       this.refreshers.push(() => btn.setSelected(this.setup.format === f));
     });
 
-    label(this, cx - 200, 740, 'ความเก่งของบอท', 34);
+    sectionTab(this, cx - 215, 760, 'ความเก่งของบอท');
     DIFFICULTIES.forEach((d, i) => {
       const btn = new Button(this, cx - 135 + i * 135, 830, 120, 64, DIFF_LABEL[d], {
         size: 28, onClick: () => { this.setup.difficulty = d; this.refresh(); },

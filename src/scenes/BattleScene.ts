@@ -48,10 +48,11 @@ interface TankView {
 }
 
 // `tint` multiplies the generated dirt texture; the flat colours are the fallback when it is missing.
-const THEMES: Record<MapId, { bg: [number, number]; top: number[] | null; dirt: number[]; deep: number[]; clouds: boolean; tint: number[] }> = {
-  hills: { bg: [0x7cc6f2, 0xd7f0ff], top: [98, 178, 72], dirt: [150, 100, 62], deep: [90, 60, 37], clouds: true, tint: [1, 1, 1] },
-  islands: { bg: [0x9bd3ff, 0xf5e6ff], top: [120, 196, 92], dirt: [168, 128, 96], deep: [112, 92, 120], clouds: true, tint: [1.02, 0.96, 1.04] },
-  mine: { bg: [0x2a211d, 0x4a3b33], top: null, dirt: [128, 104, 88], deep: [70, 58, 52], clouds: false, tint: [0.78, 0.7, 0.86] },
+// `dusk` scales the dusk grade laid over the sky (0 = none); the cave is already dark.
+const THEMES: Record<MapId, { bg: [number, number]; top: number[] | null; dirt: number[]; deep: number[]; clouds: boolean; tint: number[]; dusk: number }> = {
+  hills: { bg: [0x7cc6f2, 0xd7f0ff], top: [98, 178, 72], dirt: [150, 100, 62], deep: [90, 60, 37], clouds: true, tint: [1, 1, 1], dusk: 1 },
+  islands: { bg: [0x9bd3ff, 0xf5e6ff], top: [120, 196, 92], dirt: [168, 128, 96], deep: [112, 92, 120], clouds: true, tint: [1.02, 0.96, 1.04], dusk: 1 },
+  mine: { bg: [0x2a211d, 0x4a3b33], top: null, dirt: [128, 104, 88], deep: [70, 58, 52], clouds: false, tint: [0.78, 0.7, 0.86], dusk: 0.4 },
 };
 
 const SAMPLES = { easy: 120, normal: 220, hard: 320 };
@@ -238,8 +239,24 @@ export default class BattleScene extends Phaser.Scene {
       const f = 0.35;
       const img = this.add.image(0, 0, art).setOrigin(0, 0).setScrollFactor(f).setDepth(0);
       img.setScale(Math.max(MAP_H / img.height, (1920 + (MAP_W - 1920) * f) / img.width));
-      return;
-    }
+    } else this.paintDrawnSky(theme);
+    this.paintDusk(theme.dusk);
+  }
+
+  /**
+   * The menus' dusk look, lighter so the battle stays readable: a near-black sky fading to
+   * a burnt-orange horizon. Fixed to the screen between the sky (depth 0) and the terrain (depth 1).
+   */
+  private paintDusk(k: number): void {
+    if (k <= 0) return;
+    const g = this.add.graphics().setDepth(0).setScrollFactor(0);
+    g.fillGradientStyle(0x07080c, 0x07080c, 0x8a3a10, 0x8a3a10, 0.74 * k, 0.74 * k, 0.4 * k, 0.4 * k);
+    g.fillRect(0, 0, 1920, 640);
+    g.fillGradientStyle(0x8a3a10, 0x8a3a10, 0x07080c, 0x07080c, 0.4 * k, 0.4 * k, 0.6 * k, 0.6 * k);
+    g.fillRect(0, 640, 1920, MAP_H - 640);
+  }
+
+  private paintDrawnSky(theme: (typeof THEMES)[MapId]): void {
     const g = this.add.graphics().setDepth(0).setScrollFactor(0.2);
     g.fillGradientStyle(theme.bg[0], theme.bg[0], theme.bg[1], theme.bg[1], 1);
     g.fillRect(-200, -200, MAP_W, MAP_H + 400);

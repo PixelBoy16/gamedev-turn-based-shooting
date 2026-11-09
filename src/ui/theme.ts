@@ -66,3 +66,27 @@ export function drawPlate(g: Phaser.GameObjects.Graphics, w: number, h: number, 
     g.strokePoints(vec(platePoints(w, h, cut)), true, true);
   }
 }
+
+/** A w×h band leaning right by `lean` px: top edge shifted right, bottom edge shifted left. */
+export function slantPoints(w: number, h: number, lean: number, dy = 0): Point[] {
+  return [
+    { x: -w / 2 + lean, y: -h / 2 + dy }, { x: w / 2 + lean, y: -h / 2 + dy },
+    { x: w / 2 - lean, y: h / 2 + dy }, { x: -w / 2 - lean, y: h / 2 + dy },
+  ];
+}
+
+/** A slanted title ribbon: dark drop shadow, the face, hazard stripes along the bottom, a coloured edge. */
+export function drawRibbon(g: Phaser.GameObjects.Graphics, w: number, h: number, fill: number, edge: number): void {
+  const lean = h * 0.23;
+  g.fillStyle(THEME.ink, 0.95);
+  g.fillPoints(vec(slantPoints(w + 20, h + 18, lean, 8)), true);
+  g.fillStyle(fill, 1);
+  g.fillPoints(vec(slantPoints(w, h, lean)), true);
+  g.fillStyle(0x000000, 0.18);
+  const y0 = h / 2 - h * 0.17;
+  for (let x = -w / 2 + 10; x < w / 2 - lean - 18; x += 36) {
+    g.fillPoints(vec([{ x, y: y0 }, { x: x + 18, y: y0 }, { x: x + 8, y: h / 2 }, { x: x - 10, y: h / 2 }]), true);
+  }
+  g.lineStyle(4, edge, 1);
+  g.strokePoints(vec(slantPoints(w, h, lean)), true, true);
+}
