@@ -17,6 +17,8 @@ const SRC = 1024;
 const SRC_X = SRC / 2;
 const SRC_FEET = 964;
 const SRC_HEAD = 120;
+/** Below this the base body is hidden under a set's suit (its fists and boots would poke out). */
+const SRC_NECK = 470;
 
 /** Painted looks are baked this many times sharper than the drawn chibi; show them at 1/LOOK_RES. */
 export const LOOK_RES = 2;
@@ -168,7 +170,11 @@ export function paintedLook(scene: Phaser.Scene, l: Loadout): string {
   return bakeCanvas(scene, `plook-${version}-${lookId(l)}`, OUT_W * LOOK_RES, OUT_H * LOOK_RES, (ctx) => {
     for (const name of lookLayers(l)) {
       const r = layerRect(name);
-      if (r) ctx.drawImage(layers.get(name)!.img, r.x * LOOK_RES, r.y * LOOK_RES, r.w * LOOK_RES, r.h * LOOK_RES);
+      if (!r) continue;
+      const { img, y, h } = layers.get(name)!;
+      // a set covers the whole body, so only the head is drawn
+      const f = name === BODY && l.look.set !== 'none' ? Math.min(1, (SRC_NECK - y) / h) : 1;
+      ctx.drawImage(img, 0, 0, img.width, img.height * f, r.x * LOOK_RES, r.y * LOOK_RES, r.w * LOOK_RES, r.h * f * LOOK_RES);
     }
   });
 }
