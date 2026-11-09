@@ -1,0 +1,19 @@
+{
+  "hair-ponytail-back": [200, 700, 150],
+  "hair-ponytail-front": [410, 508, 88],
+  "glasses-goggles": [350, 508, 222],
+  "cloth-vest": [560, 512, 450],
+  "eyes-squint": [250, 508, 255],
+  "face-warpaint": [330, 508, 372],
+  "back-cape": [620, 512, 430],
+  "hair-spiky-back": [430, 500, 40],
+  "cloth-tank": [440, 505, 455],
+  "eyes-glare": [260, 508, 245],
+  "face-scar": [46, 610, 340],
+  "hair-spiky-front": [440, 515, 50],
+  "hat-aviator": [440, 508, 40],
+  "back-ammo": [520, 512, 420],
+  "set-bearskull-body": [580, 512, 440],
+  "eyes-glow": [270, 508, 250],
+  "set-bearskull-hood": [560, 508, 50]
+}
