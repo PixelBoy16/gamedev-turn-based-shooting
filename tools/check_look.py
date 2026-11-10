@@ -24,8 +24,10 @@ MENU = [
     'hat-aviator', 'hair-spiky-back', 'hair-spiky-front', 'back-cape', 'face-scar', 'cloth-tank', 'eyes-glare',
     'set-bearskull-body', 'set-bearskull-hood', 'eyes-glow', 'back-ammo',
 ]
+# the body cut into parts (src/art/lookNames.ts BODY_PARTS); together they stand in for body.png
+BODY_PARTS = ['body-legs', 'body-torso', 'body-arm-left', 'body-arm-right', 'body-head']
 # pieces that may legitimately cover most of the body
-BIG = ('cloth-', 'set-', 'back-')
+BIG = ('cloth-', 'set-', 'back-', 'body-')
 
 
 def piece_files(slot, pid):
@@ -41,7 +43,7 @@ def piece_files(slot, pid):
 
 def all_files():
     config = json.loads((PROJECT / 'config' / 'game.json').read_text())
-    return ['body'] + [n for f in config['fashion'] for n in piece_files(f['slot'], f['id'])]
+    return ['body', *BODY_PARTS] + [n for f in config['fashion'] for n in piece_files(f['slot'], f['id'])]
 
 
 def opaque(im):
@@ -104,6 +106,9 @@ def main():
             bad += 1
         else:
             good.add(path.stem)
+    if all(p in good for p in BODY_PARTS):
+        good.add('body')  # the parts stand in for a whole body.png
+    known = [n for n in known if n not in BODY_PARTS]
     for title, want in (('3 ตัวในหน้าเมนู', MENU), ('ตู้เสื้อผ้าทั้งหมด', known)):
         missing = [n for n in want if n not in good]
         print(f'\n{title}: ผ่านแล้ว {len(want) - len(missing)}/{len(want)}')

@@ -1,7 +1,10 @@
 # ชุด prompt ภาพตัวละครแบบแต่งตัวได้
 
-ตัวละครในเกมซ้อนจากภาพหลายชั้น: `body.png` หนึ่งไฟล์ แล้ววางชิ้นแต่งตัวทับทีละชั้น
+ตัวละครในเกมซ้อนจากภาพหลายชั้น: ตัวเปล่า (5 ส่วน: ขา ลำตัว แขนซ้าย แขนขวา หัว) แล้ววางชิ้นแต่งตัวทับทีละชั้น
 ทุกไฟล์ต้องอยู่บน **ผืน 1024×1024 พื้นโปร่งใส ท่าเดียวกัน ตำแหน่งเดียวกัน** ไม่อย่างนั้นซ้อนแล้วจะเหลื่อม
+
+**ทุกชิ้นต้องวาดหน้าตรง สมมาตร ไม่เอียง ไม่หันข้าง** (เสื้อ เป้ หมวก ฯลฯ) ชิ้นที่เอียงจะซ้อนบนตัวหน้าตรงไม่พอดี
+และจัดใน lab ยาก ถ้า ChatGPT วาดเอียงมา ให้ตอบว่า *"redraw it perfectly front-facing and symmetrical, flat front view"*
 
 ## วิธีทำงาน
 
@@ -10,6 +13,8 @@
    สคริปต์จะวางชิ้นลงผืน 1024×1024 ให้ที่ `art-src/look/` (ถ้าได้ไฟล์บนผืน 1024 ตรงตำแหน่งแล้ว วางที่ `art-src/look/` ตรงๆ ได้เลย)
 2. ตรวจด้วย `python3 tools/check_look.py` (ดูว่าผืนถูกขนาด พื้นโปร่งใส ชื่อถูก ขาดไฟล์ไหน)
 3. คัดลอกไป `src/art/look/` **ใน branch `feat/painted-look`** แล้วจัดตำแหน่งละเอียดใน `http://localhost:5179/?lab`
+   (ซ้าย: เลือกชุดที่ใส่ + รายการเลเยอร์ คลิกชื่อเพื่อเลือก คลิกจุดเพื่อซ่อน / กลาง: ลากชิ้นที่เลือก /
+   ขวา: เลื่อน ขนาด หมุน กลับด้าน ลำดับหน้า-หลัง แล้วกดบันทึก)
 
 > ห้ามวาง `body.png` ใน `src/art/look/` บน main จนกว่าจะครบทุกชิ้น: พอมีไฟล์นี้ เกมจะใช้ภาพวาดทั้งหมดทันที
 > ชิ้นที่ยังไม่มีไฟล์จะหายไปเลย
@@ -29,8 +34,9 @@ Use the attached character (body.png) as the exact template. Output ONE square 1
 with a fully transparent background. Draw ONLY the item described below, sized and positioned
 exactly where it would sit on this character in this exact pose, as if the character were wearing it.
 Do NOT draw the character's body, skin, face or anything else - only the item, everything
-else transparent. Same art style as the template: thick dark outlines, flat saturated colours
-with soft painted shading, chunky tough cartoon look.
+else transparent. Draw it perfectly front-facing and symmetrical, a flat front view, not turned
+or angled, exactly matching the template's straight-on pose. Same art style as the template:
+thick dark outlines, flat saturated colours with soft painted shading, chunky tough cartoon look.
 ```
 
 ---
@@ -53,6 +59,26 @@ colours, soft painted shading. Draw ONE plain base character as a dress-up manne
 ```
 
 ตาแยกเป็นชั้น เพราะเกมเปลี่ยนแบบตาได้ ถ้าวาดตาติดมากับตัว จะเปลี่ยนตาไม่ได้
+
+### 1b) ตัดตัวเป็น 5 ส่วน
+
+เกมใช้ตัวแยกส่วน (ถ้ามีครบจะใช้แทน `body.png`) เพื่อให้ lab ปรับสัดส่วน หัว แขน ขา แยกกันได้
+และชุดเซ็ต (ชุดหมี) จะโชว์แค่หัว ไม่มีกำปั้นหรือรองเท้าโผล่
+
+**ทางลัด:** ตัดจาก `body.png` ด้วย `python3 tools/split_body.py` (ตอนนี้ทำไว้แล้ว ใช้ได้เลย)
+
+ถ้าวาด body ใหม่ ให้ตัดด้วยสคริปต์เดิม (อาจต้องขยับเส้นตัดบนสุดของไฟล์) หรือสั่ง ChatGPT ทีละส่วน:
+แนบ `body.png` แล้วใช้ *"Using the attached character as the exact template, output ONE 1024x1024
+transparent PNG with ONLY its [head and neck / torso / left arm as seen on screen / right arm as seen
+on screen / legs and boots], in exactly the same size and position, everything else transparent."*
+
+| ไฟล์ | ส่วน |
+|---|---|
+| `body-head.png` | หัว ใบหู คอ |
+| `body-torso.png` | ลำตัวถึงเข็มขัด |
+| `body-arm-left.png` | แขนซ้าย (ซ้ายของจอ) ไหล่ถึงกำปั้น |
+| `body-arm-right.png` | แขนขวา (ขวาของจอ) ไหล่ถึงกำปั้น **มือนี้ถือปืน** |
+| `body-legs.png` | สะโพก ขา รองเท้า |
 
 ---
 
