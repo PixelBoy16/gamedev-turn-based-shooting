@@ -26,6 +26,8 @@ export default class LookLabScene extends Phaser.Scene {
   private info!: Phaser.GameObjects.Text;
   private rows = new Map<string, Phaser.GameObjects.Text>();
   private handMode = false;
+  private gunHidden = false;
+  private gunBtn!: Button;
 
   constructor() {
     super('looklab');
@@ -77,6 +79,7 @@ export default class LookLabScene extends Phaser.Scene {
 
     const kb = this.input.keyboard!;
     kb.on('keydown', (e: KeyboardEvent) => this.key(e));
+    this.gunBtn = new Button(this, 1700, 890, 370, 64, 'ซ่อนปืน (G)', { size: 24, onClick: () => this.toggleGun() });
     new Button(this, 1590, 980, 200, 72, 'บันทึก (S)', { fill: 0x2f9e44, size: 26, onClick: () => this.save() });
     new Button(this, 1800, 980, 160, 72, 'ออก', { size: 26, onClick: () => this.scene.start('menu') });
 
@@ -105,6 +108,8 @@ export default class LookLabScene extends Phaser.Scene {
     } else if (e.key === 'h' || e.key === 'H') {
       this.handMode = !this.handMode;
       this.refresh();
+    } else if (e.key === 'g' || e.key === 'G') {
+      this.toggleGun();
     } else if (e.key === ' ') {
       e.preventDefault();
       this.blink();
@@ -135,6 +140,13 @@ export default class LookLabScene extends Phaser.Scene {
 
   private change(next: Align): void {
     setAlign(this, next);
+    this.refresh();
+  }
+
+  /** Show or hide the weapon, to see the pieces it covers. The fist marker stays. */
+  private toggleGun(): void {
+    this.gunHidden = !this.gunHidden;
+    this.gunBtn.setSelected(this.gunHidden);
     this.refresh();
   }
 
@@ -172,7 +184,7 @@ export default class LookLabScene extends Phaser.Scene {
     }
 
     const look = gunLook(this, this.loadout.weapon);
-    this.gun.setVisible(painted());
+    this.gun.setVisible(painted() && !this.gunHidden);
     if (painted()) {
       const h = paintedHand();
       const hx = CX + h.x * ZOOM;
