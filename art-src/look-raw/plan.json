@@ -12,8 +12,8 @@
   "face-scar": [46, 610, 340],
   "hair-spiky-front": [440, 515, 50],
   "hat-aviator": [490, 508, 22],
-  "back-ammo": [440, 420, 330],
-  "set-bearskull-body": [587, 524, 400],
+  "back-ammo": [590, 512, 330],
+  "set-bearskull-body": [540, 512, 428],
   "eyes-glow": [270, 508, 250],
-  "set-bearskull-hood": [575, 490, 42]
+  "set-bearskull-hood": [640, 502, 0]
 }
