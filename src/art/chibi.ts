@@ -369,10 +369,14 @@ export const MENU_ICONS = ['bot', 'friends', 'ranked', 'shop', 'pass', 'coin', '
 
 export const hasArt = (scene: Phaser.Scene, key: string) => scene.textures.exists(key);
 
-/** Texture, scale and grip pivot for a weapon. The generated guns are pistols held at the grip (bottom-left). */
+/**
+ * Texture, scale and grip pivot for a weapon. The generated guns are pistols held by the middle
+ * of the grip (bottom-left); next to a painted look they are kept smaller, about half its height.
+ */
 export function gunLook(scene: Phaser.Scene, w: WeaponId): { key: string; scale: number; ox: number; oy: number } {
   const k = `art-gun-${w}`;
-  return hasArt(scene, k) ? { key: k, scale: 0.34, ox: 0.18, oy: 0.68 } : { key: gunKey(w), scale: ART_SCALE, ox: GUN_ORIGIN_X, oy: 0.5 };
+  if (!hasArt(scene, k)) return { key: gunKey(w), scale: ART_SCALE, ox: GUN_ORIGIN_X, oy: 0.5 };
+  return { key: k, scale: painted() ? 0.22 : 0.34, ox: 0.12, oy: 0.8 };
 }
 
 /** Generated icon for an item or skill, or null to show the label alone. */

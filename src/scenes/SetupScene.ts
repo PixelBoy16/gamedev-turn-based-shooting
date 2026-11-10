@@ -115,7 +115,7 @@ export default class SetupScene extends Phaser.Scene {
       const fist = lookHand();
       if (fist) hand.setPosition(540 + fist.x * ART_SCALE * zoom, 470 + fist.y * ART_SCALE * zoom);
       const g = gunLook(this, l.weapon);
-      hand.setTexture(g.key).setOrigin(g.ox, g.oy).setScale(g.scale * 1.7).setRotation(-0.3);
+      hand.setTexture(g.key).setOrigin(g.ox, g.oy).setScale(g.scale * (fist ? zoom : 1.7)).setRotation(-0.3);
     });
     (['hat', 'glasses'] as const).forEach((k, i) => {
       const btn = new Button(this, 470 + i * 140, 610, 130, 46, k === 'hat' ? 'ซ่อนหมวก' : 'ซ่อนแว่น', {
