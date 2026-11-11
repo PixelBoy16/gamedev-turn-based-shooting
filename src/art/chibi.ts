@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { WEAPON_IDS } from '../core/config';
 import { WeaponId } from '../core/data';
 import { EquipSlot, FashionSlot, Loadout, equipDef, lookId } from '../core/gear';
 import { DRAWERS, HAIR_BACK, SETS, drawFace, drawHead } from './drawnPieces';
@@ -348,7 +349,6 @@ function shells(scene: Phaser.Scene): void {
 // Produced by tools/prepare_art.py. Each lookup falls back to the drawn placeholder above if a file is missing.
 
 export type Pose = 'idle' | 'walk' | 'aim' | 'shoot' | 'hurt' | 'dead';
-const WEAPON_IDS: WeaponId[] = ['cannon', 'hammer', 'splitter', 'drill'];
 export const ICON_IDS = ['double', 'power', 'warp', 'heal', 'armor', 'burrow', 'wall', 'calm'] as const;
 
 /** Queue every generated sprite; call from a preload(). Missing files only log a warning. */

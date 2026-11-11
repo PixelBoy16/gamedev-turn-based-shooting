@@ -1,9 +1,10 @@
 """Slice and clean the generated art in art-src/ into game-ready sprites.
 
-Run: python3 tools/prepare_art.py   (needs Pillow only)
-Writes public/art/sprites/*. Re-run whenever a source sheet changes.
+Run: python3 tools/prepare_art.py [part ...]   (needs Pillow only; parts: characters weapons
+terrain icons backgrounds, none = all). Writes public/art/sprites/*. Re-run whenever a source sheet changes.
 Sources stay outside public/ so the big originals are not shipped with the game.
 """
+import sys
 from collections import deque
 from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
@@ -12,7 +13,11 @@ PROJECT = Path(__file__).resolve().parent.parent
 ROOT = PROJECT / 'art-src'
 OUT = PROJECT / 'public' / 'art' / 'sprites'
 POSES = ['idle', 'walk', 'aim', 'shoot', 'hurt', 'dead']
-WEAPONS = ['cannon', 'hammer', 'splitter', 'drill']
+# each sheet: the guns on it, left to right
+WEAPON_SHEETS = {
+    'weapons.png': ['cannon', 'hammer', 'splitter', 'drill'],
+    'weapons-2.png': ['shovel', 'bouncer', 'beam', 'mortar', 'magnet', 'dirtbomb'],
+}
 ICONS = ['double', 'power', 'warp', 'heal', 'armor', 'burrow', 'wall', 'calm']
 
 
@@ -95,12 +100,13 @@ def characters():
 
 
 def weapons():
-    im = clean_alpha(Image.open(ROOT / 'weapons' / 'weapons.png').convert('RGBA'))
-    for wid, m in zip(WEAPONS, components(im, 4)):
-        f = crop_sprite(im, m)
-        f = f.resize((160, round(f.height * 160 / f.width)), Image.LANCZOS)
-        f.save(OUT / f'gun-{wid}.png')
-        print(wid, f.size)
+    for sheet, ids in WEAPON_SHEETS.items():
+        im = clean_alpha(Image.open(ROOT / 'weapons' / sheet).convert('RGBA'))
+        for wid, m in zip(ids, components(im, len(ids))):
+            f = crop_sprite(im, m)
+            f = f.resize((160, round(f.height * 160 / f.width)), Image.LANCZOS)
+            f.save(OUT / f'gun-{wid}.png')
+            print(wid, f.size)
 
 
 def is_backdrop(p):
@@ -148,10 +154,9 @@ def backgrounds():
         print('bg', name, im.size)
 
 
+PARTS = {'characters': characters, 'weapons': weapons, 'terrain': terrain, 'icons': icons, 'backgrounds': backgrounds}
+
 if __name__ == '__main__':
     OUT.mkdir(exist_ok=True)
-    characters()
-    weapons()
-    terrain()
-    icons()
-    backgrounds()
+    for part in sys.argv[1:] or PARTS:
+        PARTS[part]()
