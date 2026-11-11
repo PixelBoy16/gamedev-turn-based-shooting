@@ -15,5 +15,17 @@
   "back-ammo": [590, 512, 330],
   "set-bearskull-body": [540, 512, 428],
   "eyes-glow": [270, 508, 250],
-  "set-bearskull-hood": [600, 509, 8]
+  "set-bearskull-hood": [600, 509, 8],
+  "hat-helm": [400, 512, 2],
+  "hat-spikecrown": [350, 512, 0],
+  "hat-bandana": [500, 456, 118],
+  "hair-buzz": [395, 512, 108],
+  "hair-mohawk": [395, 512, 0, 290],
+  "glasses-shades": [380, 512, 259],
+  "eyes-sharp": [267, 512, 260],
+  "face-beard": [365, 512, 297],
+  "cloth-armor": [480, 512, 452],
+  "cloth-trench": [350, 512, 452],
+  "cloth-ninja": [310, 512, 455],
+  "back-ironwings": [780, 512, 330]
 }
