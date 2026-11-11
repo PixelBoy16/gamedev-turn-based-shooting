@@ -125,23 +125,29 @@ colours, soft painted shading. Draw ONE plain base character as a dress-up manne
 
 ## 3) ชิ้นที่เหลือ (ทำหลังจาก 3 ตัวในเมนูผ่านแล้ว)
 
-ทรงผมส่งมาเป็นรูปเดียวทั้งทรงก็ได้ ถ้าเส้นขอบดำแบ่งชั้นหน้ากับชั้นหลังชัด จะแยกเป็น `-back` / `-front` ให้
-(แบบ `hair-spiky`: หนามด้านบนอยู่ชั้นหลัง หน้าม้ากับปอยข้างแก้มอยู่ชั้นหน้า ทั้งสองไฟล์อยู่บนผืนเดียวกันขนาดเท่ากัน)
+แต่ละชิ้น: ข้อความนำ + บรรทัดด้านล่าง (14 ไฟล์ จาก 12 prompt)
 
-| ไฟล์ | ชิ้น |
+- **ทรงผม วาดรูปเดียวทั้งทรง** แล้วจะแยกเป็น `-back` / `-front` ให้ตามเส้นขอบดำ
+  (แบบ `hair-spiky`: หนามด้านบนอยู่ชั้นหลัง หน้าม้ากับปอยข้างแก้มอยู่ชั้นหน้า ทั้งสองไฟล์อยู่บนผืนเดียวกันขนาดเท่ากัน)
+- **หัวตัวละครกว้าง หน้าผากสั้น** คิ้วอยู่ราว 1/3 ของหัวจากด้านบน ผมกับหมวกต้องจบเหนือคิ้ว
+  ไม่อย่างนั้นต้องย่อจนแคบกว่าหัว หรือปล่อยให้บังตา (ผมหนามรอบแรกยาวเกินจนต้องบังถึงคิ้ว)
+- **เสื้อไม่มีแขนเสื้อ** แขนในเกมเป็นชิ้นแยกที่หมุนได้ ส่วนเสื้อขยับตามลำตัว แขนเสื้อที่วาดติดเสื้อจะไม่หมุนตามแขน
+  (แขนเสื้อยืดสีเทาของตัวเปล่าจะโผล่ให้เห็นเอง แบบเสื้อกล้าม)
+
+| ไฟล์ | prompt (ต่อจากข้อความนำ) |
 |---|---|
-| `hat-spikecrown.png` | มงกุฎเหล็กหนาม |
-| `hat-bandana.png` | ผ้าโพกหัว |
-| `hat-helm.png` | หมวกเหล็ก |
-| `glasses-shades.png` | แว่นดำ |
-| `hair-buzz-back.png`, `hair-buzz-front.png` | ผมเกรียน (ชิ้นหลังอาจเกือบว่าง: แค่ขอบผมด้านหลัง) |
-| `hair-mohawk-back.png`, `hair-mohawk-front.png` | ทรงโมฮอว์ก |
-| `face-beard.png` | เคราดุ |
-| `cloth-armor.png` | เกราะเหล็ก |
-| `cloth-trench.png` | โค้ทสนาม |
-| `cloth-ninja.png` | ชุดนินจา |
-| `eyes-sharp.png` | ตาคม |
-| `back-ironwings.png` | ปีกเหล็ก |
+| `hat-spikecrown.png` | `Item: a dark iron crown - a thick riveted band around the top of the head with five sharp spikes pointing up, and a red gem in the middle of the band. It sits on top of the head and does not cover the forehead, eyes or ears.` |
+| `hat-bandana.png` | `Item: a red bandana headband tied around the head, straight and level across the forehead just above where the eyebrows would be (about one third of the way down the head), with two short knot tails sticking out from behind the head on the left side.` |
+| `hat-helm.png` | `Item: a round steel helmet with a darker riveted brim band, covering the top of the head down to just above where the eyebrows would be (about one third of the way down the head). The face and ears stay uncovered.` |
+| `glasses-shades.png` | `Item: a pair of black wraparound sunglasses with a small white shine on the lenses, worn over the eyes (the empty eye area of the face), reaching the sides of the head.` |
+| `hair-buzz-back.png` + `hair-buzz-front.png` | `Item: a very short dark-brown buzz-cut hairstyle - a thin layer of short stubble covering the top and sides of the bald head, following its shape closely, with a crisp straight hairline across the top of the forehead. No fringe. This character has a wide head and a short forehead: the hair must stop well above where the eyebrows would be (about one third of the way down the head) and must not cover the eyes or the ears.` |
+| `hair-mohawk-back.png` + `hair-mohawk-front.png` | `Item: a punk mohawk hairstyle - a tall crest of spiky magenta-pink hair standing up along the middle of the head, with the sides shaved to short dark-grey stubble, and a thick dark outline between the crest and the stubble. This character has a wide head and a short forehead: the hair must stop well above where the eyebrows would be (about one third of the way down the head) and must not cover the eyes or the ears.` |
+| `face-beard.png` | `Item: only a thick dark-brown beard along the jaw and around the chin, from just below the ears. Leave the mouth and the grin with teeth completely uncovered (transparent there). Nothing else of the face.` |
+| `cloth-armor.png` | `Item: steel plate chest armour - a chest plate made of horizontal riveted metal bands, with small round shoulder plates sitting on top of the shoulders. Torso only, no sleeves, no trousers: the arms stay free.` |
+| `cloth-trench.png` | `Item: a long brown field coat with no sleeves - buttons down the middle, a dark belt with a gold buckle at the waist, and the hem ending at mid-thigh. Torso only, no sleeves: the arms stay free.` |
+| `cloth-ninja.png` | `Item: a dark navy ninja costume top with a crossed wrap-over collar and no sleeves, and a red sash tied at the waist with one tail hanging down at the side. Torso only, no trousers: the arms stay free.` |
+| `eyes-sharp.png` | `Item: only a pair of sharp, narrow, slanted eyes with a small white glint and thick angry eyebrows angled down. Nothing else of the face.` |
+| `back-ironwings.png` | `Item: a pair of steel mechanical wings attached behind the back - on each side three riveted metal feather plates spreading out and up behind the shoulders, the same on both sides. Only the wings show beside and above the shoulders; the body covers the middle.` |
 
 ถ้าเพิ่มชิ้นใหม่ใน `config/game.json` ชื่อไฟล์คือ `<slot>-<id>.png` (ผมกับชุดมี 2 ไฟล์ตามแบบด้านบน)
 สคริปต์ตรวจจะอ่านรายการจาก config เอง
