@@ -1,4 +1,40 @@
 {
-  "layers": {},
-  "hand": { "x": 720, "y": 720 }
+  "layers": {
+    "set-bearskull-hood": {
+      "dx": 5,
+      "dy": -86.6,
+      "s": 0.93
+    },
+    "set-bearskull-body": {
+      "dx": 1.4,
+      "dy": -25.6,
+      "s": 1,
+      "z": -1
+    },
+    "back-ammo": {
+      "dx": -9.4,
+      "dy": -0.5,
+      "s": 0.77,
+      "z": -2
+    },
+    "eyes-glare": {
+      "dx": 4.3,
+      "dy": -0.1,
+      "s": 1
+    },
+    "body-head": {
+      "dx": 9.3,
+      "dy": -19.2,
+      "s": 1
+    },
+    "eyes-glow": {
+      "dx": 9,
+      "dy": -22.7,
+      "s": 1
+    }
+  },
+  "hand": {
+    "x": 731,
+    "y": 685
+  }
 }
