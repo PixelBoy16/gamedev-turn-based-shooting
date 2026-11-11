@@ -25,7 +25,10 @@ MENU = [
     'set-bearskull-body', 'set-bearskull-hood', 'eyes-glow', 'back-ammo',
 ]
 # the body cut into parts (src/art/lookNames.ts BODY_PARTS); together they stand in for body.png
-BODY_PARTS = ['body-legs', 'body-torso', 'body-arm-left', 'body-arm-right', 'body-head']
+BODY_PARTS = [
+    'body-legs', 'body-foot-left', 'body-foot-right', 'body-upperarm-left', 'body-upperarm-right',
+    'body-forearm-left', 'body-forearm-right', 'body-torso', 'body-neck', 'body-hand-left', 'body-hand-right', 'body-head',
+]
 # pieces that may legitimately cover most of the body
 BIG = ('cloth-', 'set-', 'back-', 'body-')
 

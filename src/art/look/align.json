@@ -1,8 +1,8 @@
 {
   "layers": {
     "set-bearskull-hood": {
-      "dx": 5,
-      "dy": -86.6,
+      "dx": -4.3,
+      "dy": -67.4,
       "s": 0.93
     },
     "set-bearskull-body": {
@@ -22,14 +22,14 @@
       "dy": -0.1,
       "s": 1
     },
-    "body-head": {
-      "dx": 9.3,
-      "dy": -19.2,
+    "eyes-glow": {
+      "dx": -0.3,
+      "dy": -3.5,
       "s": 1
     },
-    "eyes-glow": {
-      "dx": 9,
-      "dy": -22.7,
+    "body-head@set-bearskull": {
+      "dx": 9.3,
+      "dy": -19.2,
       "s": 1
     }
   },

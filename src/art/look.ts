@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
 import { FashionSlot, Loadout, lookId } from '../core/gear';
-import { BODY, BODY_PARTS, HAND_PART, lookLayers, pieceFiles } from './lookNames';
+import { BODY, BODY_PARTS, HAND_PART, HEAD_PART, JOINTS, headInSet, lookLayers, parentOf, pieceFiles } from './lookNames';
 
 // Painted dress-up layers: one PNG per piece in src/art/look/, all drawn by ChatGPT on
 // the same 1024 canvas over the same base body (prompts in the GDD). On boot each file
 // is trimmed to its opaque pixels; a look is composed from the trims into one texture.
 // Painted mode is on once the body (body.png or its parts) exists; until then the drawn
 // chibi is used. A piece can sit a little off in its file, so align.json moves, scales,
-// turns, flips and re-orders each layer (the look lab, ?lab in dev, edits it).
+// turns, flips and re-orders each layer (the look lab, ?lab in dev, edits it). With the body
+// in parts a layer moves with the one it hangs from (parentOf): a forearm with its upper arm,
+// a hat with the head; body parts turn and scale about their joint.
 
 const FILES = import.meta.glob('./look/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const SAVED = import.meta.glob('./look/align.json', { eager: true, import: 'default' }) as Record<string, Align>;
@@ -33,8 +35,8 @@ const KEEP = 0.5;
 export interface Nudge {
   dx: number; // source px
   dy: number;
-  s: number; // scale about the piece's centre
-  r?: number; // degrees clockwise about the centre
+  s: number; // scale about the body part's joint, or the piece's centre
+  r?: number; // degrees clockwise about the same point
   fx?: boolean; // mirrored left-right
   z?: number; // steps forward (+) or back (-) past the neighbouring layers
 }
@@ -42,7 +44,7 @@ export interface Nudge {
 export interface Align {
   /** The "body" nudge moves and scales the whole figure (about the feet). */
   layers: Record<string, Nudge>;
-  /** Where the fist is on the body, in source px: the weapon is held there. Follows the right arm's nudge. */
+  /** Where the fist is on the body, in source px: the weapon is held there. Follows the right hand's nudges. */
   hand: { x: number; y: number };
 }
 
@@ -57,15 +59,8 @@ interface Layer {
   h: number;
 }
 
-/** A layer after its nudge, in source px: centre, size, turn (radians), mirror. */
-interface Placed {
-  cx: number;
-  cy: number;
-  w: number;
-  h: number;
-  r: number;
-  fx: boolean;
-}
+/** A 2D affine map in source px, canvas order: x' = a·x + c·y + e, y' = b·x + d·y + f. */
+type Mat = [number, number, number, number, number, number];
 
 /** Source px to canvas px: X = x * k + tx. */
 interface Mapping {
@@ -80,6 +75,22 @@ let version = 0;
 const baked = new Set<string>();
 
 const fileName = (path: string) => path.slice(path.lastIndexOf('/') + 1, -'.png'.length);
+
+const ID: Mat = [1, 0, 0, 1, 0, 0];
+/** m after n. */
+const mul = (m: Mat, n: Mat): Mat => [
+  m[0] * n[0] + m[2] * n[1],
+  m[1] * n[0] + m[3] * n[1],
+  m[0] * n[2] + m[2] * n[3],
+  m[1] * n[2] + m[3] * n[3],
+  m[0] * n[4] + m[2] * n[5] + m[4],
+  m[1] * n[4] + m[3] * n[5] + m[5],
+];
+const apply = (m: Mat, x: number, y: number) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] });
+function invert(m: Mat): Mat {
+  const det = m[0] * m[3] - m[1] * m[2];
+  return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det, (m[2] * m[5] - m[3] * m[4]) / det, (m[1] * m[4] - m[0] * m[5]) / det];
+}
 
 /** Queue every painted layer; call from a preload(). */
 export function loadLook(scene: Phaser.Scene): void {
@@ -139,6 +150,9 @@ export const hasLayer = (name: string) => layers.has(name);
 export const getAlign = (): Align => align;
 export const nudgeOf = (name: string): Nudge => ({ ...NO_NUDGE, ...align.layers[name] });
 
+/** The align.json key a layer's nudge is kept under: inside a set's suit the head has its own. */
+export const nudgeKey = (name: string, set = 'none'): string => (name === HEAD_PART && set !== 'none' ? headInSet(set) : name);
+
 /** Replace the alignment (the look lab) and drop every texture baked with the old one. */
 export function setAlign(scene: Phaser.Scene, next: Align): void {
   align = next;
@@ -147,21 +161,38 @@ export function setAlign(scene: Phaser.Scene, next: Align): void {
   baked.clear();
 }
 
-function placed(name: string): Placed {
-  const l = layers.get(name)!;
-  const n = name === BODY ? NO_NUDGE : nudgeOf(name);
-  return { cx: l.x + l.w / 2 + n.dx, cy: l.y + l.h / 2 + n.dy, w: l.w * n.s, h: l.h * n.s, r: ((n.r ?? 0) * Math.PI) / 180, fx: !!n.fx };
+/** Where a layer turns and scales: a body part's joint, else the middle of the piece. */
+function pivot(name: string): { x: number; y: number } {
+  const l = layers.get(name);
+  return JOINTS[name] ?? (l ? { x: l.x + l.w / 2, y: l.y + l.h / 2 } : { x: SRC_X, y: SRC_FEET });
 }
 
-/** The four corners of a placed layer, in source px. */
-function corners(p: Placed): { x: number; y: number }[] {
-  const c = Math.cos(p.r);
-  const s = Math.sin(p.r);
-  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, v]) => {
-    const x = (u * p.w) / 2;
-    const y = (v * p.h) / 2;
-    return { x: p.cx + x * c - y * s, y: p.cy + x * s + y * c };
-  });
+/** A layer's own nudge as a map: mirror, scale and turn about its pivot, then move. */
+function local(name: string, set: string): Mat {
+  if (name === BODY) return ID;
+  const n = nudgeOf(nudgeKey(name, set));
+  const p = pivot(name);
+  const r = ((n.r ?? 0) * Math.PI) / 180;
+  const f = n.fx ? -1 : 1;
+  const a = Math.cos(r) * n.s * f;
+  const b = Math.sin(r) * n.s * f;
+  const c = -Math.sin(r) * n.s;
+  const d = Math.cos(r) * n.s;
+  return [a, b, c, d, p.x + n.dx - (a * p.x + c * p.y), p.y + n.dy - (b * p.x + d * p.y)];
+}
+
+/** A layer's nudge after the nudges of everything it hangs from (only while the body is in parts). */
+function world(name: string, set = 'none'): Mat {
+  const parent = hasParts() ? parentOf(name) : null;
+  const m = local(name, set);
+  return parent ? mul(world(parent, set), m) : m;
+}
+
+/** The four corners of a layer after its nudges, in source px. */
+function corners(name: string, set = 'none'): { x: number; y: number }[] {
+  const l = layers.get(name)!;
+  const m = world(name, set);
+  return [[l.x, l.y], [l.x + l.w, l.y], [l.x + l.w, l.y + l.h], [l.x, l.y + l.h]].map(([x, y]) => apply(m, x, y));
 }
 
 /** Source px to the logical frame, through the whole-figure nudge. */
@@ -184,30 +215,42 @@ export function lookStack(l: Loadout): string[] {
   const parts = hasParts();
   const names = lookLayers(l).filter((n) => layers.has(n) && !(parts && n === BODY));
   const key = (n: string, i: number) => {
-    const z = nudgeOf(n).z ?? 0;
+    const z = nudgeOf(nudgeKey(n, l.look.set)).z ?? 0;
     return i + z + (z > 0 ? 0.5 : z < 0 ? -0.5 : 0);
   };
   return names.map((n, i) => ({ n, k: key(n, i) })).sort((a, b) => a.k - b.k).map((e) => e.n);
 }
 
 /** A layer's corners in the logical frame (feet at the bottom centre), or null without its file. */
-export function layerCorners(name: string): { x: number; y: number }[] | null {
+export function layerCorners(name: string, set = 'none'): { x: number; y: number }[] | null {
   if (!layers.has(name)) return null;
-  return corners(placed(name)).map((p) => frame(p.x, p.y));
+  return corners(name, set).map((p) => frame(p.x, p.y));
+}
+
+/** Where a body part turns, in the logical frame; null for anything else (it turns about its middle). */
+export function layerJoint(name: string, set = 'none'): { x: number; y: number } | null {
+  const j = JOINTS[name];
+  if (!j || !hasParts()) return null;
+  const p = apply(world(name, set), j.x, j.y);
+  return frame(p.x, p.y);
+}
+
+/** A move in source px, as the dx/dy of a layer that may hang from a turned or scaled parent. */
+export function moveInParent(name: string, dx: number, dy: number, set = 'none'): { x: number; y: number } {
+  const parent = hasParts() && name !== BODY ? parentOf(name) : null;
+  if (!parent) return { x: dx, y: dy };
+  const m = invert(world(parent, set));
+  return { x: m[0] * dx + m[2] * dy, y: m[1] * dx + m[3] * dy };
 }
 
 export const LOOK_FRAME = { w: OUT_W, h: OUT_H };
 
-function drawLayer(ctx: CanvasRenderingContext2D, name: string, m: Mapping, crop = 1): void {
-  const p = placed(name);
-  const img = layers.get(name)!.img;
-  const w = p.w * m.k;
-  const h = p.h * m.k;
+function drawLayer(ctx: CanvasRenderingContext2D, name: string, m: Mapping, set = 'none', crop = 1): void {
+  const l = layers.get(name)!;
   ctx.save();
-  ctx.translate(p.cx * m.k + m.tx, p.cy * m.k + m.ty);
-  ctx.rotate(p.r);
-  if (p.fx) ctx.scale(-1, 1);
-  ctx.drawImage(img, 0, 0, img.width, img.height * crop, -w / 2, -h / 2, w, h * crop);
+  ctx.transform(m.k, 0, 0, m.k, m.tx, m.ty);
+  ctx.transform(...world(name, set));
+  ctx.drawImage(l.img, 0, 0, l.img.width, l.img.height * crop, l.x, l.y, l.w, l.h * crop);
   ctx.restore();
 }
 
@@ -235,7 +278,7 @@ export function paintedLook(scene: Phaser.Scene, l: Loadout, skip: string[] = []
       // a set covers a whole body.png but its head, so only that much is drawn
       const l0 = layers.get(name)!;
       const crop = name === BODY && l.look.set !== 'none' ? Math.min(1, (SRC_NECK - l0.y) / l0.h) : 1;
-      drawLayer(ctx, name, m, crop);
+      drawLayer(ctx, name, m, l.look.set, crop);
     }
   });
 }
@@ -244,7 +287,7 @@ export function paintedLook(scene: Phaser.Scene, l: Loadout, skip: string[] = []
 export function paintedPiece(scene: Phaser.Scene, slot: FashionSlot, id: string): string | null {
   const names = pieceFiles(slot, id).filter((n) => layers.has(n));
   if (!names.length) return null;
-  const pts = names.flatMap((n) => corners(placed(n)));
+  const pts = names.flatMap((n) => corners(n));
   const x0 = Math.min(...pts.map((p) => p.x));
   const y0 = Math.min(...pts.map((p) => p.y));
   const x1 = Math.max(...pts.map((p) => p.x));
@@ -255,30 +298,17 @@ export function paintedPiece(scene: Phaser.Scene, slot: FashionSlot, id: string)
   });
 }
 
-/** The hand's arm moves the fist with it: a source point through that arm's nudge (or back, with `undo`). */
-function throughArm(x: number, y: number, undo = false): { x: number; y: number } {
-  if (!layers.has(HAND_PART)) return { x, y };
-  const l = layers.get(HAND_PART)!;
-  const p = placed(HAND_PART);
-  const ox = l.x + l.w / 2;
-  const oy = l.y + l.h / 2;
-  const n = nudgeOf(HAND_PART);
-  const c = Math.cos(p.r);
-  const s = Math.sin(p.r);
-  if (!undo) {
-    const u = (x - ox) * n.s * (p.fx ? -1 : 1);
-    const v = (y - oy) * n.s;
-    return { x: p.cx + u * c - v * s, y: p.cy + u * s + v * c };
-  }
-  const u = x - p.cx;
-  const v = y - p.cy;
-  return { x: ox + ((u * c + v * s) / n.s) * (p.fx ? -1 : 1), y: oy + (-u * s + v * c) / n.s };
+/** The hand moves the fist with it (and the arm the hand): a source point through the hand's nudges (or back, with `undo`). */
+function throughHand(x: number, y: number, undo = false): { x: number; y: number } {
+  if (!hasParts()) return { x, y };
+  const m = world(HAND_PART);
+  return apply(undo ? invert(m) : m, x, y);
 }
 
 /** A point in the logical frame back to the fist's source px (the inverse of paintedHand). */
 export function handToSource(x: number, y: number): { x: number; y: number } {
   const m = frameMap();
-  return throughArm((x - m.tx) / m.k, (y - m.ty) / m.k, true);
+  return throughHand((x - m.tx) / m.k, (y - m.ty) / m.k, true);
 }
 
 /** How many source px one logical px is, for dragging a layer. */
@@ -286,7 +316,7 @@ export const sourcePerLogical = () => 1 / frameMap().k;
 
 /** The fist, relative to the feet in logical px, facing right. */
 export function paintedHand(): { x: number; y: number } {
-  const h = throughArm(align.hand.x, align.hand.y);
+  const h = throughHand(align.hand.x, align.hand.y);
   const p = frame(h.x, h.y);
   return { x: p.x - OUT_W / 2, y: p.y - (OUT_H - 1) };
 }

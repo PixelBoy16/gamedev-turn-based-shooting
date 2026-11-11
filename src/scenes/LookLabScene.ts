@@ -1,16 +1,17 @@
 import Phaser from 'phaser';
 import { ART_SCALE, gunLook, lookTexture } from '../art/chibi';
 import {
-  Align, LOOK_FRAME, LOOK_RES, Nudge, getAlign, handToSource, hasLayer, layerCorners, lookStack, nudgeOf, painted, paintedHand,
-  paintedLook, setAlign, sourcePerLogical,
+  Align, LOOK_FRAME, LOOK_RES, Nudge, getAlign, handToSource, hasLayer, layerCorners, layerJoint, lookStack, moveInParent, nudgeKey, nudgeOf,
+  painted, paintedHand, paintedLook, setAlign, sourcePerLogical,
 } from '../art/look';
-import { BODY, BODY_PARTS, lookLayers, pieceFiles } from '../art/lookNames';
+import { BODY, BODY_PARTS, HEAD_PART, PART_NAME, allLookFiles, lookLayers, parentOf, pieceFiles } from '../art/lookNames';
 import { DEFAULT_LOADOUT, FASHION_SLOTS, FASHION_SLOT_NAME, FashionSlot, Loadout, copyLoadout, fashionDef, fashionIn } from '../core/gear';
 import { Button, FONT, INK, label } from '../ui/widgets';
 
 // Dev tool (open the game with ?lab): line up the painted layers from ChatGPT on the
-// base body. Left: what the figure wears, then its layers front to back (click one to
-// pick it, the dot hides it while you work). Middle: the figure; drag the picked layer.
+// base body. Left: what the figure wears, then its layers front to back in two columns,
+// the worn pieces and the body parts (click one to pick it, the dot hides it while you
+// work). Middle: the figure; drag the picked layer, whatever hangs from it comes along.
 // Right: move, scale, turn, flip and re-order it, then save: the values go to
 // src/art/look/align.json and every look in the game uses them. "ทั้งตัว" is the whole figure.
 
@@ -20,7 +21,8 @@ const FEET = 1000;
 const ZOOM = 5.4;
 const PANEL_X = 1420;
 const ROW_Y = 568;
-const ROW_H = 34;
+const ROW_H = 32;
+const PARTS_X = 290; // the body parts column
 
 /** One property row on the right: how a step changes the nudge, and how to show it. */
 interface Prop {
@@ -69,7 +71,8 @@ export default class LookLabScene extends Phaser.Scene {
     this.add.rectangle(960, 540, 1920, 1080, INK);
 
     this.buildWardrobe();
-    label(this, 40, ROW_Y - 52, 'เลเยอร์ (บนสุด = อยู่หน้าสุด)', 24, '#ffd166');
+    label(this, 40, ROW_Y - 52, 'เลเยอร์ (บน = หน้าสุด)', 22, '#ffd166');
+    label(this, PARTS_X, ROW_Y - 52, 'ส่วนของตัว', 22, '#ffd166');
     this.layerList = this.add.container(0, 0);
     this.buildStage();
     this.buildPanel();
@@ -103,37 +106,52 @@ export default class LookLabScene extends Phaser.Scene {
     this.refresh();
   }
 
-  /** "ทั้งตัว", then the figure's layers front first; files that do not exist yet are listed greyed after them. */
+  /**
+   * Front first, in two columns: "ทั้งตัว" and the worn pieces (with a marker where the body
+   * sits among them), and the body parts. Files that do not exist yet are listed greyed below.
+   */
   private drawLayerList(): void {
     this.layerList.removeAll(true);
     const stack = lookStack(this.loadout).filter((n) => n !== BODY).reverse();
     const parts = BODY_PARTS.some(hasLayer);
     const missing = lookLayers(this.loadout).filter((n) => !hasLayer(n) && n !== BODY && !(BODY_PARTS.includes(n) && !parts && hasLayer(BODY)));
-    const rows = [BODY, ...stack];
-    rows.forEach((name, i) => {
-      const y = ROW_Y + i * ROW_H;
-      const on = name === this.selected;
-      if (name !== BODY) {
-        const off = this.hidden.has(name);
-        const dot = this.add.text(44, y, off ? '○' : '●', { fontFamily: FONT, fontSize: '22px', color: off ? '#5d6a8f' : '#9be564' })
-          .setOrigin(0, 0.5).setInteractive({ useHandCursor: true })
-          .on('pointerdown', () => this.toggleHidden(name));
-        this.layerList.add(dot);
-      }
-      const n = nudgeOf(name);
-      const changed = n.dx || n.dy || n.s !== 1 || n.r || n.fx || n.z;
-      const text = name === BODY ? 'ทั้งตัว (เลื่อน/ย่อทั้งหมด)' : `${name}${changed ? '  *' : ''}`;
-      const row = this.add.text(78, y, text, { fontFamily: FONT, fontSize: '20px', color: on ? '#ffd166' : '#e6ecff', backgroundColor: on ? '#3a4566' : undefined })
-        .setOrigin(0, 0.5).setPadding(6, 2, 6, 2).setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.select(name));
-      this.layerList.add(row);
-    });
+    const worn: (string | null)[] = [BODY];
+    for (const n of stack) {
+      if (!BODY_PARTS.includes(n)) worn.push(n);
+      else if (!worn.includes(null)) worn.push(null);
+    }
+    const body = stack.filter((n) => BODY_PARTS.includes(n));
+    worn.forEach((name, i) => this.layerRow(40, ROW_Y + i * ROW_H, name));
+    body.forEach((name, i) => this.layerRow(PARTS_X, ROW_Y + i * ROW_H, name));
     if (missing.length) {
-      const t = this.add.text(44, ROW_Y + rows.length * ROW_H, `ยังไม่มีไฟล์: ${missing.join(', ')}`, {
-        fontFamily: FONT, fontSize: '17px', color: '#5d6a8f', wordWrap: { width: 420 },
+      const t = this.add.text(40, ROW_Y + Math.max(worn.length, body.length) * ROW_H, `ยังไม่มีไฟล์: ${missing.join(', ')}`, {
+        fontFamily: FONT, fontSize: '16px', color: '#5d6a8f', wordWrap: { width: 440 },
       });
       this.layerList.add(t);
     }
+  }
+
+  /** One row of the layer list; null is the marker for where the body parts sit. */
+  private layerRow(x: number, y: number, name: string | null): void {
+    if (name === null) {
+      this.layerList.add(this.add.text(x + 32, y, 'ตัว (คอลัมน์ขวา) →', { fontFamily: FONT, fontSize: '17px', color: '#5d6a8f' }).setOrigin(0, 0.5));
+      return;
+    }
+    const on = name === this.selected;
+    if (name !== BODY) {
+      const off = this.hidden.has(name);
+      const dot = this.add.text(x, y, off ? '○' : '●', { fontFamily: FONT, fontSize: '20px', color: off ? '#5d6a8f' : '#9be564' })
+        .setOrigin(0, 0.5).setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.toggleHidden(name));
+      this.layerList.add(dot);
+    }
+    const n = nudgeOf(nudgeKey(name, this.loadout.look.set));
+    const changed = n.dx || n.dy || n.s !== 1 || n.r || n.fx || n.z;
+    const text = name === BODY ? 'ทั้งตัว (เลื่อน/ย่อทั้งหมด)' : `${PART_NAME[name] ?? name}${changed ? ' *' : ''}`;
+    const row = this.add.text(x + 32, y, text, { fontFamily: FONT, fontSize: '17px', color: on ? '#ffd166' : '#e6ecff', backgroundColor: on ? '#3a4566' : undefined })
+      .setOrigin(0, 0.5).setPadding(5, 2, 5, 2).setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.select(name));
+    this.layerList.add(row);
   }
 
   private toggleHidden(name: string): void {
@@ -179,13 +197,24 @@ export default class LookLabScene extends Phaser.Scene {
     hit.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (!p.isDown || this.handMode || !this.editable()) return;
       const k = sourcePerLogical() / ZOOM;
-      const n = nudgeOf(this.selected);
-      this.nudge({ dx: n.dx + (p.x - p.prevPosition.x) * k, dy: n.dy + (p.y - p.prevPosition.y) * k });
+      this.move((p.x - p.prevPosition.x) * k, (p.y - p.prevPosition.y) * k);
     });
   }
 
   private editable(): boolean {
     return this.selected === BODY ? painted() : hasLayer(this.selected);
+  }
+
+  /** The align.json key the picked layer is edited under: inside a set the head has its own. */
+  private editKey(): string {
+    return nudgeKey(this.selected, this.loadout.look.set);
+  }
+
+  /** Move the picked layer by source px as seen on screen, whatever its parent is turned or scaled by. */
+  private move(dx: number, dy: number): void {
+    const v = moveInParent(this.selected, dx, dy, this.loadout.look.set);
+    const n = nudgeOf(this.editKey());
+    this.nudge({ dx: n.dx + v.x, dy: n.dy + v.y });
   }
 
   // ---------------------------------------------------------------- right: the picked layer
@@ -215,22 +244,25 @@ export default class LookLabScene extends Phaser.Scene {
 
   private step(prop: Prop, sign: number, big = this.shiftKey.isDown): void {
     if (!this.editable() || (this.selected === BODY && prop === PROPS[3])) return; // the whole figure does not turn
-    this.nudge(prop.step(nudgeOf(this.selected), sign, big));
+    const i = PROPS.indexOf(prop);
+    const d = sign * (big ? 10 : 1);
+    if (i < 2) this.move(i === 0 ? d : 0, i === 1 ? d : 0);
+    else this.nudge(prop.step(nudgeOf(this.editKey()), sign, big));
   }
 
   private flip(): void {
     if (!this.editable() || this.selected === BODY) return;
-    this.nudge({ fx: !nudgeOf(this.selected).fx });
+    this.nudge({ fx: !nudgeOf(this.editKey()).fx });
   }
 
   private order(d: number): void {
     if (!this.editable() || this.selected === BODY) return;
-    this.nudge({ z: (nudgeOf(this.selected).z ?? 0) + d });
+    this.nudge({ z: (nudgeOf(this.editKey()).z ?? 0) + d });
   }
 
   private reset(): void {
     const layers = { ...getAlign().layers };
-    delete layers[this.selected];
+    delete layers[this.editKey()];
     this.change({ ...getAlign(), layers });
   }
 
@@ -263,7 +295,7 @@ export default class LookLabScene extends Phaser.Scene {
 
   private nudge(d: Partial<Nudge>): void {
     const a = getAlign();
-    const m = { ...nudgeOf(this.selected), ...d };
+    const m = { ...nudgeOf(this.editKey()), ...d };
     const next: Nudge = {
       dx: Math.round(m.dx * 10) / 10,
       dy: Math.round(m.dy * 10) / 10,
@@ -273,7 +305,7 @@ export default class LookLabScene extends Phaser.Scene {
     if (m.r) next.r = Math.round(m.r * 10) / 10;
     if (m.fx) next.fx = true;
     if (m.z) next.z = m.z;
-    this.change({ ...a, layers: { ...a.layers, [this.selected]: next } });
+    this.change({ ...a, layers: { ...a.layers, [this.editKey()]: next } });
   }
 
   private change(next: Align): void {
@@ -302,10 +334,19 @@ export default class LookLabScene extends Phaser.Scene {
     const f = LOOK_FRAME;
     const left = CX - (f.w * ZOOM) / 2;
     const top = FEET - f.h * ZOOM;
-    const pts = this.selected === BODY ? null : layerCorners(this.selected);
+    const set = this.loadout.look.set;
+    const pts = this.selected === BODY ? null : layerCorners(this.selected, set);
     if (pts) {
       g.lineStyle(3, 0xffd166, 0.9);
       g.strokePoints(pts.map((p) => new Phaser.Math.Vector2(left + p.x * ZOOM, top + p.y * ZOOM)), true);
+    }
+    // a body part turns and scales about its joint
+    const joint = this.selected === BODY ? null : layerJoint(this.selected, set);
+    if (joint) {
+      g.fillStyle(0x4dd0ff, 1);
+      g.fillCircle(left + joint.x * ZOOM, top + joint.y * ZOOM, 8);
+      g.lineStyle(2, INK, 1);
+      g.strokeCircle(left + joint.x * ZOOM, top + joint.y * ZOOM, 8);
     }
 
     const look = gunLook(this, this.loadout.weapon);
@@ -320,20 +361,26 @@ export default class LookLabScene extends Phaser.Scene {
       g.lineBetween(hx, hy - 14, hx, hy + 14);
     }
 
-    const n = nudgeOf(this.selected);
+    const n = nudgeOf(this.editKey());
     const can = this.editable();
-    this.title.setText(this.selected === BODY ? 'ทั้งตัว' : this.selected);
+    const inSet = this.selected === HEAD_PART && set !== 'none';
+    this.title.setText(this.selected === BODY ? 'ทั้งตัว' : `${PART_NAME[this.selected] ?? this.selected}${inSet ? ' (ในชุดเซ็ต)' : ''}`);
+    const parent = this.selected === BODY ? null : parentOf(this.selected);
     PROPS.forEach((p, i) => this.propText[i].setText(can && !(this.selected === BODY && i === 3) ? p.show(n) : '–'));
     this.flipBtn.setSelected(!!n.fx).setEnabled(can && this.selected !== BODY);
     this.handBtn.setSelected(this.handMode);
     this.gunBtn.setSelected(this.gunHidden);
 
     const dirty = JSON.stringify(getAlign()) !== this.saved;
+    const parts = BODY_PARTS.some(hasLayer);
     const z = n.z ?? 0;
     this.status.setText([
       !painted() ? 'ยังไม่มี body.png หรือชิ้นส่วนตัว: แสดงตัวที่วาดด้วยโค้ดแทน' : '',
       this.selected !== BODY && !can ? `ยังไม่มีไฟล์ src/art/look/${this.selected}.png` : '',
-      this.selected !== BODY ? `ลำดับ ${z > 0 ? '+' : ''}${z}` : '',
+      this.selected !== BODY && can ? `ไฟล์ ${this.selected}.png · ลำดับ ${z > 0 ? '+' : ''}${z}` : '',
+      parent && parts ? `ขยับตาม: ${PART_NAME[parent] ?? parent}` : '',
+      joint ? 'หมุนและย่อรอบจุดสีฟ้า (ข้อต่อ) ชิ้นที่ห้อยอยู่ขยับตาม' : '',
+      inSet ? 'ค่านี้ใช้เฉพาะตอนใส่ชุดเซ็ตนี้' : '',
       `ตัวแยกส่วน ${BODY_PARTS.filter(hasLayer).length}/${BODY_PARTS.length}`,
       this.handMode ? 'คลิกที่ตัวเพื่อวางจุดกำปั้น' : '',
       dirty ? '● ยังไม่ได้บันทึก' : 'บันทึกแล้ว',
@@ -354,7 +401,7 @@ export default class LookLabScene extends Phaser.Scene {
     try {
       const raw = JSON.parse(sessionStorage.getItem(KEEP_KEY) ?? 'null');
       if (raw?.look) for (const slot of FASHION_SLOTS) if (fashionDef(slot, raw.look[slot])) this.loadout.look[slot] = raw.look[slot];
-      if (typeof raw?.selected === 'string') this.selected = raw.selected;
+      if (typeof raw?.selected === 'string' && allLookFiles().includes(raw.selected)) this.selected = raw.selected;
     } catch {
       // ignore
     }
