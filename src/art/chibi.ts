@@ -362,7 +362,16 @@ export function loadArt(scene: Phaser.Scene): void {
   // first screen, cut from the designer's mockup by tools/prepare_menu_ui.py
   scene.load.image('art-menu-bg', 'art/ui/menu-bg.jpg');
   for (const f of MENU_UI) scene.load.image(`ui-${f}`, `art/ui/${f}.webp`);
+  scene.load.image('ui-ranked/bg', 'art/ui/ranked/bg.jpg');
+  for (const f of RANKED_UI) scene.load.image(`ui-ranked/${f}`, `art/ui/ranked/${f}.webp`);
 }
+
+/** Pieces of the ranked screen in public/art/ui/ranked/, loaded as `ui-ranked/<name>`. */
+export const RANKED_UI = [
+  'panel', 'trophy-glow', 'trophy-mount', 'trophy', 'avatar-ring', 'rating', 'rules', 'info', 'rays',
+  'hero', 'scout', 'crate-left', 'crate-right', 'header', 'logo',
+  'btn-match', 'ico-match', 'btn-wardrobe', 'ico-wardrobe', 'btn-menu', 'ico-menu', 'btn-back', 'ico-back',
+] as const;
 
 /** Pieces of the first screen in public/art/ui/, loaded as `ui-<name>`. */
 export const MENU_UI = [

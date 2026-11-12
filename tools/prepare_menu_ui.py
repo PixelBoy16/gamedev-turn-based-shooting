@@ -12,6 +12,7 @@ SRC = PROJECT / 'new_ui'
 ASSETS = SRC / 'black-boom-assets' / 'public' / 'black-boom'
 BUTTONS = SRC / 'black-boom-button-parts' / 'public' / 'black-boom-button-parts'
 CURRENCY = SRC / 'black-boom-currency-parts' / 'public' / 'black-boom-currency-parts'
+RANKED = SRC / 'black-boom-ranked-parts' / 'public' / 'black-boom-ranked'
 OUT = PROJECT / 'public' / 'art' / 'ui'
 
 # output file -> (source, width in px on the 1920 canvas, roughly what MenuScene shows it at)
@@ -39,6 +40,30 @@ FILES = {
     'cur-gems': (CURRENCY / 'gems/base.png', 290),
     'ico-coin': (CURRENCY / 'coins/icon.png', 80),
     'ico-gem': (CURRENCY / 'gems/icon.png', 80),
+    # ranked screen (layout: new_ui/black-boom-ranked-parts/layout.json, a 1671x941 mockup)
+    'ranked/panel': (RANKED / 'panels/main.png', 1300),
+    'ranked/trophy-glow': (RANKED / 'effects/trophy-glow.png', 500),
+    'ranked/trophy-mount': (RANKED / 'panels/trophy-mount.png', 440),
+    'ranked/trophy': (RANKED / 'icons/trophy.png', 340),
+    'ranked/avatar-ring': (RANKED / 'effects/avatar-ring.png', 250),
+    'ranked/rating': (RANKED / 'panels/rating-base.png', 430),
+    'ranked/rules': (RANKED / 'panels/rules-base.png', 1000),
+    'ranked/info': (RANKED / 'icons/info.png', 60),
+    'ranked/rays': (RANKED / 'effects/match-rays.png', 860),
+    'ranked/hero': (RANKED / 'characters/hero-left.png', 380),
+    'ranked/scout': (RANKED / 'characters/scout-right.png', 320),
+    'ranked/crate-left': (RANKED / 'decorations/crate-left.png', 420),
+    'ranked/crate-right': (RANKED / 'decorations/crate-right.png', 430),
+    'ranked/header': (RANKED / 'header/base.png', 790),
+    'ranked/logo': (RANKED / 'header/logo.png', 210),
+    'ranked/btn-match': (RANKED / 'buttons/match/base.png', 770),
+    'ranked/ico-match': (RANKED / 'buttons/match/icon.png', 170),
+    'ranked/btn-wardrobe': (RANKED / 'buttons/wardrobe/base.png', 280),
+    'ranked/ico-wardrobe': (RANKED / 'buttons/wardrobe/icon.png', 70),
+    'ranked/btn-menu': (RANKED / 'buttons/menu/base.png', 270),
+    'ranked/ico-menu': (RANKED / 'buttons/menu/icon.png', 70),
+    'ranked/btn-back': (RANKED / 'buttons/back/base.png', 110),
+    'ranked/ico-back': (RANKED / 'buttons/back/icon.png', 60),
 }
 
 
@@ -87,15 +112,16 @@ def status_plate() -> Image.Image:
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / 'ranked').mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
     save(fit(plus(), 70), 'plus')
     save(fit(status_plate(), 590), 'status')
-    bg = Image.open(ASSETS / 'backgrounds/arena.png').convert('RGB')
-    path = OUT / 'menu-bg.jpg'
-    bg.save(path, 'JPEG', quality=86, optimize=True, progressive=True)
-    print(f'{path.relative_to(PROJECT)}  {bg.width}x{bg.height}  {path.stat().st_size // 1024} KB')
+    for src, name in ((ASSETS / 'backgrounds/arena.png', 'menu-bg'), (RANKED / 'backgrounds/ranked-arena.png', 'ranked/bg')):
+        bg = Image.open(src).convert('RGB')
+        path = OUT / f'{name}.jpg'
+        bg.save(path, 'JPEG', quality=86, optimize=True, progressive=True)
+        print(f'{path.relative_to(PROJECT)}  {bg.width}x{bg.height}  {path.stat().st_size // 1024} KB')
 
 
 if __name__ == '__main__':
