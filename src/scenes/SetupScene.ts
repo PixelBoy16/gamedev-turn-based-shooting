@@ -7,17 +7,20 @@ import {
 } from '../core/gear';
 import { MAPS, MAP_IDS } from '../core/Maps';
 import { Difficulty } from '../core/BotAI';
-import { Button, FONT, confirmBox, fit, label, sectionTab, walletText } from '../ui/widgets';
-import { THEME, drawPlate, drawRibbon } from '../ui/theme';
+import { FONT, confirmBox, fit, label } from '../ui/widgets';
+import { THEME } from '../ui/theme';
+import { Chip, PlateButton, STROKE, heading, panel, screenChrome } from '../ui/plates';
 import { account } from '../net/account';
 import { ItemKind, enforceOwned, itemKey, owns, priceOf, priceText } from '../core/shop';
-import { menuBackdrop } from './backdrop';
 import { DIFF_LABEL, FORMAT_LABEL, Format, MatchSetup, loadSetup, saveSetup } from './setup';
 
 const FORMATS: Format[] = ['1v1', '1v2', '2v2'];
 const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard'];
 
-/** Pick character, 3 items, map, format and bot difficulty. */
+/**
+ * Pick character, 3 items, map, format and bot difficulty. No mockup of its own: built
+ * from the theme kit (src/ui/plates.ts) so it matches the painted screens around it.
+ */
 export default class SetupScene extends Phaser.Scene {
   private setup!: MatchSetup;
   private refreshers: (() => void)[] = [];
@@ -45,31 +48,23 @@ export default class SetupScene extends Phaser.Scene {
   }
 
   create(): void {
-    menuBackdrop(this);
-    const shade = this.add.graphics();
-    shade.fillStyle(0x10162a, 0.55);
-    shade.fillRect(0, 0, 1920, 1080);
-    const ribbon = this.add.graphics({ x: 230, y: 50 });
-    drawRibbon(ribbon, 360, 76, THEME.fire, THEME.gold);
-    label(this, 230, 46, 'ตู้เสื้อผ้า', 50, '#ffe08a').setOrigin(0.5);
-    const wallet = label(this, 1860, 36, '', 30).setOrigin(1, 0);
-    const showWallet = () => wallet.setText(account.view ? walletText(account.view.coins, account.view.gems) : '');
-    showWallet();
-    const stop = account.onChange(showWallet);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, stop);
+    const bg = this.add.image(960, 540, 'ui-lobby/bg');
+    bg.setScale(Math.max(1920 / bg.width, 1080 / bg.height));
+    screenChrome(this, { title: 'ตู้เสื้อผ้า', icon: 'ui-lobby/ico-wardrobe', onBack: () => this.scene.start(this.returnTo ?? 'menu') });
 
     this.wardrobe();
     this.itemPicker();
     if (!this.online) this.rightColumn();
+    else this.cheer();
 
-    this.hint = label(this, 960, 1040, '', 26, '#ffd166').setOrigin(0.5);
-    new Button(this, 200, 990, 260, 90, '← กลับ', { size: 34, onClick: () => this.scene.start(this.returnTo ?? 'menu') });
-    // a soft pulsing glow behind the main call to action
-    const glow = this.add.graphics({ x: 1640, y: 985 });
-    drawPlate(glow, 470, 140, 0x7dff8a, { cut: 30 });
-    glow.setAlpha(0.12);
-    this.tweens.add({ targets: glow, alpha: 0.38, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    new Button(this, 1640, 985, 440, 110, this.online ? 'ตกลง' : 'เริ่มเล่น!', { fill: THEME.green, size: 48, onClick: () => this.start() });
+    this.hint = label(this, 960, 1040, '', 28, '#ffd166').setOrigin(0.5).setDepth(10);
+    // the green plate is the call to action; it breathes so the eye finds it
+    const go = new PlateButton(this, 'ui-lobby/btn-create', [1420, 940, 440, 126], () => this.start());
+    const t = this.add.text(0, 0, this.online ? 'ตกลง' : 'เริ่มเล่น!', {
+      fontFamily: FONT, fontSize: '54px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 9,
+    }).setOrigin(0.5);
+    go.put(fit(t, go.w * 0.7, go.h * 0.6), 0.5, 0.48);
+    this.tweens.add({ targets: go, scale: 1.04, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.refresh();
   }
 
@@ -100,41 +95,42 @@ export default class SetupScene extends Phaser.Scene {
    * far right. Tapping a slot opens a picker with every piece for it.
    */
   private wardrobe(): void {
-    const bg = this.add.graphics({ x: 690, y: 378 });
-    drawPlate(bg, 1260, 540, THEME.panel, { cut: 26, rivets: true });
-    bg.lineStyle(2, 0xffffff, 0.06); // faint dividers between looks, the stage, and stats
-    bg.lineBetween(-375, -230, -375, 230);
-    bg.lineBetween(375, -230, 375, 230);
-    this.turntable(540, 350);
-    const zoom = 2.6;
-    const avatar = this.add.image(540, 470, '__DEFAULT').setOrigin(0.5, 1);
-    const hand = this.add.image(578, 425, '__DEFAULT');
+    // the wardrobe panel spans x 55..1325, y 140..660; the item cards below match its width
+    panel(this, 690, 400, 1270, 520);
+    // faint dividers between looks, the stage, and stats
+    this.add.rectangle(315, 405, 3, 430, 0x8991b6, 0.35);
+    this.add.rectangle(1065, 405, 3, 430, 0x8991b6, 0.35);
+    this.turntable(540, 395);
+    const zoom = 2.5;
+    const feet = 512;
+    const avatar = this.add.image(540, feet, '__DEFAULT').setOrigin(0.5, 1);
+    const hand = this.add.image(578, feet - 45, '__DEFAULT');
     this.refreshers.push(() => {
       const l = this.setup.loadout;
       avatar.setTexture(lookTexture(this, l)).setScale(ART_SCALE * zoom * lookRes());
       const fist = lookHand();
-      if (fist) hand.setPosition(540 + fist.x * ART_SCALE * zoom, 470 + fist.y * ART_SCALE * zoom);
+      if (fist) hand.setPosition(540 + fist.x * ART_SCALE * zoom, feet + fist.y * ART_SCALE * zoom);
       const g = gunLook(this, l.weapon);
       hand.setTexture(g.key).setOrigin(g.ox, g.oy).setScale(g.scale * (fist ? zoom : 1.7)).setRotation(-0.3);
     });
     (['hat', 'glasses'] as const).forEach((k, i) => {
-      const btn = new Button(this, 470 + i * 140, 610, 130, 46, k === 'hat' ? 'ซ่อนหมวก' : 'ซ่อนแว่น', {
-        size: 20, onClick: () => { this.setup.loadout.hide[k] = !this.setup.loadout.hide[k]; this.refresh(); },
+      const btn = new Chip(this, 470 + i * 140, 615, 130, 50, k === 'hat' ? 'ซ่อนหมวก' : 'ซ่อนแว่น', {
+        size: 22, onClick: () => { this.setup.loadout.hide[k] = !this.setup.loadout.hide[k]; this.refresh(); },
       });
       this.refreshers.push(() => btn.setSelected(this.setup.loadout.hide[k]));
     });
 
-    sectionTab(this, 80, 112, 'แฟชั่น · แค่หน้าตา');
+    heading(this, 100, 192, 'แฟชั่น · แค่หน้าตา', 190);
     FASHION_SLOTS.forEach((slot, i) => {
-      this.tile(140 + (i % 2) * 120, 200 + Math.floor(i / 2) * 118, FASHION_SLOT_NAME[slot], () => {
+      this.tile(145 + (i % 2) * 110, 258 + Math.floor(i / 2) * 104, FASHION_SLOT_NAME[slot], () => {
         const id = this.setup.loadout.look[slot];
         return { key: pieceTexture(this, slot, id), name: id === 'none' ? '' : fashionDef(slot, id)!.name };
-      }, () => this.pickFashion(slot));
+      }, () => this.pickFashion(slot), 98);
     });
 
-    sectionTab(this, 770, 112, 'อุปกรณ์ · ค่าสถานะ');
+    heading(this, 770, 192, 'อุปกรณ์ · ค่าสถานะ', 270);
     EQUIP_SLOTS.forEach((slot, i) => {
-      this.tile(820 + (i % 2) * 120, 200 + Math.floor(i / 2) * 118, EQUIP_SLOT_NAME[slot], () => {
+      this.tile(830 + (i % 2) * 120, 268 + Math.floor(i / 2) * 116, EQUIP_SLOT_NAME[slot], () => {
         const id = this.setup.loadout.equip[slot];
         return { key: equipTexture(this, slot, id), name: id === 'none' ? '' : equipDef(slot, id)!.name };
       }, () => this.pickEquip(slot));
@@ -146,55 +142,56 @@ export default class SetupScene extends Phaser.Scene {
       { k: 'def', value: (ts) => 2 - ts.def, text: (v) => `${Math.round(v * 100)}%` },
       { k: 'move', value: (ts) => ts.move, text: (v) => `${Math.round(v * 100)}%` },
     ];
+    const rowY = (i: number) => 492 + i * 38;
     const statG = this.add.graphics();
     const statText = STAT_ROWS.map((_, i) => ({
-      name: label(this, 770, 452 + i * 38, STAT_NAME[STAT_ROWS[i].k], 20, '#cfd8ff').setOrigin(0, 0.5),
-      value: label(this, 975, 452 + i * 38, '', 20).setOrigin(0, 0.5),
+      name: label(this, 770, rowY(i), STAT_NAME[STAT_ROWS[i].k], 21, '#cfd8ff').setOrigin(0, 0.5),
+      value: label(this, 975, rowY(i), '', 21).setOrigin(0, 0.5),
     }));
     this.refreshers.push(() => {
       const ts = tankStats(this.setup.loadout);
       const sum = sumStats(this.setup.loadout);
       statG.clear();
       STAT_ROWS.forEach((r, i) => {
-        const y = 452 + i * 38;
+        const y = rowY(i);
         const v = r.value(ts);
         const up = sum[r.k] > 0;
         const down = sum[r.k] < 0;
-        statG.fillStyle(THEME.ink, 1);
-        statG.fillRoundedRect(850, y - 7, 115, 14, 7);
-        statG.fillStyle(up ? 0x7dff8a : down ? THEME.red : THEME.fire, 1);
-        statG.fillRoundedRect(851, y - 5, Math.max(6, Math.min(1, v / 1.5) * 113), 10, 5);
-        statG.fillStyle(0xffffff, 0.5);
-        statG.fillRect(850 + 115 * (2 / 3), y - 9, 2, 18); // the 100% mark
+        statG.fillStyle(0x091024, 1);
+        statG.fillRoundedRect(850, y - 8, 115, 16, 8);
+        statG.fillStyle(up ? 0x7dff8a : down ? THEME.red : 0xffc23d, 1);
+        statG.fillRoundedRect(852, y - 6, Math.max(6, Math.min(1, v / 1.5) * 111), 12, 6);
+        statG.fillStyle(0xffffff, 0.6);
+        statG.fillRect(850 + 115 * (2 / 3), y - 10, 2, 20); // the 100% mark
         statText[i].value.setText(`${r.text(v)}${sum[r.k] ? ` (${fmt(r.k, sum[r.k])})` : ''}`)
           .setColor(up ? '#7dff8a' : down ? '#ff8a80' : '#ffffff');
       });
     });
 
-    sectionTab(this, 1090, 112, 'อาวุธ', THEME.red);
-    this.tile(1190, 230, 'อาวุธหลัก', () => ({ key: gunLook(this, this.setup.loadout.weapon).key, name: WEAPONS[this.setup.loadout.weapon].name }),
-      () => this.pickWeapon(), 190);
-    const skill = this.add.text(1190, 345, '', {
-      fontFamily: FONT, fontSize: '19px', color: '#8ef0ff', align: 'center', wordWrap: { width: 230 }, lineSpacing: 4,
+    heading(this, 1095, 192, 'อาวุธ', 190);
+    this.tile(1190, 300, 'อาวุธหลัก', () => ({ key: gunLook(this, this.setup.loadout.weapon).key, name: WEAPONS[this.setup.loadout.weapon].name }),
+      () => this.pickWeapon(), 170);
+    const skill = this.add.text(1190, 395, '', {
+      fontFamily: FONT, fontSize: '20px', color: '#8ef0ff', align: 'center', wordWrap: { width: 230 }, lineSpacing: 4,
     }).setOrigin(0.5, 0);
     this.refreshers.push(() => {
       const sk = WEAPONS[this.setup.loadout.weapon].skill!;
       skill.setText(`สกิล E: ${SKILLS[sk].name}\n${SKILLS[sk].desc}`);
     });
-    this.tile(1130, 570, 'อาวุธรอง', () => ({ key: gunLook(this, 'drill').key, name: 'สว่าน ×2' }), null);
-    this.tile(1250, 570, 'พิเศษ', () => ({ key: null, name: '' }), null);
+    this.tile(1135, 580, 'อาวุธรอง', () => ({ key: gunLook(this, 'drill').key, name: 'สว่าน ×2' }), null);
+    this.tile(1245, 580, 'พิเศษ', () => ({ key: null, name: '' }), null);
   }
 
-  /** A steel turntable under the character: fire-orange rim, turning tick marks, and a spotlight at the feet. */
+  /** A navy turntable under the character: gold rim, turning tick marks, and the glowing ring at the feet. */
   private turntable(x: number, y: number): void {
     const g = this.add.graphics({ x, y });
     g.fillStyle(0xffb347, 0.05); // warm light behind the character
     for (let r = 120; r <= 200; r += 20) g.fillCircle(0, -10, r);
-    g.fillStyle(THEME.ink, 0.9);
+    g.fillStyle(0x091024, 0.9);
     g.fillCircle(0, 0, 200);
-    g.fillStyle(THEME.steelDark, 0.95);
+    g.fillStyle(0x1d2346, 0.95);
     g.fillCircle(0, 0, 190);
-    g.lineStyle(6, THEME.fire, 0.9);
+    g.lineStyle(6, 0xffc23d, 0.9);
     g.strokeCircle(0, 0, 190);
     g.lineStyle(2, 0xffffff, 0.12);
     g.strokeCircle(0, 0, 150);
@@ -202,16 +199,14 @@ export default class SetupScene extends Phaser.Scene {
     for (let i = 0; i < 36; i++) {
       const a = (i / 36) * Math.PI * 2;
       const long = i % 3 === 0;
-      ticks.lineStyle(long ? 4 : 2, long ? THEME.fire : 0xffffff, long ? 0.9 : 0.25);
+      ticks.lineStyle(long ? 4 : 2, long ? 0xffc23d : 0xffffff, long ? 0.9 : 0.25);
       ticks.lineBetween(Math.cos(a) * 166, Math.sin(a) * 166, Math.cos(a) * (long ? 182 : 176), Math.sin(a) * (long ? 182 : 176));
     }
     // a slow turn keeps the stage alive without pulling the eye off the character
     this.tweens.add({ targets: ticks, angle: 360, duration: 40000, repeat: -1 });
-    const spot = this.add.graphics({ x, y: y + 120 });
-    spot.fillStyle(THEME.fire, 0.18);
-    spot.fillEllipse(0, 0, 300, 60);
-    spot.fillStyle(0xffd166, 0.22);
-    spot.fillEllipse(0, 0, 180, 34);
+    // the glowing ring from the painted screens, under the feet
+    const ring = this.add.image(x, y + 117, 'ui-lobby/avatar-ring');
+    ring.setScale(260 / ring.width);
   }
 
   /** A square slot: the piece's picture and name, or the faded slot name when empty. */
@@ -219,20 +214,22 @@ export default class SetupScene extends Phaser.Scene {
     x: number, y: number, slotName: string, current: () => { key: string | null; name: string },
     onClick: (() => void) | null, size = 104,
   ): void {
-    const btn = new Button(this, x, y, size, size, '', { radius: 14, onClick: onClick ?? undefined });
+    const btn = new Chip(this, x, y, size, size, '', { plate: 'slot', onClick: onClick ?? undefined });
     if (!onClick) btn.setAlpha(0.7);
     const img = this.add.image(0, -8, '__DEFAULT');
-    const empty = label(this, 0, 0, slotName, 22, '#5d6a8f').setOrigin(0.5);
-    const name = label(this, 0, size / 2 - 2, '', 15).setOrigin(0.5, 1);
+    const empty = label(this, 0, 0, slotName, 22, '#7d89b3').setOrigin(0.5);
+    fit(empty, size - 16, 40);
+    const name = label(this, 0, size / 2 - 6, '', 15).setOrigin(0.5, 1);
     btn.add([img, empty, name]);
     this.refreshers.push(() => {
       const c = current();
       img.setVisible(!!c.key);
       empty.setVisible(!c.key);
       name.setText(c.key ? c.name : '');
+      fit(name.setScale(1), size - 14, 22);
       if (c.key) {
         img.setTexture(c.key);
-        img.setScale((size - 30) / Math.max(img.width, img.height));
+        img.setScale((size - 34) / Math.max(img.width, img.height));
       }
     });
   }
@@ -314,21 +311,19 @@ export default class SetupScene extends Phaser.Scene {
     const perRow = Math.min(5, opts.length);
     const rows = Math.ceil(opts.length / perRow);
     const w = Math.max(700, perRow * 220 + 60);
-    const h = 140 + rows * 320;
+    const h = 170 + rows * 320;
     const top = 540 - h / 2;
-    const panel = add(this.add.graphics({ x: 960, y: top + h / 2 }).setDepth(51));
-    drawPlate(panel, w, h, THEME.panel, { cut: 26, rivets: true, selected: true });
-    const ribbon = add(this.add.graphics({ x: 960, y: top + 6 }).setDepth(52));
-    const tw = Math.min(w - 160, 120 + title.length * 22);
-    drawRibbon(ribbon, tw, 64, THEME.fire, THEME.gold);
-    add(fit(label(this, 960, top + 2, title, 32, '#ffe08a').setOrigin(0.5), tw - 40, 56).setDepth(53));
+    add(panel(this, 960, top + h / 2, w, h).setDepth(51));
+    add(fit(this.add.text(960, top + 58, title, {
+      fontFamily: FONT, fontSize: '38px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 7,
+    }).setOrigin(0.5), w - 200, 56).setDepth(53));
     opts.forEach((o, i) => {
       const row = Math.floor(i / perRow);
       const inRow = Math.min(perRow, opts.length - row * perRow);
       const x = 960 - ((inRow - 1) * 220) / 2 + (i % perRow) * 220;
-      const y = top + 260 + row * 320;
-      const card = add(new Button(this, x, y, 200, 300, '', {
-        radius: 18, onClick: () => {
+      const y = top + 270 + row * 320;
+      const card = add(new Chip(this, x, y, 200, 300, '', {
+        plate: 'slot', onClick: () => {
           this.closePicker();
           if (o.lock) o.buy?.();
           else {
@@ -344,14 +339,14 @@ export default class SetupScene extends Phaser.Scene {
         const img = this.add.image(0, -72, o.key);
         img.setScale(110 / Math.max(img.width, img.height));
         card.add(img);
-      } else card.add(label(this, 0, -72, '—', 60, '#5d6a8f').setOrigin(0.5));
+      } else card.add(label(this, 0, -72, '—', 60, '#7d89b3').setOrigin(0.5));
       card.add(fit(label(this, 0, -6, o.title, 24, o.on ? '#ffd166' : '#ffffff').setOrigin(0.5, 0), 180, 36));
       if (o.lock) card.add(fit(label(this, 0, 140, o.lock, 22, '#ffd166').setOrigin(0.5, 1), 180, 32));
       card.add(fit(this.add.text(0, 34, o.body, {
         fontFamily: FONT, fontSize: '17px', color: '#cfd8ff', align: 'center', wordWrap: { width: 176 }, lineSpacing: -2,
       }).setOrigin(0.5, 0), 180, o.lock ? 72 : 106));
     });
-    add(new Button(this, 960 + w / 2 - 40, top + 30, 52, 52, '✕', { size: 26, onClick: () => this.closePicker() }).setDepth(53));
+    add(new Chip(this, 960 + w / 2 - 62, top + 58, 64, 64, '✕', { size: 30, onClick: () => this.closePicker() }).setDepth(53));
   }
 
   private closePicker(): void {
@@ -359,17 +354,16 @@ export default class SetupScene extends Phaser.Scene {
     this.picker = [];
   }
 
+  /** The items for the match: a card each (icon, name, what it does); tap to take or put back. */
   private itemPicker(): void {
-    sectionTab(this, 60, 690, 'ไอเท็ม');
-    const title = label(this, 200, 690, '', 26).setOrigin(0, 0.5);
+    const top = 690;
+    const title = heading(this, 70, top, 'ไอเท็ม');
+    const count = label(this, title.x + title.width + 24, top, '', 28).setOrigin(0, 0.5);
     const pips = this.add.graphics();
     ITEM_IDS.forEach((id, i) => {
-      const x = 180 + i * 230;
-      const card = this.add.graphics({ x, y: 806 });
-      drawPlate(card, 222, 186, THEME.steelDark, { cut: 14 });
-      const btn = new Button(this, x, 760, 210, 80, ITEMS[id].name, {
-        size: 28,
-        onClick: () => {
+      const x = 55 + 120 + i * 257.5;
+      const card = new Chip(this, x, top + 140, 240, 210, '', {
+        plate: 'slot', onClick: () => {
           const s = this.setup.items;
           const at = s.indexOf(id);
           if (at >= 0) s.splice(at, 1);
@@ -378,61 +372,78 @@ export default class SetupScene extends Phaser.Scene {
           this.refresh();
         },
       });
-      btn.setIcon(iconTexture(this, id));
-      this.add.text(x, 812, ITEMS[id].desc, {
-        fontFamily: FONT, fontSize: '19px', color: '#cfd8ff', align: 'center', wordWrap: { width: 200 },
-      }).setOrigin(0.5, 0);
-      this.refreshers.push(() => btn.setSelected(this.setup.items.includes(id)));
+      const icon = iconTexture(this, id);
+      if (icon) {
+        const img = this.add.image(-70, -56, icon);
+        card.add(img.setScale(70 / Math.max(img.width, img.height)));
+      }
+      card.text.setText(ITEMS[id].name).setOrigin(0, 0.5);
+      card.placeText(-26, -56, 130, 44);
+      card.add(this.add.text(0, 2, ITEMS[id].desc, {
+        fontFamily: FONT, fontSize: '19px', color: '#cfd8ff', align: 'center', wordWrap: { width: 204 }, lineSpacing: 2,
+      }).setOrigin(0.5, 0));
+      this.refreshers.push(() => card.setSelected(this.setup.items.includes(id)));
     });
     this.refreshers.push(() => {
       const n = this.setup.items.length;
-      title.setText(`เลือก ${n}/${LIMITS.itemsPerMatch}`).setColor(n === LIMITS.itemsPerMatch ? '#ffd166' : '#ffffff');
+      count.setText(`เลือก ${n}/${LIMITS.itemsPerMatch}`).setColor(n === LIMITS.itemsPerMatch ? '#ffd166' : '#ffffff');
       pips.clear();
       for (let i = 0; i < LIMITS.itemsPerMatch; i++) {
-        const px = title.x + title.width + 26 + i * 26;
-        pips.fillStyle(THEME.ink, 1);
-        pips.fillCircle(px, 690, 10);
-        pips.fillStyle(i < n ? THEME.fire : THEME.steel, 1);
-        pips.fillCircle(px, 690, 7);
+        const px = count.x + count.width + 26 + i * 28;
+        pips.fillStyle(0x091024, 1);
+        pips.fillCircle(px, top, 11);
+        pips.fillStyle(i < n ? 0xffc23d : 0x3a4370, 1);
+        pips.fillCircle(px, top, 8);
       }
     });
   }
 
+  /** Dressing for a friend room or ranked has no map picks: a painted fighter cheers there instead. */
+  private cheer(): void {
+    const scout = this.add.image(1640, 905, 'ui-lobby/scout').setOrigin(0.5, 1);
+    scout.setScale(560 / scout.height);
+    this.tweens.add({ targets: scout, scaleY: scout.scaleY * 1.025, duration: 850, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const rays = this.add.image(1420, 520, 'ui-lobby/emphasis').setFlipX(true);
+    rays.setScale(90 / rays.height);
+    const crate = this.add.image(1690, 1080, 'ui-lobby/crate-right').setOrigin(0.5, 1);
+    crate.setScale(420 / crate.width);
+  }
+
+  /** Map, format and bot strength (offline only: a friend room or ranked decides these). */
   private rightColumn(): void {
-    const cx = 1560;
-    const panel = this.add.graphics({ x: cx + 4, y: 498 });
-    drawPlate(panel, 450, 800, THEME.panel, { cut: 26, rivets: true });
-    sectionTab(this, cx - 215, 112, 'ด่าน');
-    const mapDesc = label(this, cx, 410, '', 22, '#cfd8ff').setOrigin(0.5, 0);
+    const cx = 1615;
+    panel(this, cx, 525, 500, 800); // y 125..925
+    heading(this, cx - 205, 182, 'ด่าน', 410);
+    const mapDesc = label(this, cx, 448, '', 22, '#cfd8ff').setOrigin(0.5, 0.5);
     MAP_IDS.forEach((id, i) => {
-      const btn = new Button(this, cx, 190 + i * 76, 400, 64, MAPS[id].name, {
+      const btn = new Chip(this, cx, 244 + i * 64, 420, 58, MAPS[id].name, {
         size: 30, onClick: () => { this.setup.map = id; this.refresh(); },
       });
       // a strip of the map's painted backdrop on the left of its button
       const art = `art-bg-${id}`;
       if (this.textures.exists(art)) {
-        const thumb = this.add.image(-140, 0, art);
-        const k = 48 / thumb.height;
+        const thumb = this.add.image(-148, 0, art);
+        const k = 40 / thumb.height;
         const cropW = 104 / k;
         thumb.setScale(k).setCrop((thumb.width - cropW) / 2, 0, cropW, thumb.height);
-        btn.addAt(thumb, 1);
-        btn.text.setX(50);
+        btn.addAt(thumb, 2);
+        btn.placeText(45, 0, 300, 52);
       }
       this.refreshers.push(() => btn.setSelected(this.setup.map === id));
     });
     this.refreshers.push(() => mapDesc.setText(MAPS[this.setup.map].desc));
 
-    sectionTab(this, cx - 215, 465, 'รูปแบบ');
+    heading(this, cx - 205, 512, 'รูปแบบ', 410);
     FORMATS.forEach((f, i) => {
-      const btn = new Button(this, cx, 540 + i * 72, 400, 60, FORMAT_LABEL[f], {
+      const btn = new Chip(this, cx, 572 + i * 64, 420, 56, FORMAT_LABEL[f], {
         size: 28, onClick: () => { this.setup.format = f; this.refresh(); },
       });
       this.refreshers.push(() => btn.setSelected(this.setup.format === f));
     });
 
-    sectionTab(this, cx - 215, 760, 'ความเก่งของบอท');
+    heading(this, cx - 205, 778, 'ความเก่งของบอท', 410);
     DIFFICULTIES.forEach((d, i) => {
-      const btn = new Button(this, cx - 135 + i * 135, 830, 120, 64, DIFF_LABEL[d], {
+      const btn = new Chip(this, cx - 142 + i * 142, 842, 132, 58, DIFF_LABEL[d], {
         size: 28, onClick: () => { this.setup.difficulty = d; this.refresh(); },
       });
       this.refreshers.push(() => btn.setSelected(this.setup.difficulty === d));

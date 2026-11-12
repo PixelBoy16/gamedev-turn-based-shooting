@@ -366,6 +366,8 @@ export function loadArt(scene: Phaser.Scene): void {
   for (const f of RANKED_UI) scene.load.image(`ui-ranked/${f}`, `art/ui/ranked/${f}.webp`);
   scene.load.image('ui-lobby/bg', 'art/ui/lobby/bg.jpg');
   for (const f of LOBBY_UI) scene.load.image(`ui-lobby/${f}`, `art/ui/lobby/${f}.webp`);
+  // theme kit (nine-sliced panel and slot) for screens without their own mockup
+  for (const f of ['panel', 'slot']) scene.load.image(`ui-kit/${f}`, `art/ui/kit/${f}.webp`);
 }
 
 /** Pieces of the friends lobby in public/art/ui/lobby/, loaded as `ui-lobby/<name>`. */

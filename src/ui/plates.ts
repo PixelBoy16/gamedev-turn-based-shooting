@@ -180,3 +180,126 @@ function settingsPanel(scene: Phaser.Scene, gear: PlateButton, onClose: () => vo
   shield.on('pointerdown', close);
   return close;
 }
+
+// ------------------------------------------------------------------ theme kit
+// For screens with no mockup of their own: the painted pieces nine-sliced to any size.
+
+/** Nine-slice a painted plate to w×h, drawing its corners at `s` of their painted size. */
+function sliced(scene: Phaser.Scene, key: string, w: number, h: number, inset: number, s: number): Phaser.GameObjects.NineSlice {
+  // the slice needs room for both corners; very small boxes draw the corners smaller still
+  const k = Math.min(s, w / (inset * 2 + 2), h / (inset * 2 + 2));
+  return scene.add.nineslice(0, 0, key, undefined, w / k, h / k, inset, inset, inset, inset).setScale(k);
+}
+
+/** The navy steel panel (riveted corners) at any size, centred on x, y. */
+export function panel(scene: Phaser.Scene, x: number, y: number, w: number, h: number): Phaser.GameObjects.NineSlice {
+  return sliced(scene, 'ui-kit/panel', w, h, 110, 0.6).setPosition(x, y);
+}
+
+/** A section heading: bold white text, then a thin divider running on to `w` px from x. */
+export function heading(scene: Phaser.Scene, x: number, y: number, text: string, w = 0): Phaser.GameObjects.Text {
+  const t = scene.add.text(x, y, text, { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 6 }).setOrigin(0, 0.5);
+  if (w > t.width + 30) scene.add.rectangle(x + t.width + 16, y + 2, w - t.width - 16, 3, 0x8991b6, 0.75).setOrigin(0, 0.5);
+  return t;
+}
+
+export interface ChipOpts {
+  /** 'chip': the navy button plate (options, toggles); 'slot': the octagonal slot (pieces, cards). */
+  plate?: 'chip' | 'slot';
+  size?: number;
+  onClick?: () => void;
+}
+
+/**
+ * A selectable painted button of any size: a navy plate normally, the gold-rimmed box when
+ * selected. Holds an optional label and anything added to it (local space, centre 0,0).
+ */
+export class Chip extends Phaser.GameObjects.Container {
+  readonly text: Phaser.GameObjects.Text;
+  private normal: Phaser.GameObjects.NineSlice;
+  private picked: Phaser.GameObjects.NineSlice;
+  private enabled = true;
+  selected = false;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, readonly w: number, readonly h: number, str: string, opts: ChipOpts = {}) {
+    super(scene, x, y);
+    this.normal = opts.plate === 'slot'
+      ? sliced(scene, 'ui-kit/slot', w, h, 72, 0.5)
+      : sliced(scene, 'ui-ranked/btn-wardrobe', w, h, 30, 0.75);
+    this.picked = sliced(scene, 'ui-lobby/input-name', w, h, 40, 0.7).setVisible(false);
+    this.text = scene.add.text(0, 0, str, {
+      fontFamily: FONT, fontSize: `${opts.size ?? 28}px`, fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 5, align: 'center',
+    }).setOrigin(0.5);
+    fit(this.text, w - 24, h - 8);
+    const zone = scene.add.zone(0, 0, w, h).setInteractive({ useHandCursor: !!opts.onClick });
+    this.add([this.normal, this.picked, this.text, zone]);
+    scene.add.existing(this);
+    if (!opts.onClick) return;
+    let held = false;
+    zone.on('pointerdown', () => {
+      if (!this.enabled) return;
+      held = true;
+      this.setScale(0.96);
+      sfx.click();
+    });
+    zone.on('pointerout', () => {
+      held = false;
+      this.setScale(1);
+    });
+    zone.on('pointerup', () => {
+      if (!held) return;
+      held = false;
+      this.setScale(1);
+      opts.onClick!();
+    });
+    zone.on('pointerover', () => {
+      if (this.enabled) this.setScale(1.03);
+    });
+  }
+
+  setSelected(on: boolean): this {
+    this.selected = on;
+    this.normal.setVisible(!on);
+    this.picked.setVisible(on);
+    this.text.setColor(on ? '#ffd166' : '#ffffff');
+    return this;
+  }
+
+  setEnabled(on: boolean): this {
+    this.enabled = on;
+    return this.setAlpha(on ? 1 : 0.55);
+  }
+
+  /** Put the label at (x, y) in local space, keeping its origin. */
+  placeText(x: number, y: number, maxW: number, maxH: number): this {
+    this.text.setPosition(x, y);
+    fit(this.text.setScale(1), maxW, maxH);
+    return this;
+  }
+}
+
+/**
+ * The top of a themed screen: back button, the title plate (logo, icon, title) and the
+ * wallet with settings. Returns a setter for the title.
+ */
+export function screenChrome(scene: Phaser.Scene, opts: { title: string; icon: string; onBack: () => void }): (title: string) => void {
+  const box = (b: Box) => mockupBox(b, 1672);
+  const back = new PlateButton(scene, 'ui-ranked/btn-back', box([24, 18, 94, 84]), opts.onBack);
+  back.put(fitted(scene, 'ui-ranked/ico-back', back.w * 0.5, back.h * 0.5), 0.5, 0.5);
+  filled(scene, 'ui-lobby/header', box([143, 27, 675, 95]));
+  placed(scene, 'ui-lobby/logo', box([139, 17, 173, 92]));
+  const [dx, dy, , dh] = box([328, 50, 3, 40]);
+  scene.add.rectangle(dx, dy, 3, dh, 0x8991b6, 0.75).setOrigin(0);
+  placed(scene, opts.icon, box([352, 41, 81, 58]));
+  const [tx, ty, tw, th] = box([452, 35, 330, 68]);
+  const title = scene.add.text(tx, ty + th / 2, '', {
+    fontFamily: FONT, fontSize: '64px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 8,
+  }).setOrigin(0, 0.5);
+  walletBar(scene);
+  const set = (t: string) => {
+    title.setText(t);
+    fit(title.setScale(1), tw, th);
+  };
+  set(opts.title);
+  return set;
+}

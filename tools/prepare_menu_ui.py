@@ -134,15 +134,34 @@ def status_plate() -> Image.Image:
     return im
 
 
+def kit_panel() -> Image.Image:
+    """The lobby's navy steel panel with its horizontal middle band wiped (rows copied up from a
+    clean stretch below), so it can be nine-sliced to any size: corners and rivets stay put,
+    only the plain middle stretches."""
+    im = fit(Image.open(LOBBY / 'panels/main.png').convert('RGBA'), 1350)
+    top, src, n, fade = 205, 400, 160, 25
+    before = im.copy()
+    im.paste(im.crop((0, src, im.width, src + n)), (0, top))
+    # fade both ends of the patch into what was there, so the panel's top-to-bottom shading has no step
+    for i in range(fade):
+        for y, t in ((top + i, i / fade), (top + n - 1 - i, i / fade)):
+            row = Image.blend(before.crop((0, y, im.width, y + 1)), im.crop((0, y, im.width, y + 1)), t)
+            im.paste(row, (0, y))
+    return im
+
+
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    for sub in ('ranked', 'lobby'):
+    for sub in ('ranked', 'lobby', 'kit'):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
     save(fit(plus(), 70), 'plus')
     save(fit(status_plate(), 590), 'status')
+    # theme kit for screens without their own mockup: a nine-slice panel and a square slot
+    save(kit_panel(), 'kit/panel')
+    save(fit(Image.open(BUTTONS / 'settings/base.png').convert('RGBA'), 240), 'kit/slot')
     for src, name in ((ASSETS / 'backgrounds/arena.png', 'menu-bg'), (RANKED / 'backgrounds/ranked-arena.png', 'ranked/bg'),
                       (LOBBY / 'backgrounds/friends-arena.png', 'lobby/bg')):
         bg = Image.open(src).convert('RGB')

@@ -6,7 +6,7 @@ import { MAPS, MAP_IDS } from '../core/Maps';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
 import { OnlineFormat, Profile, RoomConfig, ServerMsg, TEAM_SIZE } from '../net/protocol';
-import { Box, PlateButton, STROKE, filled, fitted, mockupBox, placed, walletBar } from '../ui/plates';
+import { Box, PlateButton, STROKE, filled, fitted, mockupBox, placed, screenChrome } from '../ui/plates';
 import { Button, FONT, INK, TEAM_COLORS, fit, label } from '../ui/widgets';
 import { DIFF_LABEL, loadSetup } from './setup';
 
@@ -31,8 +31,7 @@ export default class LobbyScene extends Phaser.Scene {
   /** The line that says whether the server is reachable (wifi hint, or the room's subtitle). */
   private status: Phaser.GameObjects.Text | null = null;
   private statusIdle = '';
-  private title!: Phaser.GameObjects.Text;
-  private titleBox!: Box;
+  private setTitle: (title: string) => void = () => undefined;
   private hint!: Phaser.GameObjects.Text;
   private handler = (msg: ServerMsg) => this.onNet(msg);
   private statusHandler = () => this.render();
@@ -81,24 +80,7 @@ export default class LobbyScene extends Phaser.Scene {
 
   /** Back to the menu (leaving any room), the title plate, wallet and settings. */
   private chrome(): void {
-    const back = new PlateButton(this, 'ui-ranked/btn-back', box([24, 18, 94, 84]), () => this.toMenu());
-    back.put(fitted(this, 'ui-ranked/ico-back', back.w * 0.5, back.h * 0.5), 0.5, 0.5);
-    filled(this, L('header'), box([143, 27, 675, 95]));
-    placed(this, L('logo'), box([139, 17, 173, 92]));
-    const [dx, dy, , dh] = box([328, 50, 3, 40]);
-    this.add.rectangle(dx, dy, 3, dh, DIVIDER, 0.75).setOrigin(0);
-    placed(this, L('people'), box([352, 41, 81, 58]));
-    this.titleBox = box([452, 35, 330, 68]);
-    const [tx, ty, , th] = this.titleBox;
-    this.title = this.add.text(tx, ty + th / 2, '', {
-      fontFamily: FONT, fontSize: '64px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 8,
-    }).setOrigin(0, 0.5);
-    walletBar(this);
-  }
-
-  private setTitle(t: string): void {
-    this.title.setText(t);
-    fit(this.title.setScale(1), this.titleBox[2], this.titleBox[3]);
+    this.setTitle = screenChrome(this, { title: 'เล่นกับเพื่อน', icon: L('people'), onBack: () => this.toMenu() });
   }
 
   /** Connected: the view's own line. Not yet: say so, and after a few seconds say the server seems down. */
