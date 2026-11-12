@@ -3,7 +3,7 @@ import { lookTexture } from '../art/chibi';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
 import { ServerMsg } from '../net/protocol';
-import { Box, PlateButton, STROKE, fitted, mockupBox, placed, walletBar } from '../ui/plates';
+import { Box, PlateButton, STROKE, filled, fitted, mockupBox, placed, walletBar } from '../ui/plates';
 import { Button, FONT, fit } from '../ui/widgets';
 import { loadSetup } from './setup';
 
@@ -11,10 +11,6 @@ import { loadSetup } from './setup';
 const box = (b: Box): Box => mockupBox(b, 1671);
 const R = (name: string) => `ui-ranked/${name}`;
 
-/** An image stretched to fill a box exactly (the mockup's "fill" pieces: plates, strips, glows). */
-function filled(scene: Phaser.Scene, key: string, [x, y, w, h]: Box): Phaser.GameObjects.Image {
-  return scene.add.image(x + w / 2, y + h / 2, key).setDisplaySize(w, h);
-}
 
 /** Centre and widest extent of the big button's text, as fractions of the button face. */
 const MATCH_TEXT = { x: 0.64, w: 0.5 };

@@ -35,6 +35,11 @@ export function placed(scene: Phaser.Scene, key: string, [x, y, w, h]: Box): Pha
   return img.setScale(Math.min(w / img.width, h / img.height));
 }
 
+/** An image stretched to fill a box exactly (a mockup's "fill" pieces: plates, strips, glows). */
+export function filled(scene: Phaser.Scene, key: string, [x, y, w, h]: Box): Phaser.GameObjects.Image {
+  return scene.add.image(x + w / 2, y + h / 2, key).setDisplaySize(w, h);
+}
+
 /**
  * A painted plate that is a button: the image scaled so its painted face (`face`, fractions
  * of the image) fills the box, a hit zone the size of that face, a lift on hover and a sink

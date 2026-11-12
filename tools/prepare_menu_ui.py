@@ -13,6 +13,7 @@ ASSETS = SRC / 'black-boom-assets' / 'public' / 'black-boom'
 BUTTONS = SRC / 'black-boom-button-parts' / 'public' / 'black-boom-button-parts'
 CURRENCY = SRC / 'black-boom-currency-parts' / 'public' / 'black-boom-currency-parts'
 RANKED = SRC / 'black-boom-ranked-parts' / 'public' / 'black-boom-ranked'
+LOBBY = SRC / 'black-boom-lobby-parts' / 'public' / 'black-boom-lobby'
 OUT = PROJECT / 'public' / 'art' / 'ui'
 
 # output file -> (source, width in px on the 1920 canvas, roughly what MenuScene shows it at)
@@ -64,6 +65,30 @@ FILES = {
     'ranked/ico-menu': (RANKED / 'buttons/menu/icon.png', 70),
     'ranked/btn-back': (RANKED / 'buttons/back/base.png', 110),
     'ranked/ico-back': (RANKED / 'buttons/back/icon.png', 60),
+    # friends lobby (layout: new_ui/black-boom-lobby-parts/layout.json, a 1672x941 mockup)
+    'lobby/panel': (LOBBY / 'panels/main.png', 1350),
+    'lobby/header': (LOBBY / 'header/base.png', 790),
+    'lobby/logo': (LOBBY / 'header/logo.png', 210),
+    'lobby/people': (LOBBY / 'icons/people.png', 100),
+    'lobby/person': (LOBBY / 'icons/person.png', 64),
+    'lobby/wifi': (LOBBY / 'icons/wifi.png', 56),
+    'lobby/avatar-ring': (LOBBY / 'effects/avatar-ring.png', 230),
+    'lobby/emphasis': (LOBBY / 'effects/emphasis.png', 100),
+    'lobby/or': (LOBBY / 'panels/or-base.png', 110),
+    'lobby/hero': (LOBBY / 'characters/hero-left.png', 380),
+    'lobby/scout': (LOBBY / 'characters/scout-right.png', 360),
+    'lobby/crate-left': (LOBBY / 'decorations/crate-left.png', 390),
+    'lobby/crate-right': (LOBBY / 'decorations/crate-right.png', 410),
+    'lobby/btn-create': (LOBBY / 'buttons/create/base.png', 590),
+    'lobby/ico-create': (LOBBY / 'buttons/create/icon.png', 170),
+    'lobby/btn-join': (LOBBY / 'buttons/join/base.png', 550),
+    'lobby/ico-join': (LOBBY / 'buttons/join/icon.png', 200),
+    'lobby/btn-wardrobe': (LOBBY / 'buttons/wardrobe/base.png', 250),
+    'lobby/ico-wardrobe': (LOBBY / 'buttons/wardrobe/icon.png', 70),
+    'lobby/btn-edit': (LOBBY / 'buttons/edit/base.png', 80),
+    'lobby/ico-edit': (LOBBY / 'buttons/edit/icon.png', 60),
+    'lobby/input-name': (LOBBY / 'inputs/name/base.png', 650),
+    'lobby/input-code': (LOBBY / 'inputs/code/base.png', 670),
 }
 
 
@@ -112,12 +137,14 @@ def status_plate() -> Image.Image:
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    (OUT / 'ranked').mkdir(parents=True, exist_ok=True)
+    for sub in ('ranked', 'lobby'):
+        (OUT / sub).mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
     save(fit(plus(), 70), 'plus')
     save(fit(status_plate(), 590), 'status')
-    for src, name in ((ASSETS / 'backgrounds/arena.png', 'menu-bg'), (RANKED / 'backgrounds/ranked-arena.png', 'ranked/bg')):
+    for src, name in ((ASSETS / 'backgrounds/arena.png', 'menu-bg'), (RANKED / 'backgrounds/ranked-arena.png', 'ranked/bg'),
+                      (LOBBY / 'backgrounds/friends-arena.png', 'lobby/bg')):
         bg = Image.open(src).convert('RGB')
         path = OUT / f'{name}.jpg'
         bg.save(path, 'JPEG', quality=86, optimize=True, progressive=True)

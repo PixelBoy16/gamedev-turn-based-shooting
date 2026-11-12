@@ -364,7 +364,16 @@ export function loadArt(scene: Phaser.Scene): void {
   for (const f of MENU_UI) scene.load.image(`ui-${f}`, `art/ui/${f}.webp`);
   scene.load.image('ui-ranked/bg', 'art/ui/ranked/bg.jpg');
   for (const f of RANKED_UI) scene.load.image(`ui-ranked/${f}`, `art/ui/ranked/${f}.webp`);
+  scene.load.image('ui-lobby/bg', 'art/ui/lobby/bg.jpg');
+  for (const f of LOBBY_UI) scene.load.image(`ui-lobby/${f}`, `art/ui/lobby/${f}.webp`);
 }
+
+/** Pieces of the friends lobby in public/art/ui/lobby/, loaded as `ui-lobby/<name>`. */
+export const LOBBY_UI = [
+  'panel', 'header', 'logo', 'people', 'person', 'wifi', 'avatar-ring', 'emphasis', 'or',
+  'hero', 'scout', 'crate-left', 'crate-right', 'btn-create', 'ico-create', 'btn-join', 'ico-join',
+  'btn-wardrobe', 'ico-wardrobe', 'btn-edit', 'ico-edit', 'input-name', 'input-code',
+] as const;
 
 /** Pieces of the ranked screen in public/art/ui/ranked/, loaded as `ui-ranked/<name>`. */
 export const RANKED_UI = [

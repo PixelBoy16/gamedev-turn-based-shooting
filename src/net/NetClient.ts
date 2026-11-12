@@ -80,6 +80,26 @@ class NetClient extends Phaser.Events.EventEmitter {
   private authToken: string | null = null;
   private authOwned = -1;
 
+  /**
+   * Sign in to the room server again (after the account changed over HTTP, e.g. a new display
+   * name) and wait until it has answered, so the next message is handled under the new account.
+   */
+  reauth(): Promise<void> {
+    if (!this.connected || !account.token) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.off('account', done);
+        this.off('error', done);
+        resolve();
+      };
+      const timer = setTimeout(done, 3000);
+      this.once('account', done);
+      this.once('error', done);
+      this.auth();
+    });
+  }
+
   private auth(): void {
     this.authToken = account.token;
     this.authOwned = account.view?.owned.length ?? 0;
