@@ -359,13 +359,18 @@ export function loadArt(scene: Phaser.Scene): void {
   for (const m of ['hills', 'islands', 'mine']) scene.load.image(`art-bg-${m}`, `${base}bg-${m}.jpg`);
   scene.load.image('art-dirt', `${base}dirt.png`);
   scene.load.image('art-grass', `${base}grass.png`);
-  // first screen (optional; drawn fallbacks in MenuScene)
-  scene.load.image('art-menu-bg', `${base}menu-bg.jpg`);
-  scene.load.image('art-logo', `${base}logo.png`);
-  for (const i of MENU_ICONS) scene.load.image(`art-menu-${i}`, `${base}menu-${i}.png`);
+  // first screen, cut from the designer's mockup by tools/prepare_menu_ui.py
+  scene.load.image('art-menu-bg', 'art/ui/menu-bg.jpg');
+  for (const f of MENU_UI) scene.load.image(`ui-${f}`, `art/ui/${f}.webp`);
 }
 
-export const MENU_ICONS = ['bot', 'friends', 'ranked', 'shop', 'pass', 'coin', 'gem'] as const;
+/** Pieces of the first screen in public/art/ui/, loaded as `ui-<name>`. */
+export const MENU_UI = [
+  'logo', 'slogan', 'char-scout', 'char-hero', 'char-bear', 'trail', 'status', 'arrow', 'plus',
+  'btn-bot', 'btn-friends', 'btn-ranked', 'btn-shop', 'btn-pass', 'btn-settings',
+  'ico-bot', 'ico-friends', 'ico-ranked', 'ico-shop', 'ico-pass', 'ico-settings', 'ico-coin', 'ico-gem',
+  'cur-coins', 'cur-gems',
+] as const;
 
 export const hasArt = (scene: Phaser.Scene, key: string) => scene.textures.exists(key);
 

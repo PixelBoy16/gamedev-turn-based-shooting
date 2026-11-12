@@ -1,22 +1,28 @@
 import Phaser from 'phaser';
-import { ART_SCALE, lookRes, lookTexture } from '../art/chibi';
-import { sfx } from '../audio/sfx';
-import { DEFAULT_LOADOUT, Loadout } from '../core/gear';
+import { isMuted, setMuted, sfx } from '../audio/sfx';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
-import { THEME, drawPlate, drawRibbon } from '../ui/theme';
-import { FONT, label } from '../ui/widgets';
+import { THEME, drawPlate } from '../ui/theme';
+import { Button, FONT, fit } from '../ui/widgets';
 import { menuBackdrop } from './backdrop';
 
-const GROUND = 1010; // where the showcase chibis stand
-const HERO_X = 600; // centre of the logo and the chibis
+/** Where each piece sits in the designer's 1672x941 mockup (new_ui/…/manifest.json), as [x, y, w, h]. */
+type Box = [number, number, number, number];
+const MOCKUP_W = 1672;
+const K = 1920 / MOCKUP_W;
+const box = (b: Box): Box => b.map((v) => Math.round(v * K)) as Box;
+
+const STROKE = '#091024';
 
 /**
- * The first screen: logo and three dressed-up chibis on the left (one of them lobs a
- * shell now and then), the three ways to play on the right, the account and wallet on
- * top. Painted art (logo, icons) replaces the drawn stand-ins when the files exist.
+ * The first screen, built to the painted mockup: logo, slogan and three painted heroes on
+ * the left, the three ways to play plus shop and pass on the right, the player card, wallet
+ * and settings along the top. Every piece is its own image (public/art/ui/, made by
+ * tools/prepare_menu_ui.py) with live text drawn over it, so names and numbers stay real.
  */
 export default class MenuScene extends Phaser.Scene {
+  private settings?: () => void;
+
   constructor() {
     super('menu');
   }
@@ -27,235 +33,137 @@ export default class MenuScene extends Phaser.Scene {
       this.scene.start('lobby');
       return;
     }
+    this.settings = undefined;
     menuBackdrop(this);
-    this.atmosphere();
-    // a soft shade behind the right column so the cards read on any background
-    const shade = this.add.graphics();
-    shade.fillGradientStyle(0x07080c, 0x07080c, 0x07080c, 0x07080c, 0, 0.5, 0, 0.5);
-    shade.fillRect(1060, 0, 860, 1080);
-
+    this.heroes();
     this.logo();
-    const shooter = this.chibis();
     this.modes();
     this.topBar();
-    this.lobLoop(shooter);
   }
 
-  /**
-   * Mood over the backdrop: a dark ground band for the chibis to stand on, a fire glow at
-   * their feet, darkened corners, and embers drifting up off the battlefield.
-   */
-  private atmosphere(): void {
-    const ground = this.add.graphics();
-    ground.fillGradientStyle(0x07080c, 0x07080c, 0x07080c, 0x07080c, 0, 0, 0.75, 0.75);
-    ground.fillRect(0, 820, 1920, 260);
-    const spot = this.add.graphics({ x: HERO_X, y: GROUND + 4 });
-    spot.fillStyle(THEME.fire, 0.16);
-    spot.fillEllipse(0, 0, 900, 110);
-    spot.fillStyle(0xffb347, 0.14);
-    spot.fillEllipse(0, 0, 560, 60);
-
-    if (!this.textures.exists('menu-vignette')) {
-      const tex = this.textures.createCanvas('menu-vignette', 480, 270)!;
-      const g = tex.context.createRadialGradient(240, 135, 70, 240, 135, 280);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, 'rgba(0,0,0,0.6)');
-      tex.context.fillStyle = g;
-      tex.context.fillRect(0, 0, 480, 270);
-      tex.refresh();
-    }
-    this.add.image(960, 540, 'menu-vignette').setDisplaySize(1920, 1080);
-
-    if (!this.textures.exists('ember')) {
-      const tex = this.textures.createCanvas('ember', 32, 32)!;
-      const g = tex.context.createRadialGradient(16, 16, 0, 16, 16, 16);
-      g.addColorStop(0, 'rgba(255,230,160,1)');
-      g.addColorStop(0.35, 'rgba(255,140,40,0.8)');
-      g.addColorStop(1, 'rgba(255,90,20,0)');
-      tex.context.fillStyle = g;
-      tex.context.fillRect(0, 0, 32, 32);
-      tex.refresh();
-    }
-    this.add.particles(0, 0, 'ember', {
-      x: { min: 0, max: 1920 }, y: { min: 1000, max: 1100 },
-      lifespan: { min: 4000, max: 7000 },
-      speedY: { min: -150, max: -60 }, speedX: { min: -30, max: 30 },
-      scale: { start: 0.55, end: 0 }, alpha: { start: 0.9, end: 0 },
-      frequency: 140, blendMode: Phaser.BlendModes.ADD,
-      advance: 5000, // already drifting when the menu opens
-    });
+  /** An image fitted inside a mockup box (keeping its shape), centred on it. */
+  private placed(key: string, b: Box): Phaser.GameObjects.Image {
+    const [x, y, w, h] = box(b);
+    const img = this.add.image(x + w / 2, y + h / 2, key);
+    return img.setScale(Math.min(w / img.width, h / img.height));
   }
 
-  private has(key: string): boolean {
-    return this.textures.exists(key);
-  }
-
-  /** The painted logo, or the name in chunky gradient letters. Pops in, then floats. */
+  /** Logo pops in and floats; the slogan plate fades in under it; a shell arcs off to the right. */
   private logo(): void {
-    let logo: Phaser.GameObjects.Image | Phaser.GameObjects.Text;
-    if (this.has('art-logo')) {
-      logo = this.add.image(HERO_X, 230, 'art-logo');
-      logo.setScale(Math.min(960 / logo.width, 380 / logo.height));
-    } else {
-      // black letters with a hot orange rim and a burst of light behind them
-      // one smooth radial gradient: stacked shapes showed their edges as rings on some screens
-      if (!this.textures.exists('logo-glow')) {
-        const tex = this.textures.createCanvas('logo-glow', 256, 256)!;
-        const g = tex.context.createRadialGradient(128, 128, 0, 128, 128, 128);
-        g.addColorStop(0, 'rgba(255,154,48,0.42)');
-        g.addColorStop(0.5, 'rgba(255,122,26,0.16)');
-        g.addColorStop(1, 'rgba(255,122,26,0)');
-        tex.context.fillStyle = g;
-        tex.context.fillRect(0, 0, 256, 256);
-        tex.refresh();
-      }
-      const glow = this.add.image(HERO_X, 220, 'logo-glow').setDisplaySize(760, 320).setBlendMode(Phaser.BlendModes.ADD);
-      this.tweens.add({ targets: glow, scaleX: glow.scaleX * 1.1, scaleY: glow.scaleY * 1.1, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      const t = this.add.text(HERO_X, 220, 'BLACK BOOM', {
-        fontFamily: FONT, fontSize: '150px', fontStyle: '900', color: '#1b1d26', stroke: '#ffb020', strokeThickness: 18,
-        padding: { x: 20, y: 20 },
-      }).setOrigin(0.5);
-      const grad = t.context.createLinearGradient(0, 40, 0, t.height - 40);
-      grad.addColorStop(0, '#5a6078');
-      grad.addColorStop(0.55, '#1b1d26');
-      grad.addColorStop(1, '#000000');
-      t.setFill(grad);
-      t.setShadow(0, 12, '#7a1d00', 0, true, false);
-      logo = t;
-    }
+    const logo = this.placed('ui-logo', [185, 118, 590, 239]);
     const s = logo.scale;
     logo.setScale(0);
     this.tweens.add({ targets: logo, scale: s, duration: 600, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: logo, y: logo.y + 12, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 600 });
-    const tagY = this.has('art-logo') ? 430 : 350;
-    const band = this.add.graphics({ x: HERO_X, y: tagY });
-    drawRibbon(band, 640, 62, THEME.steelDark, THEME.fire);
-    const tag = label(this, HERO_X, tagY - 2, 'ยิงหนึ่งนัด เปลี่ยนแผนที่ทั้งแผ่น', 36).setOrigin(0.5);
-    for (const o of [band, tag]) {
-      o.setAlpha(0);
-      this.tweens.add({ targets: o, alpha: 1, duration: 500, delay: 400 });
-    }
+    this.tweens.add({ targets: logo, y: logo.y + 10, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 600 });
+
+    const slogan = this.placed('ui-slogan', [207, 355, 556, 76]).setAlpha(0);
+    this.tweens.add({ targets: slogan, alpha: 1, duration: 500, delay: 400 });
+
+    const trail = this.placed('ui-trail', [728, 206, 235, 90]).setAlpha(0);
+    this.tweens.add({ targets: trail, alpha: 1, duration: 400, delay: 900 });
+    this.tweens.add({ targets: trail, x: trail.x + 8, y: trail.y + 6, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 1300 });
   }
 
-  /** The same chibi, dressed three ways; they drop in and breathe. Returns the one with the cannon. */
-  private chibis(): Phaser.GameObjects.Image {
-    const dress = (look: Partial<Loadout['look']>, weapon: Loadout['weapon']): Loadout =>
-      ({ ...DEFAULT_LOADOUT, weapon, look: { ...DEFAULT_LOADOUT.look, ...look } });
-    const looks: Loadout[] = [
-      dress({ hair: 'ponytail', glasses: 'goggles', cloth: 'vest', eyes: 'squint', face: 'warpaint' }, 'splitter'),
-      dress({ hat: 'aviator', hair: 'spiky', back: 'cape', face: 'scar' }, 'cannon'),
-      dress({ set: 'bearskull', eyes: 'glow', back: 'ammo' }, 'hammer'),
+  /** The three painted heroes on the rock: they drop in, then breathe. */
+  private heroes(): void {
+    const heroes: [string, Box][] = [
+      ['ui-char-scout', [134, 492, 242, 325]],
+      ['ui-char-bear', [593, 511, 236, 305]],
+      ['ui-char-hero', [293, 432, 310, 392]], // in front
     ];
-    const imgs = looks.map((l, i) => {
-      const x = HERO_X + (i - 1) * 280;
-      const shadow = this.add.ellipse(x, GROUND, 170, 34, 0x1b2030, 0.25);
-      const img = this.add.image(x, GROUND, lookTexture(this, l)).setOrigin(0.5, 1).setScale(ART_SCALE * (i === 1 ? 3.9 : 3.4) * lookRes());
-      if (i === 0) img.setFlipX(true);
+    heroes.forEach(([key, b], i) => {
+      const [x, y, w, h] = box(b);
+      const img = this.add.image(x + w / 2, y + h, key).setOrigin(0.5, 1);
+      img.setScale(Math.min(w / img.width, h / img.height));
+      const ground = img.y;
       const sy = img.scaleY;
-      img.y = GROUND - 700;
-      shadow.setScale(0.3);
-      this.tweens.add({ targets: img, y: GROUND, duration: 500, delay: 250 + i * 140, ease: 'Bounce.easeOut' });
-      this.tweens.add({ targets: shadow, scale: 1, duration: 500, delay: 250 + i * 140 });
-      this.tweens.add({ targets: img, scaleY: sy * 1.04, duration: 700 + i * 90, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 900 });
-      return img;
+      img.y = ground - 700;
+      this.tweens.add({ targets: img, y: ground, duration: 500, delay: 250 + i * 140, ease: 'Bounce.easeOut' });
+      this.tweens.add({ targets: img, scaleY: sy * 1.03, duration: 760 + i * 90, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 900 });
     });
-    return imgs[1];
   }
 
-  /** The three ways to play, as big cards with an icon, a name and one line about it. */
+  /** The three ways to play as big painted plates, then shop and pass under them. */
   private modes(): void {
-    const cards: [string, string, string, number, () => void][] = [
-      ['bot', 'เล่นกับบอท', 'ฝึกมือ เล่นได้แม้ไม่มีเน็ต', THEME.steel, () => {
+    const wide: [string, string, string, Box, () => void][] = [
+      ['bot', 'เล่นกับบอท', 'ฝึกมือ เล่นได้แม้ไม่มีเน็ต', [982, 178, 640, 165], () => {
         this.registry.set('setupMode', null);
         this.scene.start('setup');
       }],
-      ['friends', 'เล่นกับเพื่อน', 'สร้างห้อง แล้วส่งรหัส 6 หลักให้เพื่อน', THEME.blue, () => this.scene.start('lobby')],
-      ['ranked', 'แข่งจัดอันดับ', 'จับคู่กับผู้เล่นฝีมือใกล้กัน', THEME.red, () => this.scene.start('ranked')],
+      ['friends', 'เล่นกับเพื่อน', 'สร้างห้อง แล้วส่งรหัส 6 หลักให้เพื่อน', [963, 328, 690, 211], () => this.scene.start('lobby')],
+      ['ranked', 'แข่งขันอันดับ', 'จับคู่กับผู้เล่นฝีมือใกล้กัน', [965, 543, 666, 175], () => this.scene.start('ranked')],
     ];
-    cards.forEach(([icon, title, sub, fill, go], i) => {
-      const c = new MenuCard(this, 1490, 400 + i * 190, 700, 160, fill, go);
-      const badge = this.add.graphics({ x: -350 + 90, y: 0 });
-      badge.fillStyle(THEME.ink, 0.55);
-      badge.fillCircle(0, 0, 58);
-      badge.lineStyle(4, 0xffffff, 0.18);
-      badge.strokeCircle(0, 0, 58);
-      c.add(badge);
-      c.add(this.icon(-350 + 90, 0, icon, ['🤖', '👥', '🏆'][i], 112));
-      c.add(this.add.text(-350 + 170, -24, title, { fontFamily: FONT, fontSize: '52px', fontStyle: 'bold', color: '#ffffff', stroke: '#1b2030', strokeThickness: 8 }).setOrigin(0, 0.5));
-      c.add(this.add.text(-350 + 172, 36, sub, { fontFamily: FONT, fontSize: '24px', color: '#ffffff' }).setOrigin(0, 0.5).setAlpha(0.92));
-      const chevron = this.add.text(316, 0, '›', { fontFamily: FONT, fontSize: '72px', color: '#ffffff', stroke: '#1b2030', strokeThickness: 8 }).setOrigin(0.5);
-      c.add(chevron);
-      this.tweens.add({ targets: chevron, x: 326, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: i * 200 });
-      c.x += 700;
+    wide.forEach(([id, title, sub, b, go], i) => {
+      const c = new PlateButton(this, `ui-btn-${id}`, box(b), go);
+      // the friends plate carries a glow rim, so its face sits a little lower and narrower
+      const glow = id === 'friends';
+      const fy = glow ? 0.04 : 0;
+      c.put(this.fitted('ui-ico-' + id, c.w * (glow ? 0.17 : 0.2), c.h * (glow ? 0.5 : 0.66)), glow ? 0.17 : 0.165, 0.5 + fy);
+      const t = this.add.text(0, 0, title, {
+        fontFamily: FONT, fontSize: `${Math.round(c.w * 0.082)}px`, fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 10,
+      }).setOrigin(0, 0.5);
+      c.put(fit(t, c.w * 0.58, c.h * 0.52), 0.3, 0.37 + fy);
+      const s = this.add.text(0, 0, sub, { fontFamily: FONT, fontSize: `${Math.round(c.w * 0.04)}px`, color: '#e6f7ff' }).setOrigin(0, 0.5);
+      c.put(fit(s, c.w * 0.6, c.h * 0.3), 0.302, 0.7 + fy * 0.5);
+      const arrow = this.fitted('ui-arrow', c.w * 0.05, c.h * (glow ? 0.28 : 0.34));
+      c.put(arrow, glow ? 0.905 : 0.925, 0.5 + fy * 0.5);
+      this.tweens.add({ targets: arrow, x: arrow.x + 8, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: i * 200 });
+      const home = c.x;
+      c.x += 800;
       this.tweens.add({
-        targets: c, x: 1490, duration: 450, delay: 150 + i * 110, ease: 'Cubic.easeOut',
-        onComplete: () => this.shine(1490, 400 + i * 190, 700, 160, 1400 + i * 260),
+        targets: c, x: home, duration: 450, delay: 150 + i * 110, ease: 'Cubic.easeOut',
+        onComplete: () => c.glint(1400 + i * 260),
       });
     });
 
-    // shop and pass under the cards
-    const small: [string, string, string, number, () => void][] = [
-      ['shop', 'ร้านค้า', '🛍️', 0xa86a12, () => this.scene.start('shop')],
-      ['pass', 'Battle Pass', '🎟️', THEME.purple, () => this.scene.start('pass')],
+    const small: [string, string, Box, () => void][] = [
+      ['shop', 'ร้านค้า', [953, 732, 314, 135], () => this.scene.start('shop')],
+      ['pass', 'Battle Pass', [1274, 733, 361, 134], () => this.scene.start('pass')],
     ];
-    small.forEach(([icon, name, emoji, fill, go], i) => {
-      const c = new MenuCard(this, 1315 + i * 350, 960, 330, 110, fill, go);
-      c.add(this.icon(-165 + 62, 0, icon, emoji, 82));
-      c.add(this.add.text(-165 + 116, 0, name, { fontFamily: FONT, fontSize: '36px', fontStyle: 'bold', color: '#ffffff', stroke: '#1b2030', strokeThickness: 6 }).setOrigin(0, 0.5));
+    small.forEach(([id, name, b, go], i) => {
+      const c = new PlateButton(this, `ui-btn-${id}`, box(b), go);
+      c.put(this.fitted('ui-ico-' + id, c.w * 0.27, c.h * 0.7), 0.245, 0.5);
+      const t = this.add.text(0, 0, name, {
+        fontFamily: FONT, fontSize: `${Math.round(c.w * (id === 'pass' ? 0.1 : 0.13))}px`, fontStyle: 'bold',
+        color: '#ffffff', stroke: STROKE, strokeThickness: 8,
+      }).setOrigin(0, 0.5);
+      c.put(fit(t, c.w * 0.53, c.h * 0.6), 0.42, 0.48);
       c.setAlpha(0);
       this.tweens.add({ targets: c, alpha: 1, duration: 400, delay: 550 + i * 80 });
     });
   }
 
-  /**
-   * A bright diagonal band that sweeps across a card every few seconds. Redrawn each frame
-   * with its corners clamped inside the card, so it never spills past the edge. Started once
-   * the card has slid into place.
-   */
-  private shine(x: number, y: number, w: number, h: number, delay: number): void {
-    const band = this.add.graphics({ x, y }).setBlendMode(Phaser.BlendModes.ADD);
-    const edge = w / 2 - 18; // inside the plate's cut corners
-    const clamp = (v: number) => Phaser.Math.Clamp(v, -edge, edge);
-    this.tweens.addCounter({
-      from: -edge - 80, to: edge + 80, duration: 700, delay, repeatDelay: 4200, repeat: -1, ease: 'Sine.easeInOut',
-      onUpdate: (tw) => {
-        const c = tw.getValue() ?? 0;
-        band.clear();
-        band.fillStyle(0xffffff, 0.16);
-        band.fillPoints([
-          { x: clamp(c + 10), y: -h / 2 }, { x: clamp(c + 80), y: -h / 2 },
-          { x: clamp(c - 10), y: h / 2 }, { x: clamp(c - 80), y: h / 2 },
-        ] as unknown as Phaser.Math.Vector2[], true);
-      },
-      onRepeat: () => band.clear(),
-    });
+  /** An image scaled to fit w×h. */
+  private fitted(key: string, w: number, h: number): Phaser.GameObjects.Image {
+    const img = this.add.image(0, 0, key);
+    return img.setScale(Math.min(w / img.width, h / img.height));
   }
 
-  /** Painted icon `art-menu-<name>` fitted to `size`, or the emoji stand-in. */
-  private icon(x: number, y: number, name: string, emoji: string, size: number): Phaser.GameObjects.GameObject {
-    const key = `art-menu-${name}`;
-    if (this.has(key)) {
-      const img = this.add.image(x, y, key);
-      return img.setScale(size / Math.max(img.width, img.height));
-    }
-    return this.add.text(x, y, emoji, { fontFamily: FONT, fontSize: `${Math.round(size * 0.62)}px` }).setOrigin(0.5);
-  }
-
-  /** Who you are (tap to manage the account) on the left; coins and gems on the right. */
+  /** Player card (tap to manage the account), coins, gems and the settings gear. */
   private topBar(): void {
-    const card = new MenuCard(this, 40 + 240, 76, 480, 100, THEME.steelDark, () => this.scene.start('account'));
-    const name = this.add.text(-210, -18, '', { fontFamily: FONT, fontSize: '32px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0, 0.5);
-    const sub = this.add.text(-210, 24, '', { fontFamily: FONT, fontSize: '22px', color: '#cfd8ff' }).setOrigin(0, 0.5);
-    card.add([name, sub]);
+    const card = new PlateButton(this, 'ui-status', box([29, 5, 490, 120]), () => this.scene.start('account'));
+    const dot = this.add.circle(0, 0, card.h * 0.075, 0xff4040).setStrokeStyle(4, 0xffffff);
+    card.put(dot, 0.32, 0.38);
+    const name = this.add.text(0, 0, '', { fontFamily: FONT, fontSize: '32px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 6 }).setOrigin(0, 0.5);
+    card.put(name, 0.36, 0.38);
+    const sub = this.add.text(0, 0, '', { fontFamily: FONT, fontSize: '21px', color: '#e6f0ff' }).setOrigin(0, 0.5);
+    card.put(sub, 0.29, 0.62);
 
-    const coins = this.pill(1530, 'coin', '🪙');
-    const gems = this.pill(1790, 'gem', '💎');
+    const coins = this.counter('coins', box([1068, 24, 242, 65]));
+    const gems = this.counter('gems', box([1323, 25, 235, 65]));
+
+    const gear = new PlateButton(this, 'ui-btn-settings', box([1572, 19, 84, 77]), () => this.toggleSettings(gear));
+    gear.put(this.fitted('ui-ico-settings', gear.w * 0.6, gear.h * 0.6), 0.5, 0.5);
+
     const show = () => {
       const a = account.view;
+      dot.setFillStyle(a ? 0x3ddc6a : 0xff4040);
       name.setText(a ? a.displayName : 'ออฟไลน์');
+      fit(name, card.w * 0.56, card.h * 0.34);
       sub.setText(!a ? 'ต่อเซิร์ฟเวอร์ไม่ได้ เล่นกับบอทได้' : a.username ? `🏆 ${a.rating}  ·  เล่น ${a.played} เกม` : `🏆 ${a.rating}  ·  บัญชีชั่วคราว แตะเพื่อตั้งชื่อ`);
-      coins.setText(a ? a.coins.toLocaleString() : '–');
-      gems.setText(a ? a.gems.toLocaleString() : '–');
+      fit(sub.setScale(1), card.w * 0.62, card.h * 0.26);
+      coins(a ? a.coins : null);
+      gems(a ? a.gems : null);
     };
     show();
     const stop = account.onChange(show);
@@ -263,79 +171,72 @@ export default class MenuScene extends Phaser.Scene {
     void account.ensure();
   }
 
-  /** A rounded counter with an icon; returns its number text. */
-  private pill(x: number, icon: string, emoji: string): Phaser.GameObjects.Text {
-    const g = this.add.graphics({ x, y: 82 });
-    drawPlate(g, 220, 60, THEME.steelDark, { cut: 12 });
-    this.icon(x - 76, 82, icon, emoji, 70);
-    return this.add.text(x + 86, 82, '', { fontFamily: FONT, fontSize: '32px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(1, 0.5);
-  }
-
-  /** Every few seconds the middle chibi lobs a shell across the field; it lands in a puff of dirt. */
-  private lobLoop(shooter: Phaser.GameObjects.Image): void {
-    const fire = () => {
-      const from = { x: shooter.x + 90, y: GROUND - shooter.displayHeight * 0.45 };
-      const to = { x: Phaser.Math.Between(980, 1080), y: GROUND - 4 };
-      const shell = this.add.circle(from.x, from.y, 13, 0x2b3350).setStrokeStyle(4, 0x1b2030);
-      const trail = this.add.graphics();
-      const pts: Phaser.Math.Vector2[] = [];
-      const peak = Math.min(from.y, to.y) - Phaser.Math.Between(380, 480);
-      this.tweens.addCounter({
-        from: 0, to: 1, duration: 1100, ease: 'Linear',
-        onUpdate: (tw) => {
-          const t = tw.getValue() ?? 0;
-          // quadratic arc through the peak
-          const x = Phaser.Math.Linear(from.x, to.x, t);
-          const y = (1 - t) * (1 - t) * from.y + 2 * (1 - t) * t * (2 * peak - (from.y + to.y) / 2) + t * t * to.y;
-          shell.setPosition(x, y);
-          pts.push(new Phaser.Math.Vector2(x, y));
-          if (pts.length > 14) pts.shift();
-          trail.clear();
-          pts.forEach((p, i) => {
-            trail.fillStyle(0xffffff, (i / pts.length) * 0.6);
-            trail.fillCircle(p.x, p.y, 4 + i * 0.6);
-          });
-        },
-        onComplete: () => {
-          shell.destroy();
-          trail.destroy();
-          this.boom(to.x, to.y);
-        },
-      });
-      this.tweens.add({ targets: shooter, angle: -6, duration: 90, yoyo: true });
+  /** A painted wallet bar with its icon and a + that opens the shop; returns the setter for its number. */
+  private counter(kind: 'coins' | 'gems', b: Box): (n: number | null) => void {
+    const [x, y, w, h] = b;
+    const bar = this.add.image(x + w / 2, y + h / 2, `ui-cur-${kind}`);
+    bar.setScale(Math.min(w / bar.width, h / bar.height));
+    const bw = bar.displayWidth;
+    const bh = bar.displayHeight;
+    const at = (fx: number) => bar.x - bw / 2 + fx * bw;
+    const icon = this.add.image(at(kind === 'coins' ? 0.155 : 0.16), bar.y, `ui-ico-${kind === 'coins' ? 'coin' : 'gem'}`);
+    icon.setScale(Math.min((bw * 0.23) / icon.width, (bh * 0.85) / icon.height));
+    const value = this.add.text(at(0.52), bar.y, '', { fontFamily: FONT, fontSize: '34px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 4 }).setOrigin(0.5);
+    const plus = new PlateButton(this, 'ui-plus', [at(0.78), bar.y - bh * 0.35, bw * 0.17, bh * 0.7], () => this.scene.start('shop'));
+    plus.setDepth(1);
+    return (n) => {
+      value.setText(n === null ? '–' : n.toLocaleString('en-US'));
+      fit(value.setScale(1), bw * 0.46, bh * 0.8);
     };
-    this.time.addEvent({ delay: 4200, startAt: 2600, loop: true, callback: fire });
   }
 
-  private boom(x: number, y: number): void {
-    const flash = this.add.circle(x, y - 20, 30, 0xfff3b0, 0.95);
-    this.tweens.add({ targets: flash, scale: 3, alpha: 0, duration: 260, ease: 'Cubic.easeOut', onComplete: () => flash.destroy() });
-    const ring = this.add.circle(x, y - 20, 40).setStrokeStyle(8, 0xffc93c);
-    this.tweens.add({ targets: ring, scale: 2.6, alpha: 0, duration: 380, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
-    for (let i = 0; i < 14; i++) {
-      const a = Phaser.Math.FloatBetween(Math.PI * 1.05, Math.PI * 1.95);
-      const d = Phaser.Math.Between(60, 170);
-      const bit = this.add.circle(x, y - 10, Phaser.Math.Between(6, 13), i % 3 ? 0x9c6b43 : 0x6fbf4b);
-      this.tweens.add({
-        targets: bit, x: x + Math.cos(a) * d, y: y - 10 + Math.sin(a) * d, alpha: 0, scale: 0.4,
-        duration: Phaser.Math.Between(420, 650), ease: 'Quad.easeOut', onComplete: () => bit.destroy(),
-      });
+  /** A small panel under the gear: sound on/off and the account screen. Tap the gear or outside to close. */
+  private toggleSettings(gear: PlateButton): void {
+    if (this.settings) {
+      this.settings();
+      return;
     }
-    this.cameras.main.shake(140, 0.003);
+    const x = gear.x - 150 + gear.w / 2;
+    const y = gear.y + gear.h / 2 + 110;
+    const shield = this.add.zone(960, 540, 1920, 1080).setInteractive().setDepth(20);
+    const panel = this.add.graphics({ x, y }).setDepth(21);
+    drawPlate(panel, 300, 190, THEME.steelDark, { cut: 14 });
+    const soundLabel = () => (isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด');
+    const sound: Button = new Button(this, x, y - 42, 260, 64, soundLabel(), {
+      size: 26,
+      onClick: () => {
+        setMuted(!isMuted());
+        sound.text.setText(soundLabel());
+      },
+    }).setDepth(22);
+    const acct = new Button(this, x, y + 42, 260, 64, 'บัญชีผู้เล่น', { size: 26, onClick: () => this.scene.start('account') }).setDepth(22);
+    const close = () => {
+      for (const o of [shield, panel, sound, acct]) o.destroy();
+      this.settings = undefined;
+    };
+    shield.on('pointerdown', close);
+    this.settings = close;
   }
 }
 
 /**
- * A chunky tappable steel plate (see theme.ts), riveted when tall; sinks a little
- * when pressed. Children are added in its local space (centre 0,0).
+ * A painted plate that is a button: the image fitted (keeping its shape) inside a box, a hit
+ * zone the size of what shows, a lift on hover and a sink when pressed. Children go in its
+ * local space (centre 0,0); `put` places them by fractions of the plate.
  */
-class MenuCard extends Phaser.GameObjects.Container {
-  constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, fill: number, onClick: () => void) {
-    super(scene, x, y);
-    const g = scene.add.graphics();
-    drawPlate(g, w, h, fill, { rivets: h >= 140 });
-    const zone = scene.add.zone(0, 0, w, h + 8).setInteractive({ useHandCursor: true });
-    this.add([g, zone]);
+class PlateButton extends Phaser.GameObjects.Container {
+  readonly w: number;
+  readonly h: number;
+  private base: Phaser.GameObjects.Image;
+
+  constructor(scene: Phaser.Scene, key: string, [x, y, bw, bh]: Box, onClick: () => void) {
+    super(scene, x + bw / 2, y + bh / 2);
+    this.base = scene.add.image(0, 0, key);
+    this.base.setScale(Math.min(bw / this.base.width, bh / this.base.height));
+    this.w = this.base.displayWidth;
+    this.h = this.base.displayHeight;
+    const zone = scene.add.zone(0, 0, this.w, this.h).setInteractive({ useHandCursor: true });
+    this.add([this.base, zone]);
     scene.add.existing(this);
     let held = false;
     zone.on('pointerdown', () => {
@@ -353,6 +254,20 @@ class MenuCard extends Phaser.GameObjects.Container {
       this.setScale(1);
       onClick();
     });
-    zone.on('pointerover', () => this.setScale(1.02));
+    zone.on('pointerover', () => this.setScale(1.03));
+  }
+
+  /** Add `o` with its origin at (fx, fy) of the plate, 0..1 from the top-left. */
+  put(o: Phaser.GameObjects.Components.Transform & Phaser.GameObjects.GameObject, fx: number, fy: number): this {
+    o.setPosition(-this.w / 2 + fx * this.w, -this.h / 2 + fy * this.h);
+    this.add(o);
+    return this;
+  }
+
+  /** Every few seconds the plate flashes brighter, in its own silhouette (an additive copy of it fades up and out). */
+  glint(delay: number): void {
+    const flash = this.scene.add.image(0, 0, this.base.texture.key).setScale(this.base.scale).setAlpha(0).setBlendMode(Phaser.BlendModes.ADD);
+    this.addAt(flash, 1);
+    this.scene.tweens.add({ targets: flash, alpha: 0.28, duration: 260, yoyo: true, delay, repeatDelay: 4200, repeat: -1, ease: 'Sine.easeInOut' });
   }
 }
