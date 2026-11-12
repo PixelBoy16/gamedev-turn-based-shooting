@@ -16,6 +16,9 @@ function filled(scene: Phaser.Scene, key: string, [x, y, w, h]: Box): Phaser.Gam
   return scene.add.image(x + w / 2, y + h / 2, key).setDisplaySize(w, h);
 }
 
+/** Centre and widest extent of the big button's text, as fractions of the button face. */
+const MATCH_TEXT = { x: 0.64, w: 0.5 };
+
 const RULES = 'จับคู่ 1 ต่อ 1 กับผู้เล่นฝีมือใกล้เคียง   •   ไม่ใช้ค่าจากอุปกรณ์ วัดกันที่ฝีมือ';
 
 /**
@@ -80,7 +83,7 @@ export default class RankedScene extends Phaser.Scene {
       const s = Math.floor((Date.now() - this.waitingSince) / 1000);
       const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}  ·  แตะเพื่อยกเลิก`;
       // only when the second ticks: re-rendering a text every frame is wasted work
-      if (this.matchSub.text !== t) this.matchSub.setText(t);
+      if (this.matchSub.text !== t) fit(this.matchSub.setText(t).setScale(1), this.match.w * MATCH_TEXT.w, this.match.h * 0.2);
     }
   }
 
@@ -150,8 +153,9 @@ export default class RankedScene extends Phaser.Scene {
     this.match.put(this.matchIcon, 0.255, 0.5);
     this.matchTitle = this.add.text(0, 0, '', { fontFamily: FONT, fontSize: '76px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 10 }).setOrigin(0.5);
     this.matchSub = this.add.text(0, 0, '', { fontFamily: FONT, fontSize: '28px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 5 }).setOrigin(0.5);
-    this.match.put(this.matchTitle, 0.62, 0.48);
-    this.match.put(this.matchSub, 0.62, 0.72);
+    // text lives right of the swords (which end at 0.355) and short of the right bevel
+    this.match.put(this.matchTitle, MATCH_TEXT.x, 0.48);
+    this.match.put(this.matchSub, MATCH_TEXT.x, 0.72);
 
     // the fighters stand in front of the panel's sides, crates in front of their feet
     const fighter = (key: string, b: Box, delay: number) => {
@@ -261,9 +265,9 @@ export default class RankedScene extends Phaser.Scene {
     else if (this.asked) title = 'กำลังเข้าคิว…';
     else if (!ready) sub = 'ต้องต่อเซิร์ฟเวอร์ก่อน';
     this.matchTitle.setText(title);
-    fit(this.matchTitle.setScale(1), this.match.w * 0.56, this.match.h * (sub || this.waitingSince ? 0.46 : 0.62));
+    fit(this.matchTitle.setScale(1), this.match.w * MATCH_TEXT.w, this.match.h * (sub || this.waitingSince ? 0.46 : 0.62));
     this.matchTitle.setY(-this.match.h / 2 + this.match.h * (sub || this.waitingSince ? 0.4 : 0.48));
-    if (!this.waitingSince) this.matchSub.setText(sub);
+    if (!this.waitingSince) fit(this.matchSub.setText(sub).setScale(1), this.match.w * MATCH_TEXT.w, this.match.h * 0.2);
     this.match.setEnabled(resuming || (ready && !this.asked) || !!this.waitingSince);
 
     const searching = !!this.waitingSince;
