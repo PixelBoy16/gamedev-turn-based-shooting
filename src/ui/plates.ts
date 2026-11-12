@@ -303,3 +303,62 @@ export function screenChrome(scene: Phaser.Scene, opts: { title: string; icon: s
   set(opts.title);
   return set;
 }
+
+/**
+ * A section tab that sits on a panel's top edge: a slanted navy plate with a coloured rim,
+ * an optional icon, and bold text. x, y is its left-middle. Returns its width.
+ */
+export function tab(scene: Phaser.Scene, x: number, y: number, text: string, opts: { color?: number; icon?: string; size?: number } = {}): number {
+  const color = opts.color ?? 0xff8a1f;
+  const h = 48;
+  const t = scene.add.text(0, y, text, { fontFamily: FONT, fontSize: `${opts.size ?? 28}px`, fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 5 }).setOrigin(0, 0.5);
+  const iconW = opts.icon ? 40 : 0;
+  const w = 26 + iconW + t.width + 30;
+  const lean = 14;
+  const g = scene.add.graphics({ x, y });
+  const pts = [
+    { x: lean, y: -h / 2 }, { x: w, y: -h / 2 }, { x: w - lean, y: h / 2 }, { x: 0, y: h / 2 },
+  ] as unknown as Phaser.Math.Vector2[];
+  g.fillStyle(0x000000, 0.45);
+  g.fillPoints(pts.map((p) => ({ x: p.x + 3, y: p.y + 4 })) as unknown as Phaser.Math.Vector2[], true);
+  g.fillStyle(0x1a2042, 1);
+  g.fillPoints(pts, true);
+  g.lineStyle(4, color, 1);
+  g.strokePoints(pts, true);
+  g.lineStyle(2, 0xffffff, 0.18);
+  g.lineBetween(lean + 6, -h / 2 + 5, w - 8, -h / 2 + 5);
+  if (opts.icon) {
+    const img = scene.add.image(x + 22 + iconW / 2, y, opts.icon);
+    img.setScale(Math.min(34 / img.width, 30 / img.height));
+  }
+  t.setX(x + 22 + iconW + 4).setDepth(g.depth + 1);
+  scene.children.bringToTop(t);
+  return w;
+}
+
+/** Bright corner brackets over a panel's chamfered corners (x, y, w, h: the panel's outer box). */
+export function accents(scene: Phaser.Scene, x: number, y: number, w: number, h: number, color = 0xff8a1f): Phaser.GameObjects.Graphics {
+  const g = scene.add.graphics();
+  const cut = 44; // the kit panel's chamfer at its drawn size
+  const arm = 70;
+  const corner = (cx: number, cy: number, sx: number, sy: number) => {
+    const pts = [
+      { x: cx, y: cy + sy * (cut + arm) }, { x: cx, y: cy + sy * cut }, { x: cx + sx * cut, y: cy }, { x: cx + sx * (cut + arm), y: cy },
+    ] as unknown as Phaser.Math.Vector2[];
+    g.lineStyle(10, 0x091024, 1);
+    g.strokePoints(pts, false);
+    g.lineStyle(6, color, 1);
+    g.strokePoints(pts, false);
+  };
+  const i = 5; // sit on the bevel, just inside the black outline
+  corner(x + i, y + i, 1, 1);
+  corner(x + w - i, y + i, -1, 1);
+  corner(x + i, y + h - i, 1, -1);
+  corner(x + w - i, y + h - i, -1, -1);
+  return g;
+}
+
+/** Any painted plate nine-sliced to w×h at x, y (corners drawn at `s` of their painted size). */
+export function plate(scene: Phaser.Scene, key: string, x: number, y: number, w: number, h: number, inset: number, s: number): Phaser.GameObjects.NineSlice {
+  return sliced(scene, key, w, h, inset, s).setPosition(x, y);
+}

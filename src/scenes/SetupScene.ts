@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ART_SCALE, equipTexture, gunLook, iconTexture, lookHand, lookRes, lookTexture, pieceTexture } from '../art/chibi';
-import { ITEMS, ITEM_IDS, LIMITS, MAIN_WEAPONS, SKILLS, WEAPONS } from '../core/data';
+import { ITEMS, ITEM_IDS, ItemId, LIMITS, MAIN_WEAPONS, SKILLS, WEAPONS } from '../core/data';
 import {
   EQUIP_SLOTS, EQUIP_SLOT_NAME, EquipSlot, FASHION_SLOTS, FASHION_SLOT_NAME, FashionSlot, STAT_NAME, Stats,
   equipDef, equipIn, fashionDef, fashionIn, sumStats, tankStats,
@@ -8,14 +8,30 @@ import {
 import { MAPS, MAP_IDS } from '../core/Maps';
 import { Difficulty } from '../core/BotAI';
 import { FONT, confirmBox, fit, label } from '../ui/widgets';
-import { THEME } from '../ui/theme';
-import { Chip, PlateButton, STROKE, heading, panel, screenChrome } from '../ui/plates';
+import { Chip, PlateButton, STROKE, accents, panel, plate, screenChrome, tab } from '../ui/plates';
 import { account } from '../net/account';
 import { ItemKind, enforceOwned, itemKey, owns, priceOf, priceText } from '../core/shop';
 import { DIFF_LABEL, FORMAT_LABEL, Format, MatchSetup, loadSetup, saveSetup } from './setup';
 
 const FORMATS: Format[] = ['1v1', '1v2', '2v2'];
 const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard'];
+
+/** Each item card wears one of the painted button plates, so the row reads at a glance. */
+const ITEM_PLATE: Record<ItemId, { key: string; inset: number; s: number }> = {
+  double: { key: 'ui-lobby/btn-join', inset: 46, s: 0.62 },
+  power: { key: 'ui-btn-ranked', inset: 46, s: 0.62 },
+  warp: { key: 'ui-btn-pass', inset: 34, s: 0.8 },
+  heal: { key: 'ui-lobby/btn-create', inset: 46, s: 0.62 },
+  armor: { key: 'ui-lobby/btn-join', inset: 46, s: 0.62 },
+};
+
+/** Stat rows: an icon from the painted sets and a bar colour each. */
+const STAT_LOOK: Record<keyof Stats, { icon: string; color: number }> = {
+  hp: { icon: 'art-icon-heal', color: 0xff4d5e },
+  atk: { icon: 'ui-ranked/ico-match', color: 0x62e05a },
+  def: { icon: 'art-icon-armor', color: 0xffc23d },
+  move: { icon: 'ui-arrow', color: 0xff8a1f },
+};
 
 /**
  * Pick character, 3 items, map, format and bot difficulty. No mockup of its own: built
@@ -95,14 +111,17 @@ export default class SetupScene extends Phaser.Scene {
    * far right. Tapping a slot opens a picker with every piece for it.
    */
   private wardrobe(): void {
-    // the wardrobe panel spans x 55..1325, y 140..660; the item cards below match its width
-    panel(this, 690, 400, 1270, 520);
+    // the wardrobe panel spans x 55..1325, y 165..665 (tabs sit on its top edge, clear of the
+    // title plate); the items panel below matches its width
+    panel(this, 690, 415, 1270, 500);
+    accents(this, 55, 165, 1270, 500);
     // faint dividers between looks, the stage, and stats
-    this.add.rectangle(315, 405, 3, 430, 0x8991b6, 0.35);
-    this.add.rectangle(1065, 405, 3, 430, 0x8991b6, 0.35);
-    this.turntable(540, 395);
-    const zoom = 2.5;
-    const feet = 512;
+    this.add.rectangle(318, 420, 3, 400, 0x8991b6, 0.3);
+    this.add.rectangle(1075, 420, 3, 400, 0x8991b6, 0.3);
+
+    this.stage(540, 392);
+    const zoom = 2.4;
+    const feet = 522;
     const avatar = this.add.image(540, feet, '__DEFAULT').setOrigin(0.5, 1);
     const hand = this.add.image(578, feet - 45, '__DEFAULT');
     this.refreshers.push(() => {
@@ -114,122 +133,194 @@ export default class SetupScene extends Phaser.Scene {
       hand.setTexture(g.key).setOrigin(g.ox, g.oy).setScale(g.scale * (fist ? zoom : 1.7)).setRotation(-0.3);
     });
     (['hat', 'glasses'] as const).forEach((k, i) => {
-      const btn = new Chip(this, 470 + i * 140, 615, 130, 50, k === 'hat' ? 'ซ่อนหมวก' : 'ซ่อนแว่น', {
+      const btn = new Chip(this, 465 + i * 152, 622, 142, 46, k === 'hat' ? 'ซ่อนหมวก' : 'ซ่อนแว่น', {
         size: 22, onClick: () => { this.setup.loadout.hide[k] = !this.setup.loadout.hide[k]; this.refresh(); },
       });
-      this.refreshers.push(() => btn.setSelected(this.setup.loadout.hide[k]));
-    });
-
-    heading(this, 100, 192, 'แฟชั่น · แค่หน้าตา', 190);
-    FASHION_SLOTS.forEach((slot, i) => {
-      this.tile(145 + (i % 2) * 110, 258 + Math.floor(i / 2) * 104, FASHION_SLOT_NAME[slot], () => {
-        const id = this.setup.loadout.look[slot];
-        return { key: pieceTexture(this, slot, id), name: id === 'none' ? '' : fashionDef(slot, id)!.name };
-      }, () => this.pickFashion(slot), 98);
-    });
-
-    heading(this, 770, 192, 'อุปกรณ์ · ค่าสถานะ', 270);
-    EQUIP_SLOTS.forEach((slot, i) => {
-      this.tile(830 + (i % 2) * 120, 268 + Math.floor(i / 2) * 116, EQUIP_SLOT_NAME[slot], () => {
-        const id = this.setup.loadout.equip[slot];
-        return { key: equipTexture(this, slot, id), name: id === 'none' ? '' : equipDef(slot, id)!.name };
-      }, () => this.pickEquip(slot));
-    });
-    // stat bars: 100% sits two thirds along, so gear that raises a stat visibly pushes past it
-    const STAT_ROWS: { k: keyof Stats; value: (ts: ReturnType<typeof tankStats>) => number; text: (v: number) => string }[] = [
-      { k: 'hp', value: (ts) => ts.maxHp / 1000, text: (v) => `${Math.round(v * 1000)}` },
-      { k: 'atk', value: (ts) => ts.atk, text: (v) => `${Math.round(v * 100)}%` },
-      { k: 'def', value: (ts) => 2 - ts.def, text: (v) => `${Math.round(v * 100)}%` },
-      { k: 'move', value: (ts) => ts.move, text: (v) => `${Math.round(v * 100)}%` },
-    ];
-    const rowY = (i: number) => 492 + i * 38;
-    const statG = this.add.graphics();
-    const statText = STAT_ROWS.map((_, i) => ({
-      name: label(this, 770, rowY(i), STAT_NAME[STAT_ROWS[i].k], 21, '#cfd8ff').setOrigin(0, 0.5),
-      value: label(this, 975, rowY(i), '', 21).setOrigin(0, 0.5),
-    }));
-    this.refreshers.push(() => {
-      const ts = tankStats(this.setup.loadout);
-      const sum = sumStats(this.setup.loadout);
-      statG.clear();
-      STAT_ROWS.forEach((r, i) => {
-        const y = rowY(i);
-        const v = r.value(ts);
-        const up = sum[r.k] > 0;
-        const down = sum[r.k] < 0;
-        statG.fillStyle(0x091024, 1);
-        statG.fillRoundedRect(850, y - 8, 115, 16, 8);
-        statG.fillStyle(up ? 0x7dff8a : down ? THEME.red : 0xffc23d, 1);
-        statG.fillRoundedRect(852, y - 6, Math.max(6, Math.min(1, v / 1.5) * 111), 12, 6);
-        statG.fillStyle(0xffffff, 0.6);
-        statG.fillRect(850 + 115 * (2 / 3), y - 10, 2, 20); // the 100% mark
-        statText[i].value.setText(`${r.text(v)}${sum[r.k] ? ` (${fmt(r.k, sum[r.k])})` : ''}`)
-          .setColor(up ? '#7dff8a' : down ? '#ff8a80' : '#ffffff');
+      // a tick box on the left of the label
+      const box = this.add.graphics();
+      btn.add(box);
+      btn.placeText(14, 0, 90, 36);
+      this.refreshers.push(() => {
+        const on = this.setup.loadout.hide[k];
+        btn.setSelected(on);
+        box.clear();
+        box.fillStyle(0x091024, 1).fillRoundedRect(-62, -12, 24, 24, 5);
+        box.lineStyle(3, on ? 0xffc23d : 0x8991b6, 1).strokeRoundedRect(-62, -12, 24, 24, 5);
+        if (on) box.lineStyle(4, 0xffc23d, 1).strokePoints([{ x: -57, y: 0 }, { x: -52, y: 6 }, { x: -43, y: -6 }] as unknown as Phaser.Math.Vector2[]);
       });
     });
 
-    heading(this, 1095, 192, 'อาวุธ', 190);
-    this.tile(1190, 300, 'อาวุธหลัก', () => ({ key: gunLook(this, this.setup.loadout.weapon).key, name: WEAPONS[this.setup.loadout.weapon].name }),
-      () => this.pickWeapon(), 170);
-    const skill = this.add.text(1190, 395, '', {
-      fontFamily: FONT, fontSize: '20px', color: '#8ef0ff', align: 'center', wordWrap: { width: 230 }, lineSpacing: 4,
+    tab(this, 70, 165, 'แฟชั่น · แค่หน้าตา', { icon: 'ui-lobby/ico-wardrobe' });
+    FASHION_SLOTS.forEach((slot, i) => {
+      const sample = fashionIn(slot).find((f) => f.id !== 'none')?.id;
+      this.tile(135 + (i % 2) * 112, 240 + Math.floor(i / 2) * 98, FASHION_SLOT_NAME[slot], () => {
+        const id = this.setup.loadout.look[slot];
+        return { key: pieceTexture(this, slot, id), name: id === 'none' ? '' : fashionDef(slot, id)!.name };
+      }, () => this.pickFashion(slot), sample ? pieceTexture(this, slot, sample) : null);
+    });
+
+    tab(this, 745, 165, 'อุปกรณ์ · ค่าสถานะ', { icon: 'art-icon-wall' });
+    EQUIP_SLOTS.forEach((slot, i) => {
+      const sample = equipIn(slot).find((e) => e.id !== 'none')?.id;
+      this.tile(840 + (i % 2) * 124, 244 + Math.floor(i / 2) * 100, EQUIP_SLOT_NAME[slot], () => {
+        const id = this.setup.loadout.equip[slot];
+        return { key: equipTexture(this, slot, id), name: id === 'none' ? '' : equipDef(slot, id)!.name };
+      }, () => this.pickEquip(slot), sample ? equipTexture(this, slot, sample) : null, 112);
+    });
+    this.stats(760, 450);
+
+    tab(this, 1095, 165, 'อาวุธ', { color: 0xe8333a, icon: 'ui-ranked/ico-match' });
+    this.weaponCard(1200, 292);
+    const skill = this.add.text(1200, 392, '', {
+      fontFamily: FONT, fontSize: '20px', fontStyle: 'bold', color: '#8ef0ff', align: 'center', wordWrap: { width: 220 }, lineSpacing: 2,
+      stroke: STROKE, strokeThickness: 3,
     }).setOrigin(0.5, 0);
     this.refreshers.push(() => {
       const sk = WEAPONS[this.setup.loadout.weapon].skill!;
       skill.setText(`สกิล E: ${SKILLS[sk].name}\n${SKILLS[sk].desc}`);
     });
-    this.tile(1135, 580, 'อาวุธรอง', () => ({ key: gunLook(this, 'drill').key, name: 'สว่าน ×2' }), null);
-    this.tile(1245, 580, 'พิเศษ', () => ({ key: null, name: '' }), null);
+    this.tile(1146, 588, 'อาวุธรอง', () => ({ key: gunLook(this, 'drill').key, name: 'สว่าน ×2' }), null, null, 98);
+    const special = new Chip(this, 1254, 588, 98, 92, '', {});
+    special.setAlpha(0.75);
+    const plus = this.add.graphics();
+    plus.fillStyle(0x8991b6, 0.9).fillRoundedRect(-4, -30, 8, 32, 3).fillRoundedRect(-16, -18, 32, 8, 3);
+    special.add([plus, label(this, 0, 30, 'พิเศษ', 17, '#9aa6cf').setOrigin(0.5)]);
   }
 
-  /** A navy turntable under the character: gold rim, turning tick marks, and the glowing ring at the feet. */
-  private turntable(x: number, y: number): void {
-    const g = this.add.graphics({ x, y });
-    g.fillStyle(0xffb347, 0.05); // warm light behind the character
-    for (let r = 120; r <= 200; r += 20) g.fillCircle(0, -10, r);
-    g.fillStyle(0x091024, 0.9);
-    g.fillCircle(0, 0, 200);
-    g.fillStyle(0x1d2346, 0.95);
-    g.fillCircle(0, 0, 190);
-    g.lineStyle(6, 0xffc23d, 0.9);
-    g.strokeCircle(0, 0, 190);
-    g.lineStyle(2, 0xffffff, 0.12);
-    g.strokeCircle(0, 0, 150);
-    const ticks = this.add.graphics({ x, y });
-    for (let i = 0; i < 36; i++) {
-      const a = (i / 36) * Math.PI * 2;
-      const long = i % 3 === 0;
-      ticks.lineStyle(long ? 4 : 2, long ? 0xffc23d : 0xffffff, long ? 0.9 : 0.25);
-      ticks.lineBetween(Math.cos(a) * 166, Math.sin(a) * 166, Math.cos(a) * (long ? 182 : 176), Math.sin(a) * (long ? 182 : 176));
+  /** Stat rows under the gear: icon, name, a coloured bar (100% two thirds along) and the value with its change. */
+  private stats(x: number, y0: number): void {
+    // 100% sits two thirds along, so gear that raises a stat visibly pushes past it
+    const ROWS: { k: keyof Stats; value: (ts: ReturnType<typeof tankStats>) => number; text: (v: number) => string }[] = [
+      { k: 'hp', value: (ts) => ts.maxHp / 1000, text: (v) => `${Math.round(v * 1000)}` },
+      { k: 'atk', value: (ts) => ts.atk, text: (v) => `${Math.round(v * 100)}%` },
+      { k: 'def', value: (ts) => 2 - ts.def, text: (v) => `${Math.round(v * 100)}%` },
+      { k: 'move', value: (ts) => ts.move, text: (v) => `${Math.round(v * 100)}%` },
+    ];
+    const rowY = (i: number) => y0 + i * 42;
+    const barX = x + 118;
+    const barW = 112;
+    const g = this.add.graphics();
+    const texts = ROWS.map((r, i) => {
+      if (this.textures.exists(STAT_LOOK[r.k].icon)) {
+        const icon = this.add.image(x + 14, rowY(i), STAT_LOOK[r.k].icon);
+        icon.setScale(Math.min(30 / icon.width, 30 / icon.height));
+      }
+      return {
+        name: label(this, x + 38, rowY(i), STAT_NAME[r.k], 21, '#ffffff').setOrigin(0, 0.5),
+        value: label(this, barX + barW + 10, rowY(i), '', 20).setOrigin(0, 0.5),
+      };
+    });
+    this.refreshers.push(() => {
+      const ts = tankStats(this.setup.loadout);
+      const sum = sumStats(this.setup.loadout);
+      g.clear();
+      ROWS.forEach((r, i) => {
+        const y = rowY(i);
+        const v = r.value(ts);
+        const up = sum[r.k] > 0;
+        const down = sum[r.k] < 0;
+        const fill = Math.min(1, v / 1.5);
+        g.fillStyle(0x091024, 1).fillRoundedRect(barX, y - 9, barW, 18, 9);
+        g.fillStyle(STAT_LOOK[r.k].color, 1).fillRoundedRect(barX + 2, y - 7, Math.max(8, fill * (barW - 4)), 14, 7);
+        g.fillStyle(0xffffff, 0.35).fillRoundedRect(barX + 4, y - 6, Math.max(4, fill * (barW - 8)), 4, 2);
+        g.fillStyle(0xffffff, 0.7).fillRect(barX + barW * (2 / 3), y - 11, 2, 22); // the 100% mark
+        texts[i].value.setText(`${r.text(v)}${sum[r.k] ? ` (${fmt(r.k, sum[r.k])})` : ''}`)
+          .setColor(up ? '#7dff8a' : down ? '#ff8a80' : '#ffffff');
+        fit(texts[i].value.setScale(1), 1072 - texts[i].value.x - 6, 30);
+      });
+    });
+  }
+
+  /** The main weapon on a purple plate with gold rays; tap to change it. */
+  private weaponCard(x: number, y: number): void {
+    const rays = this.add.image(x + 96, y - 80, 'ui-lobby/emphasis').setFlipX(true);
+    rays.setScale(64 / rays.height);
+    const card = new Chip(this, x, y, 210, 170, '', { onClick: () => this.pickWeapon() });
+    card.addAt(plate(this, 'ui-btn-pass', 0, 0, 210, 170, 34, 0.8), 2);
+    const img = this.add.image(0, -18, '__DEFAULT');
+    card.add(img);
+    card.text.setFontSize(30);
+    this.refreshers.push(() => {
+      const l = this.setup.loadout;
+      img.setTexture(gunLook(this, l.weapon).key);
+      img.setScale(Math.min(170 / img.width, 100 / img.height));
+      card.text.setText(WEAPONS[l.weapon].name);
+      card.placeText(0, 56, 190, 40);
+    });
+  }
+
+  /**
+   * The stage the character stands on: a round window with a glowing orange rim, a lamp
+   * at the top throwing a cone of light down, and the painted glowing ring at the feet.
+   */
+  private stage(x: number, y: number): void {
+    const r = 168;
+    if (!this.textures.exists('wardrobe-stage')) {
+      const size = r * 2;
+      const tex = this.textures.createCanvas('wardrobe-stage', size, size)!;
+      const c = tex.context;
+      const bg = c.createRadialGradient(r, r * 0.9, 20, r, r, r);
+      bg.addColorStop(0, '#3a3256');
+      bg.addColorStop(0.6, '#211d3a');
+      bg.addColorStop(1, '#100e22');
+      c.fillStyle = bg;
+      c.beginPath();
+      c.arc(r, r, r, 0, Math.PI * 2);
+      c.fill();
+      // the cone from the lamp, fading out toward the floor
+      const cone = c.createLinearGradient(0, 10, 0, size - 30);
+      cone.addColorStop(0, 'rgba(255,214,140,0.55)');
+      cone.addColorStop(1, 'rgba(255,170,60,0.06)');
+      c.fillStyle = cone;
+      c.beginPath();
+      c.moveTo(r - 34, 14);
+      c.lineTo(r + 34, 14);
+      c.lineTo(r + 150, size - 40);
+      c.lineTo(r - 150, size - 40);
+      c.closePath();
+      c.fill();
+      tex.refresh();
     }
-    // a slow turn keeps the stage alive without pulling the eye off the character
-    this.tweens.add({ targets: ticks, angle: 360, duration: 40000, repeat: -1 });
-    // the glowing ring from the painted screens, under the feet
-    const ring = this.add.image(x, y + 117, 'ui-lobby/avatar-ring');
-    ring.setScale(260 / ring.width);
+    this.add.image(x, y, 'wardrobe-stage');
+    const rim = this.add.graphics({ x, y });
+    rim.lineStyle(18, 0xff8a1f, 0.18).strokeCircle(0, 0, r + 6);
+    rim.lineStyle(10, 0x091024, 1).strokeCircle(0, 0, r);
+    rim.lineStyle(7, 0xff9a2e, 1).strokeCircle(0, 0, r);
+    rim.lineStyle(2, 0xffd59a, 0.8).strokeCircle(0, 0, r - 5);
+    // the lamp
+    rim.fillStyle(0x2a2d40, 1).fillRoundedRect(-30, -r + 4, 60, 16, 6);
+    rim.fillStyle(0xfff1c4, 1).fillEllipse(0, -r + 20, 46, 10);
+    // glowing floor under the feet
+    const ring = this.add.image(x, y + 128, 'ui-lobby/avatar-ring');
+    ring.setScale(240 / ring.width);
+    this.tweens.add({ targets: ring, alpha: 0.65, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 
-  /** A square slot: the piece's picture and name, or the faded slot name when empty. */
+  /**
+   * A slot: the piece's picture and name, or (empty) a white outline of a sample piece
+   * over the slot name, so every slot says what goes in it.
+   */
   private tile(
     x: number, y: number, slotName: string, current: () => { key: string | null; name: string },
-    onClick: (() => void) | null, size = 104,
+    onClick: (() => void) | null, ghostKey: string | null = null, w = 100, h = 92,
   ): void {
-    const btn = new Chip(this, x, y, size, size, '', { plate: 'slot', onClick: onClick ?? undefined });
-    if (!onClick) btn.setAlpha(0.7);
-    const img = this.add.image(0, -8, '__DEFAULT');
-    const empty = label(this, 0, 0, slotName, 22, '#7d89b3').setOrigin(0.5);
-    fit(empty, size - 16, 40);
-    const name = label(this, 0, size / 2 - 6, '', 15).setOrigin(0.5, 1);
-    btn.add([img, empty, name]);
+    const btn = new Chip(this, x, y, w, h, '', { onClick: onClick ?? undefined });
+    if (!onClick) btn.setAlpha(0.8);
+    const img = this.add.image(0, -12, '__DEFAULT');
+    const ghost = ghostKey ? this.add.image(0, -12, ghostKey).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL).setAlpha(0.85) : null;
+    if (ghost) ghost.setScale(Math.min((w - 46) / ghost.width, (h - 46) / ghost.height));
+    const name = label(this, 0, h / 2 - 8, '', 17).setOrigin(0.5, 1);
+    btn.add([img, name]);
+    if (ghost) btn.add(ghost);
     this.refreshers.push(() => {
       const c = current();
       img.setVisible(!!c.key);
-      empty.setVisible(!c.key);
-      name.setText(c.key ? c.name : '');
-      fit(name.setScale(1), size - 14, 22);
+      ghost?.setVisible(!c.key);
+      name.setText(c.key ? c.name : slotName).setColor(c.key ? '#ffffff' : '#c9d2f2');
+      fit(name.setScale(1), w - 12, 24);
       if (c.key) {
         img.setTexture(c.key);
-        img.setScale((size - 34) / Math.max(img.width, img.height));
+        img.setScale(Math.min((w - 30) / img.width, (h - 36) / img.height));
       }
     });
   }
@@ -354,16 +445,20 @@ export default class SetupScene extends Phaser.Scene {
     this.picker = [];
   }
 
-  /** The items for the match: a card each (icon, name, what it does); tap to take or put back. */
+  /** The items for the match: a coloured card each (icon, name, what it does); tap to take or put back. */
   private itemPicker(): void {
-    const top = 690;
-    const title = heading(this, 70, top, 'ไอเท็ม');
-    const count = label(this, title.x + title.width + 24, top, '', 28).setOrigin(0, 0.5);
+    const top = 700; // panel y 700..935
+    panel(this, 690, top + 117, 1270, 235);
+    accents(this, 55, top, 1270, 235);
+    const tw = tab(this, 70, top, 'ไอเท็ม', { icon: 'ui-ico-shop' });
+    const count = label(this, 70 + tw + 22, top, '', 26).setOrigin(0, 0.5);
     const pips = this.add.graphics();
+    const w = 232;
     ITEM_IDS.forEach((id, i) => {
-      const x = 55 + 120 + i * 257.5;
-      const card = new Chip(this, x, top + 140, 240, 210, '', {
-        plate: 'slot', onClick: () => {
+      const x = 85 + w / 2 + i * (w + 12.5);
+      const look = ITEM_PLATE[id];
+      const card = new Chip(this, x, top + 122, w, 170, '', {
+        onClick: () => {
           const s = this.setup.items;
           const at = s.indexOf(id);
           if (at >= 0) s.splice(at, 1);
@@ -372,28 +467,43 @@ export default class SetupScene extends Phaser.Scene {
           this.refresh();
         },
       });
+      const face = plate(this, look.key, 0, 0, w, 170, look.inset, look.s);
+      card.addAt(face, 2);
       const icon = iconTexture(this, id);
       if (icon) {
-        const img = this.add.image(-70, -56, icon);
-        card.add(img.setScale(70 / Math.max(img.width, img.height)));
+        const img = this.add.image(-62, -44, icon);
+        card.add(img.setScale(68 / Math.max(img.width, img.height)));
       }
-      card.text.setText(ITEMS[id].name).setOrigin(0, 0.5);
-      card.placeText(-26, -56, 130, 44);
-      card.add(this.add.text(0, 2, ITEMS[id].desc, {
-        fontFamily: FONT, fontSize: '19px', color: '#cfd8ff', align: 'center', wordWrap: { width: 204 }, lineSpacing: 2,
-      }).setOrigin(0.5, 0));
-      this.refreshers.push(() => card.setSelected(this.setup.items.includes(id)));
+      card.text.setText(ITEMS[id].name).setOrigin(0, 0.5).setFontSize(30);
+      card.placeText(-22, -44, 122, 44);
+      const desc = this.add.text(0, 22, ITEMS[id].desc, {
+        fontFamily: FONT, fontSize: '19px', fontStyle: 'bold', color: '#ffffff', align: 'center', wordWrap: { width: 200 }, lineSpacing: 0,
+        stroke: STROKE, strokeThickness: 3,
+      }).setOrigin(0.5, 0);
+      card.add(fit(desc, 204, 66));
+      // picked: full colour with a gold rim and a tick; not picked: dimmed
+      const rim = this.add.graphics();
+      rim.lineStyle(10, 0xffc23d, 0.35).strokeRoundedRect(-w / 2 + 2, -83, w - 4, 166, 20);
+      rim.lineStyle(4, 0xffd166, 1).strokeRoundedRect(-w / 2 + 4, -81, w - 8, 162, 18);
+      rim.fillStyle(0x091024, 1).fillCircle(w / 2 - 20, -66, 15);
+      rim.fillStyle(0xffc23d, 1).fillCircle(w / 2 - 20, -66, 12);
+      rim.lineStyle(4, 0x091024, 1).strokePoints([{ x: w / 2 - 26, y: -66 }, { x: w / 2 - 21, y: -61 }, { x: w / 2 - 13, y: -71 }] as unknown as Phaser.Math.Vector2[]);
+      card.add(rim);
+      this.refreshers.push(() => {
+        const on = this.setup.items.includes(id);
+        rim.setVisible(on);
+        face.setTint(on ? 0xffffff : 0x8a8fa8);
+        card.setAlpha(on ? 1 : 0.85);
+      });
     });
     this.refreshers.push(() => {
       const n = this.setup.items.length;
       count.setText(`เลือก ${n}/${LIMITS.itemsPerMatch}`).setColor(n === LIMITS.itemsPerMatch ? '#ffd166' : '#ffffff');
       pips.clear();
       for (let i = 0; i < LIMITS.itemsPerMatch; i++) {
-        const px = count.x + count.width + 26 + i * 28;
-        pips.fillStyle(0x091024, 1);
-        pips.fillCircle(px, top, 11);
-        pips.fillStyle(i < n ? 0xffc23d : 0x3a4370, 1);
-        pips.fillCircle(px, top, 8);
+        const px = count.x + count.width + 24 + i * 28;
+        pips.fillStyle(0x091024, 1).fillCircle(px, top, 11);
+        pips.fillStyle(i < n ? 0xffa21f : 0x3a4370, 1).fillCircle(px, top, 8);
       }
     });
   }
@@ -412,11 +522,12 @@ export default class SetupScene extends Phaser.Scene {
   /** Map, format and bot strength (offline only: a friend room or ranked decides these). */
   private rightColumn(): void {
     const cx = 1615;
-    panel(this, cx, 525, 500, 800); // y 125..925
-    heading(this, cx - 205, 182, 'ด่าน', 410);
-    const mapDesc = label(this, cx, 448, '', 22, '#cfd8ff').setOrigin(0.5, 0.5);
+    panel(this, cx, 547, 500, 764); // y 165..929
+    accents(this, cx - 250, 165, 500, 764);
+    tab(this, cx - 235, 165, 'ด่าน');
+    const mapDesc = label(this, cx, 452, '', 22, '#cfd8ff').setOrigin(0.5, 0.5);
     MAP_IDS.forEach((id, i) => {
-      const btn = new Chip(this, cx, 244 + i * 64, 420, 58, MAPS[id].name, {
+      const btn = new Chip(this, cx, 252 + i * 64, 420, 58, MAPS[id].name, {
         size: 30, onClick: () => { this.setup.map = id; this.refresh(); },
       });
       // a strip of the map's painted backdrop on the left of its button
@@ -433,17 +544,17 @@ export default class SetupScene extends Phaser.Scene {
     });
     this.refreshers.push(() => mapDesc.setText(MAPS[this.setup.map].desc));
 
-    heading(this, cx - 205, 512, 'รูปแบบ', 410);
+    tab(this, cx - 235, 522, 'รูปแบบ');
     FORMATS.forEach((f, i) => {
-      const btn = new Chip(this, cx, 572 + i * 64, 420, 56, FORMAT_LABEL[f], {
+      const btn = new Chip(this, cx, 578 + i * 62, 420, 54, FORMAT_LABEL[f], {
         size: 28, onClick: () => { this.setup.format = f; this.refresh(); },
       });
       this.refreshers.push(() => btn.setSelected(this.setup.format === f));
     });
 
-    heading(this, cx - 205, 778, 'ความเก่งของบอท', 410);
+    tab(this, cx - 235, 780, 'ความเก่งของบอท');
     DIFFICULTIES.forEach((d, i) => {
-      const btn = new Chip(this, cx - 142 + i * 142, 842, 132, 58, DIFF_LABEL[d], {
+      const btn = new Chip(this, cx - 142 + i * 142, 852, 132, 56, DIFF_LABEL[d], {
         size: 28, onClick: () => { this.setup.difficulty = d; this.refresh(); },
       });
       this.refreshers.push(() => btn.setSelected(this.setup.difficulty === d));
