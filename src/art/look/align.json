@@ -3,7 +3,8 @@
     "set-bearskull-hood": {
       "dx": -4.3,
       "dy": -67.4,
-      "s": 0.93
+      "s": 0.93,
+      "z": 9
     },
     "set-bearskull-body": {
       "dx": 1.4,
@@ -12,15 +13,16 @@
       "z": -1
     },
     "back-ammo": {
-      "dx": -9.4,
-      "dy": -0.5,
-      "s": 0.77,
-      "z": -2
+      "dx": -0.3,
+      "dy": -22.5,
+      "s": 0.61,
+      "z": 10
     },
     "eyes-glare": {
       "dx": 4.3,
       "dy": -0.1,
-      "s": 1
+      "s": 1,
+      "z": 10
     },
     "eyes-glow": {
       "dx": -0.3,
@@ -30,7 +32,8 @@
     "body-head@set-bearskull": {
       "dx": 9.3,
       "dy": -19.2,
-      "s": 1
+      "s": 1,
+      "z": 10
     },
     "eyes-squint": {
       "dx": 0,
@@ -38,10 +41,110 @@
       "s": 1
     },
     "cloth-vest": {
-      "dx": -1.1,
-      "dy": -64.9,
+      "dx": -2.5,
+      "dy": -61.7,
       "s": 0.75,
-      "z": -1
+      "z": -4
+    },
+    "hair-spiky-front": {
+      "dx": 0.2,
+      "dy": -23,
+      "s": 1,
+      "z": 9
+    },
+    "glasses-goggles": {
+      "dx": -1.5,
+      "dy": -20.9,
+      "s": 1,
+      "z": 7
+    },
+    "face-warpaint": {
+      "dx": 0,
+      "dy": 0,
+      "s": 0.95,
+      "z": 7
+    },
+    "cloth-tank": {
+      "dx": 7.2,
+      "dy": -81,
+      "s": 0.7,
+      "z": -4
+    },
+    "back-cape": {
+      "dx": -15.6,
+      "dy": -36.4,
+      "s": 1
+    },
+    "cloth-armor": {
+      "dx": -3,
+      "dy": -4.6,
+      "s": 0.91,
+      "z": -4
+    },
+    "cloth-trench": {
+      "dx": -6,
+      "dy": -30.9,
+      "s": 0.95,
+      "z": -4
+    },
+    "hat-bandana": {
+      "dx": 3,
+      "dy": 20.9,
+      "s": 1,
+      "z": 8
+    },
+    "hair-ponytail-front": {
+      "dx": -9.8,
+      "dy": 16.5,
+      "s": 0.95,
+      "z": 9
+    },
+    "hair-ponytail-back": {
+      "dx": -27,
+      "dy": 9,
+      "s": 1
+    },
+    "cloth-ninja": {
+      "dx": -3,
+      "dy": -13.5,
+      "s": 1,
+      "z": -4
+    },
+    "glasses-shades": {
+      "dx": 0,
+      "dy": 0,
+      "s": 1,
+      "z": 7
+    },
+    "hair-buzz-front": {
+      "dx": 0,
+      "dy": 0,
+      "s": 1,
+      "z": 9
+    },
+    "hat-aviator": {
+      "dx": -1.5,
+      "dy": -14.6,
+      "s": 1,
+      "z": 11
+    },
+    "hat-spikecrown": {
+      "dx": 0,
+      "dy": 0,
+      "s": 1.18,
+      "z": 14
+    },
+    "hair-mohawk-front": {
+      "dx": 0,
+      "dy": 0,
+      "s": 1,
+      "z": 9
+    },
+    "hat-helm": {
+      "dx": -4.3,
+      "dy": 7.4,
+      "s": 1.11,
+      "z": 8
     }
   },
   "hand": {
