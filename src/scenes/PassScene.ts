@@ -4,7 +4,8 @@ import { Reward, currentConfig } from '../core/config';
 import { EquipSlot, FashionSlot } from '../core/gear';
 import { Track, claimKey, itemName, parseItemKey, seasonOver, tierOf } from '../core/shop';
 import { account } from '../net/account';
-import { FONT, confirmBox, fit, label } from '../ui/widgets';
+import { offerBox } from '../ui/modals';
+import { FONT, fit, label } from '../ui/widgets';
 import { Box, PlateButton, STROKE, filled, fitted, mockupBox, placed, walletBar } from '../ui/plates';
 
 /** Where each piece sits in the designer's 1672x941 mockup (new_ui/black-boom-pass-parts 2/layout.json). */
@@ -226,8 +227,11 @@ export default class PassScene extends Phaser.Scene {
       if (premium) return this.say('ปลดล็อกพรีเมียมแล้ว รับรางวัลแถวล่างได้เลย');
       if (over) return this.say('ซีซันนี้จบแล้ว');
       if (!account.view) return this.say('ต้องต่อเซิร์ฟเวอร์ก่อนถึงจะปลดล็อกได้');
-      confirmBox(this, `ปลดล็อก Battle Pass พรีเมียม\n${gems} เพชร`, 'ปลดล็อก', () => {
-        account.buyPass().then(() => this.say('ปลดล็อกพรีเมียมแล้ว รับรางวัลขั้นที่ผ่านมาได้เลย')).catch((e: Error) => this.say(e.message));
+      offerBox(this, {
+        title: 'ปลดล็อก Battle Pass', tag: 'พรีเมียม', about: 'ปลดล็อกรางวัลพิเศษตลอดซีซัน', price: { gems }, yes: 'ปลดล็อก', crest: true,
+        onYes: () => {
+          account.buyPass().then(() => this.say('ปลดล็อกพรีเมียมแล้ว รับรางวัลขั้นที่ผ่านมาได้เลย')).catch((e: Error) => this.say(e.message));
+        },
       });
     }));
     btn.put(fitted(this, P('crown'), btn.w * 0.17, btn.h * 0.66), 0.135, 0.5);

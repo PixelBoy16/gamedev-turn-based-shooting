@@ -2,15 +2,16 @@ import Phaser from 'phaser';
 import { ART_SCALE, equipTexture, gunLook, lookHand, lookRes, lookTexture, pieceTexture } from '../art/chibi';
 import { ITEMS, ITEM_IDS, ItemId, LIMITS, MAIN_WEAPONS, SKILLS, WEAPONS } from '../core/data';
 import {
-  EQUIP_SLOTS, EQUIP_SLOT_NAME, EquipSlot, FASHION_SLOTS, FASHION_SLOT_NAME, FashionSlot, STAT_NAME, Stats,
+  EQUIP_SLOTS, EQUIP_SLOT_NAME, EquipSlot, FASHION_SLOTS, FASHION_SLOT_NAME, FashionSlot, Price, STAT_NAME, Stats,
   equipDef, equipIn, fashionDef, fashionIn, sumStats, tankStats,
 } from '../core/gear';
 import { MAPS, MAP_IDS, MapId } from '../core/Maps';
 import { Difficulty } from '../core/BotAI';
-import { FONT, confirmBox, fit, label } from '../ui/widgets';
-import { Box, Chip, PlateButton, STROKE, SliceButton, SliceLook, filled, fitted, mockupBox, panel, placed, walletBar } from '../ui/plates';
+import { FONT, fit, label } from '../ui/widgets';
+import { offerBox, pickerBox } from '../ui/modals';
+import { Box, PlateButton, STROKE, SliceButton, SliceLook, filled, fitted, mockupBox, placed, walletBar } from '../ui/plates';
 import { account } from '../net/account';
-import { ItemKind, enforceOwned, itemKey, owns, priceOf, priceText } from '../core/shop';
+import { ItemKind, enforceOwned, itemKey, owns, priceOf } from '../core/shop';
 import { DIFF_LABEL, FORMAT_LABEL, Format, MatchSetup, loadSetup, saveSetup } from './setup';
 
 const FORMATS: Format[] = ['1v1', '1v2', '2v2'];
@@ -66,7 +67,6 @@ export default class SetupScene extends Phaser.Scene {
   /** Where "back"/"done" go when dressing up for a friend room or ranked (no map or bot picks). */
   private returnTo: 'lobby' | 'ranked' | null = null;
   /** The open "pick a piece" window, if any. */
-  private picker: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super('setup');
@@ -75,7 +75,6 @@ export default class SetupScene extends Phaser.Scene {
   init(): void {
     this.setup = loadSetup(this.registry);
     this.refreshers = [];
-    this.picker = [];
     const mode = this.registry.get('setupMode');
     this.returnTo = mode === 'online' ? 'lobby' : mode === 'ranked' ? 'ranked' : null;
     this.online = this.returnTo !== null;
@@ -402,35 +401,34 @@ export default class SetupScene extends Phaser.Scene {
 
   private pickFashion(slot: FashionSlot): void {
     const l = this.setup.loadout;
-    this.openPicker(`${FASHION_SLOT_NAME[slot]} (ไม่มีผลกับค่าสถานะ)`, fashionIn(slot).map((f) => ({
+    this.openPicker(FASHION_SLOT_NAME[slot], slot === 'face' ? 'ui-modal/face' : W(`ico-${FASHION_ICON[slot]}`), fashionIn(slot).map((f) => ({
       on: l.look[slot] === f.id,
-      key: pieceTexture(this, slot, f.id),
-      title: f.name,
-      body: '',
-      lock: this.lockText('fashion', slot, f.id, f.exclusive),
+      key: f.id === 'none' ? null : pieceTexture(this, slot, f.id),
+      name: f.name,
+      price: this.priceTag('fashion', slot, f.id, f.exclusive),
       pick: () => { l.look[slot] = f.id; },
       buy: () => this.offer('fashion', slot, f.id, f.name, () => { l.look[slot] = f.id; }),
-    })));
+    })), '(ไม่มีผลกับค่าสถานะ)');
   }
 
   private pickEquip(slot: EquipSlot): void {
     const l = this.setup.loadout;
-    this.openPicker(EQUIP_SLOT_NAME[slot], equipIn(slot).map((e) => ({
+    this.openPicker(EQUIP_SLOT_NAME[slot], W(`ico-${slot}`), equipIn(slot).map((e) => ({
       on: l.equip[slot] === e.id,
-      key: equipTexture(this, slot, e.id),
-      title: e.name,
-      body: (Object.keys(e.stats) as (keyof Stats)[]).map((k) => `${STAT_NAME[k]} ${fmt(k, e.stats[k]!)}`).join('\n'),
-      lock: this.lockText('equip', slot, e.id, false),
+      key: e.id === 'none' ? null : equipTexture(this, slot, e.id),
+      name: e.name,
+      body: statLine(e.stats),
+      price: this.priceTag('equip', slot, e.id, false),
       pick: () => { l.equip[slot] = e.id; },
       buy: () => this.offer('equip', slot, e.id, e.name, () => { l.equip[slot] = e.id; }),
     })));
   }
 
-  /** What a piece's card says when it isn't owned yet; undefined when it is. */
-  private lockText(kind: ItemKind, slot: string, id: string, exclusive?: boolean): string | undefined {
+  /** What a piece costs when it isn't owned yet ('pass' = Battle Pass only); undefined when it is. */
+  private priceTag(kind: ItemKind, slot: string, id: string, exclusive?: boolean): Price | 'pass' | undefined {
     if (owns(account.owned(), kind, slot, id)) return undefined;
     const price = priceOf(kind, slot, id);
-    return exclusive || !price ? '🔒 Battle Pass' : `🔒 ${priceText(price)}`;
+    return exclusive || !price ? 'pass' : price;
   }
 
   /** Ask to buy a piece that isn't owned; wear it once bought. */
@@ -438,86 +436,64 @@ export default class SetupScene extends Phaser.Scene {
     const price = priceOf(kind, slot, id);
     if (!price) return this.say('ชิ้นนี้ได้จาก Battle Pass เท่านั้น');
     if (!account.view) return this.say('ต้องต่อเซิร์ฟเวอร์ก่อนถึงจะซื้อได้');
-    confirmBox(this, `ซื้อ ${name}\n${priceText(price)}`, 'ซื้อ', () => {
-      account.buy(itemKey(kind, slot, id)).then(() => {
-        wear();
-        this.refresh();
-        this.say(`ได้ ${name} แล้ว`);
-      }).catch((err: Error) => this.say(err.message));
+    const fashion = kind === 'fashion';
+    offerBox(this, {
+      title: 'ซื้อชิ้นนี้',
+      tag: name,
+      about: fashion
+        ? `${FASHION_SLOT_NAME[slot as FashionSlot]} · แค่หน้าตา ไม่มีผลกับค่าสถานะ`
+        : `${EQUIP_SLOT_NAME[slot as EquipSlot]} · ${statLine(equipDef(slot as EquipSlot, id)!.stats)}`,
+      art: (fashion ? pieceTexture(this, slot as FashionSlot, id) : equipTexture(this, slot as EquipSlot, id)) ?? undefined,
+      price,
+      yes: 'ซื้อ',
+      onYes: () => {
+        account.buy(itemKey(kind, slot, id)).then(() => {
+          wear();
+          this.refresh();
+          this.say(`ได้ ${name} แล้ว`);
+        }).catch((err: Error) => this.say(err.message));
+      },
     });
   }
 
   private pickWeapon(): void {
     const l = this.setup.loadout;
-    this.openPicker('อาวุธหลัก', MAIN_WEAPONS.map((w) => {
+    this.openPicker('อาวุธหลัก', W('ico-target'), MAIN_WEAPONS.map((w) => {
       const def = WEAPONS[w];
       return {
         on: l.weapon === w,
         key: gunLook(this, w).key,
-        title: def.name,
+        name: def.name,
         body: `${def.desc}\nสกิล: ${SKILLS[def.skill!].name}`,
         pick: () => { l.weapon = w; },
       };
     }));
   }
 
-  private openPicker(title: string, opts: {
-    on: boolean; key: string | null; title: string; body: string; pick: () => void;
-    /** Not owned: shown on the card, and tapping offers to buy instead of wearing. */
-    lock?: string; buy?: () => void;
-  }[]): void {
-    this.closePicker();
-    const add = <T extends Phaser.GameObjects.GameObject>(o: T) => (this.picker.push(o), o);
-    // the dim layer swallows clicks so nothing behind the window reacts; tapping it closes
-    add(this.add.rectangle(960, 540, 1920, 1080, 0x000000, 0.55).setInteractive().setDepth(50))
-      .on('pointerdown', () => this.closePicker());
-    // up to five cards a row; more wrap to a second row
-    const perRow = Math.min(5, opts.length);
-    const rows = Math.ceil(opts.length / perRow);
-    const w = Math.max(700, perRow * 220 + 60);
-    const h = 170 + rows * 320;
-    const top = 540 - h / 2;
-    add(panel(this, 960, top + h / 2, w, h).setDepth(51));
-    add(fit(this.add.text(960, top + 58, title, {
-      fontFamily: FONT, fontSize: '38px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 7,
-    }).setOrigin(0.5), w - 200, 56).setDepth(53));
-    opts.forEach((o, i) => {
-      const row = Math.floor(i / perRow);
-      const inRow = Math.min(perRow, opts.length - row * perRow);
-      const x = 960 - ((inRow - 1) * 220) / 2 + (i % perRow) * 220;
-      const y = top + 270 + row * 320;
-      const card = add(new Chip(this, x, y, 200, 300, '', {
-        plate: 'slot', onClick: () => {
-          this.closePicker();
-          if (o.lock) o.buy?.();
+  /** The painted card picker; a piece that isn't owned offers to buy instead of wearing. */
+  private openPicker(title: string, icon: string, opts: {
+    on: boolean; key: string | null; name: string; body?: string; pick: () => void;
+    price?: Price | 'pass'; buy?: () => void;
+  }[], hint?: string): void {
+    pickerBox(this, {
+      title, hint, icon,
+      cards: opts.map((o) => ({
+        key: o.key, name: o.name, body: o.body, on: o.on, price: o.price,
+        onTap: () => {
+          if (o.price) o.buy?.();
           else {
             o.pick();
             this.refresh();
           }
         },
-      }).setDepth(52));
-      if (o.lock) card.setAlpha(0.85);
-      card.setSelected(o.on);
-      // picture, name, details, price: each in its own band so long Thai text never runs into the next
-      if (o.key) {
-        const img = this.add.image(0, -72, o.key);
-        img.setScale(110 / Math.max(img.width, img.height));
-        card.add(img);
-      } else card.add(label(this, 0, -72, '—', 60, '#7d89b3').setOrigin(0.5));
-      card.add(fit(label(this, 0, -6, o.title, 24, o.on ? '#ffd166' : '#ffffff').setOrigin(0.5, 0), 180, 36));
-      if (o.lock) card.add(fit(label(this, 0, 140, o.lock, 22, '#ffd166').setOrigin(0.5, 1), 180, 32));
-      card.add(fit(this.add.text(0, 34, o.body, {
-        fontFamily: FONT, fontSize: '17px', color: '#cfd8ff', align: 'center', wordWrap: { width: 176 }, lineSpacing: -2,
-      }).setOrigin(0.5, 0), 180, o.lock ? 72 : 106));
+      })),
     });
-    add(new Chip(this, 960 + w / 2 - 62, top + 58, 64, 64, '✕', { size: 30, onClick: () => this.closePicker() }).setDepth(53));
   }
+}
 
-  private closePicker(): void {
-    for (const o of this.picker) o.destroy();
-    this.picker = [];
-  }
-
+/** "พลังชีวิต +20  โจมตี +5%" */
+function statLine(stats: Partial<Stats>): string {
+  return (Object.keys(stats) as (keyof Stats)[]).map((k) => `${STAT_NAME[k]} ${fmt(k, stats[k]!)}`).join('  ');
 }
 
 function fmt(k: keyof Stats, v: number): string {

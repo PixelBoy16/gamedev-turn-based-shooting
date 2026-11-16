@@ -19,6 +19,8 @@ SHOP = SRC / 'black-boom-shop-parts 2' / 'public' / 'black-boom-shop'
 PASS = SRC / 'black-boom-pass-parts 2' / 'public' / 'black-boom-pass'
 # Battle Pass shapes shipped as SVG (XP bar fill, its ball, the hint strip, page chevrons)
 ACCOUNT = SRC / 'black-boom-account-parts 2' / 'public' / 'black-boom-account'
+MODAL = SRC / 'black-boom-modal-parts 2' / 'public' / 'black-boom-modals'
+MODAL_SVGS = ['effects/sparkle', 'buttons/close/icon', 'faces/none']
 ACCOUNT_SVGS = ['avatar/fill', 'panels/divider', 'header/divider']
 PASS_SVGS = ['progress/fill', 'progress/orb', 'progress/hint-base', 'buttons/page/chevron-left', 'buttons/page/chevron-right']
 # shop category icons (file in the drop -> our name), shown about 60 px
@@ -214,6 +216,25 @@ FILES = {
     'account/row': (ACCOUNT / 'leaderboard/empty-base.png', 540),
     'account/crate': (ACCOUNT / 'decorations/crate-left.png', 265),
     'account/ammo-crate': (ACCOUNT / 'decorations/ammo-crate.png', 390),
+    'modal/panel-offer': (MODAL / 'panels/premium.png', 1200),
+    'modal/panel-pick': (MODAL / 'panels/faces.png', 1400),
+    'modal/glow': (MODAL / 'effects/ticket-glow.png', 325),
+    'modal/ticket': (MODAL / 'icons/premium-ticket.png', 265),
+    'modal/emphasis': (MODAL / 'effects/emphasis.png', 105),
+    'modal/banner': (MODAL / 'premium/banner-base.png', 375),
+    'modal/price-plate': (MODAL / 'premium/price-base.png', 355),
+    'modal/gems': (MODAL / 'icons/gems.png', 85),
+    'modal/coins': (MODAL / 'icons/coins.png', 85),
+    'modal/btn-cancel': (MODAL / 'buttons/cancel/base.png', 360),
+    'modal/btn-confirm': (MODAL / 'buttons/confirm/base.png', 390),
+    'modal/btn-price': (MODAL / 'buttons/price/base.png', 255),
+    'modal/btn-close': (MODAL / 'buttons/close/base.png', 110),
+    'modal/tab': (MODAL / 'tabs/face-base.png', 385),
+    'modal/face': (MODAL / 'icons/face.png', 80),
+    'modal/hint': (MODAL / 'tabs/hint-base.png', 385),
+    'modal/card': (MODAL / 'cards/base.png', 305),
+    'modal/selection': (MODAL / 'cards/selection.png', 330),
+    'modal/check': (MODAL / 'icons/check.png', 70),
 }
 
 
@@ -278,7 +299,7 @@ def kit_panel() -> Image.Image:
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop', 'pass', 'account'):
+    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop', 'pass', 'account', 'modal'):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
@@ -290,6 +311,10 @@ def main() -> None:
     for svg in WARDROBE_SVGS:
         dst = OUT / 'wardrobe' / (svg.split('/')[-1] + '.svg')
         dst.write_bytes((WARDROBE / f'{svg}.svg').read_bytes())
+        print(f'{dst.relative_to(PROJECT)}  (svg)')
+    for svg in MODAL_SVGS:
+        dst = OUT / 'modal' / (svg.split('/')[-1] + '.svg')
+        dst.write_bytes((MODAL / f'{svg}.svg').read_bytes())
         print(f'{dst.relative_to(PROJECT)}  (svg)')
     for svg in ACCOUNT_SVGS:
         dst = OUT / 'account' / (svg.replace('/', '-') + '.svg')

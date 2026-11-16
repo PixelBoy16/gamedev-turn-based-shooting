@@ -382,11 +382,21 @@ export function loadArt(scene: Phaser.Scene): void {
   for (const [f, w, h] of [['avatar-fill', 160, 160], ['panels-divider', 890, 4], ['header-divider', 4, 52]] as const) {
     scene.load.svg(`ui-account/${f}`, `art/ui/account/${f}.svg`, { width: w, height: h });
   }
+  for (const f of MODAL_UI) scene.load.image(`ui-modal/${f}`, `art/ui/modal/${f}.webp`);
+  scene.load.svg('ui-modal/sparkle', 'art/ui/modal/sparkle.svg', { width: 48, height: 48 });
+  scene.load.svg('ui-modal/x', 'art/ui/modal/icon.svg', { width: 64, height: 64 });
+  scene.load.svg('ui-modal/none', 'art/ui/modal/none.svg', { width: 100, height: 100 });
   // simple shapes shipped as SVG, rasterised at the size they are drawn largest
   for (const [f, px] of [['checkbox', 48], ['tick', 48], ['dot', 40], ['play', 80], ['plus', 80], ['heart', 48], ['sword', 48], ['boot', 48]] as const) {
     scene.load.svg(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.svg`, { width: px, height: px });
   }
 }
+
+/** Pieces of the pop-up windows in public/art/ui/modal/, loaded as `ui-modal/<name>`. */
+export const MODAL_UI = [
+  'panel-offer', 'panel-pick', 'glow', 'ticket', 'emphasis', 'banner', 'price-plate', 'gems', 'coins',
+  'btn-cancel', 'btn-confirm', 'btn-price', 'btn-close', 'tab', 'face', 'hint', 'card', 'selection', 'check',
+] as const;
 
 /** Pieces of the account screen in public/art/ui/account/, loaded as `ui-account/<name>`. */
 export const ACCOUNT_UI = [

@@ -127,24 +127,6 @@ export class Button extends Phaser.GameObjects.Container {
   }
 }
 
-/** A yes/no window over everything; tapping outside or "ยกเลิก" closes it. Returns a close function. */
-export function confirmBox(scene: Phaser.Scene, text: string, yes: string, onYes: () => void): () => void {
-  const parts: Phaser.GameObjects.GameObject[] = [];
-  const close = () => {
-    for (const p of parts) p.destroy();
-    parts.length = 0;
-  };
-  parts.push(scene.add.rectangle(960, 540, 1920, 1080, 0x000000, 0.5).setInteractive().setDepth(60).on('pointerdown', close));
-  const g = scene.add.graphics().setDepth(61).setPosition(960, 540);
-  drawPlate(g, 800, 320, THEME.panel, { cut: 28, rivets: true, selected: true });
-  parts.push(g);
-  parts.push(scene.add.text(960, 470, text, { fontFamily: FONT, fontSize: '34px', color: '#ffffff', align: 'center', wordWrap: { width: 720 } })
-    .setOrigin(0.5).setDepth(62));
-  parts.push(new Button(scene, 820, 620, 260, 90, yes, { fill: THEME.green, size: 34, onClick: () => { close(); onYes(); } }).setDepth(62));
-  parts.push(new Button(scene, 1100, 620, 260, 90, 'ยกเลิก', { size: 32, onClick: close }).setDepth(62));
-  return close;
-}
-
 /** A small slanted fire-orange tab that heads a section; `x` is its left edge, `y` its middle. */
 export function sectionTab(scene: Phaser.Scene, x: number, y: number, str: string, fill: number = THEME.fire): Phaser.GameObjects.Container {
   const t = label(scene, 0, 0, str, 22).setOrigin(0.5);

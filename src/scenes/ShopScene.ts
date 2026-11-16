@@ -5,7 +5,8 @@ import {
 } from '../core/gear';
 import { ItemKind, itemKey, owns, priceOf, priceText } from '../core/shop';
 import { account } from '../net/account';
-import { FONT, confirmBox, fit, label } from '../ui/widgets';
+import { FONT, fit, label } from '../ui/widgets';
+import { offerBox } from '../ui/modals';
 import { Box, PlateButton, STROKE, filled, fitted, mockupBox, placed, walletBar } from '../ui/plates';
 import { loadSetup, saveSetup } from './setup';
 
@@ -177,7 +178,8 @@ export default class ShopScene extends Phaser.Scene {
     if (!account.view) return this.say('ต้องต่อเซิร์ฟเวอร์ก่อนถึงจะซื้อได้');
     if (this.busy) return;
     const price = p.price;
-    confirmBox(this, `ซื้อ ${p.name}\n${priceText(price)}`, 'ซื้อ', () => {
+    offerBox(this, {
+      title: 'ซื้อชิ้นนี้', tag: p.name, about: this.describe(p).replace('\n', ' · '), art: this.picture(p) ?? undefined, price, yes: 'ซื้อ', onYes: () => {
       this.busy = true;
       account.buy(itemKey(p.kind, p.slot, p.id))
         .then(() => this.say(`ได้ ${p.name} แล้ว กดใส่เลยได้`))
@@ -185,6 +187,7 @@ export default class ShopScene extends Phaser.Scene {
         .finally(() => {
           this.busy = false;
         });
+      },
     });
   }
 
