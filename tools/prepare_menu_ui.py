@@ -18,6 +18,8 @@ WARDROBE = SRC / 'black-boom-wardrobe-parts' / 'public' / 'black-boom-wardrobe'
 SHOP = SRC / 'black-boom-shop-parts 2' / 'public' / 'black-boom-shop'
 PASS = SRC / 'black-boom-pass-parts 2' / 'public' / 'black-boom-pass'
 # Battle Pass shapes shipped as SVG (XP bar fill, its ball, the hint strip, page chevrons)
+ACCOUNT = SRC / 'black-boom-account-parts 2' / 'public' / 'black-boom-account'
+ACCOUNT_SVGS = ['avatar/fill', 'panels/divider', 'header/divider']
 PASS_SVGS = ['progress/fill', 'progress/orb', 'progress/hint-base', 'buttons/page/chevron-left', 'buttons/page/chevron-right']
 # shop category icons (file in the drop -> our name), shown about 60 px
 SHOP_ICONS = {
@@ -186,6 +188,32 @@ FILES = {
     'pass/crate': (PASS / 'decorations/crate.png', 225),
     'pass/ammo-crate': (PASS / 'decorations/ammo-crate.png', 375),
     'pass/skull-canister': (PASS / 'decorations/skull-canister.png', 195),
+    'account/header': (ACCOUNT / 'header/base.png', 870),
+    'account/logo': (ACCOUNT / 'header/logo.png', 245),
+    'account/panel': (ACCOUNT / 'panels/account.png', 1010),
+    'account/board': (ACCOUNT / 'panels/leaderboard.png', 670),
+    'account/frame': (ACCOUNT / 'avatar/frame.png', 165),
+    'account/emphasis': (ACCOUNT / 'effects/emphasis.png', 75),
+    'account/stats': (ACCOUNT / 'stats/base.png', 885),
+    'account/crown': (ACCOUNT / 'icons/crown.png', 65),
+    'account/people': (ACCOUNT / 'icons/people.png', 75),
+    'account/person': (ACCOUNT / 'icons/person.png', 50),
+    'account/password': (ACCOUNT / 'icons/password.png', 50),
+    'account/name-input': (ACCOUNT / 'inputs/display-name/base.png', 460),
+    'account/field': (ACCOUNT / 'inputs/credentials/base.png', 795),
+    'account/btn-back': (ACCOUNT / 'buttons/back/base.png', 140),
+    'account/ico-back': (ACCOUNT / 'buttons/back/icon.png', 70),
+    'account/btn-save': (ACCOUNT / 'buttons/save/base.png', 235),
+    'account/btn-create': (ACCOUNT / 'buttons/create/base.png', 420),
+    'account/btn-login': (ACCOUNT / 'buttons/login/base.png', 415),
+    'account/title-base': (ACCOUNT / 'leaderboard/title-base.png', 595),
+    'account/laurels': (ACCOUNT / 'leaderboard/laurels.png', 530),
+    'account/backdrop': (ACCOUNT / 'leaderboard/backdrop.png', 495),
+    'account/trophy': (ACCOUNT / 'leaderboard/trophy.png', 290),
+    'account/podium': (ACCOUNT / 'leaderboard/podium.png', 420),
+    'account/row': (ACCOUNT / 'leaderboard/empty-base.png', 540),
+    'account/crate': (ACCOUNT / 'decorations/crate-left.png', 265),
+    'account/ammo-crate': (ACCOUNT / 'decorations/ammo-crate.png', 390),
 }
 
 
@@ -250,7 +278,7 @@ def kit_panel() -> Image.Image:
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop', 'pass'):
+    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop', 'pass', 'account'):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
@@ -263,6 +291,10 @@ def main() -> None:
         dst = OUT / 'wardrobe' / (svg.split('/')[-1] + '.svg')
         dst.write_bytes((WARDROBE / f'{svg}.svg').read_bytes())
         print(f'{dst.relative_to(PROJECT)}  (svg)')
+    for svg in ACCOUNT_SVGS:
+        dst = OUT / 'account' / (svg.replace('/', '-') + '.svg')
+        dst.write_bytes((ACCOUNT / f'{svg}.svg').read_bytes())
+        print(f'{dst.relative_to(PROJECT)}  (svg)')
     for svg in PASS_SVGS:
         dst = OUT / 'pass' / (svg.split('/')[-1] + '.svg')
         dst.write_bytes((PASS / f'{svg}.svg').read_bytes())
@@ -271,7 +303,8 @@ def main() -> None:
                       (LOBBY / 'backgrounds/friends-arena.png', 'lobby/bg'),
                       (WARDROBE / 'backgrounds/arena.png', 'wardrobe/bg'),
                       (SHOP / 'backgrounds/shop-arena.png', 'shop/bg'),
-                      (PASS / 'backgrounds/arena.png', 'pass/bg')):
+                      (PASS / 'backgrounds/arena.png', 'pass/bg'),
+                      (ACCOUNT / 'backgrounds/arena.png', 'account/bg')):
         bg = Image.open(src).convert('RGB')
         path = OUT / f'{name}.jpg'
         bg.save(path, 'JPEG', quality=86, optimize=True, progressive=True)

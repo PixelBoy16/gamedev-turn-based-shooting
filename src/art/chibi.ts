@@ -377,11 +377,23 @@ export function loadArt(scene: Phaser.Scene): void {
   for (const [f, w, h] of [['fill', 1000, 40], ['orb', 64, 64], ['hint-base', 900, 48], ['chevron-left', 48, 48], ['chevron-right', 48, 48]] as const) {
     scene.load.svg(`ui-pass/${f}`, `art/ui/pass/${f}.svg`, { width: w, height: h });
   }
+  scene.load.image('ui-account/bg', 'art/ui/account/bg.jpg');
+  for (const f of ACCOUNT_UI) scene.load.image(`ui-account/${f}`, `art/ui/account/${f}.webp`);
+  for (const [f, w, h] of [['avatar-fill', 160, 160], ['panels-divider', 890, 4], ['header-divider', 4, 52]] as const) {
+    scene.load.svg(`ui-account/${f}`, `art/ui/account/${f}.svg`, { width: w, height: h });
+  }
   // simple shapes shipped as SVG, rasterised at the size they are drawn largest
   for (const [f, px] of [['checkbox', 48], ['tick', 48], ['dot', 40], ['play', 80], ['plus', 80], ['heart', 48], ['sword', 48], ['boot', 48]] as const) {
     scene.load.svg(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.svg`, { width: px, height: px });
   }
 }
+
+/** Pieces of the account screen in public/art/ui/account/, loaded as `ui-account/<name>`. */
+export const ACCOUNT_UI = [
+  'header', 'logo', 'panel', 'board', 'frame', 'emphasis', 'stats', 'crown', 'people', 'person', 'password',
+  'name-input', 'field', 'btn-back', 'ico-back', 'btn-save', 'btn-create', 'btn-login',
+  'title-base', 'laurels', 'backdrop', 'trophy', 'podium', 'row', 'crate', 'ammo-crate',
+] as const;
 
 /** Pieces of the Battle Pass in public/art/ui/pass/, loaded as `ui-pass/<name>`. */
 export const PASS_UI = [
