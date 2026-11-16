@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
-import { ART_SCALE, equipTexture, gunLook, iconTexture, lookHand, lookRes, lookTexture, pieceTexture } from '../art/chibi';
+import { ART_SCALE, equipTexture, gunLook, lookHand, lookRes, lookTexture, pieceTexture } from '../art/chibi';
 import { ITEMS, ITEM_IDS, ItemId, LIMITS, MAIN_WEAPONS, SKILLS, WEAPONS } from '../core/data';
 import {
   EQUIP_SLOTS, EQUIP_SLOT_NAME, EquipSlot, FASHION_SLOTS, FASHION_SLOT_NAME, FashionSlot, STAT_NAME, Stats,
   equipDef, equipIn, fashionDef, fashionIn, sumStats, tankStats,
 } from '../core/gear';
-import { MAPS, MAP_IDS } from '../core/Maps';
+import { MAPS, MAP_IDS, MapId } from '../core/Maps';
 import { Difficulty } from '../core/BotAI';
 import { FONT, confirmBox, fit, label } from '../ui/widgets';
-import { Chip, PlateButton, STROKE, accents, panel, plate, screenChrome, tab } from '../ui/plates';
+import { Box, Chip, PlateButton, STROKE, SliceButton, SliceLook, filled, fitted, mockupBox, panel, placed, walletBar } from '../ui/plates';
 import { account } from '../net/account';
 import { ItemKind, enforceOwned, itemKey, owns, priceOf, priceText } from '../core/shop';
 import { DIFF_LABEL, FORMAT_LABEL, Format, MatchSetup, loadSetup, saveSetup } from './setup';
@@ -16,26 +16,46 @@ import { DIFF_LABEL, FORMAT_LABEL, Format, MatchSetup, loadSetup, saveSetup } fr
 const FORMATS: Format[] = ['1v1', '1v2', '2v2'];
 const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'hard'];
 
-/** Each item card wears one of the painted button plates, so the row reads at a glance. */
-const ITEM_PLATE: Record<ItemId, { key: string; inset: number; s: number }> = {
-  double: { key: 'ui-lobby/btn-join', inset: 46, s: 0.62 },
-  power: { key: 'ui-btn-ranked', inset: 46, s: 0.62 },
-  warp: { key: 'ui-btn-pass', inset: 34, s: 0.8 },
-  heal: { key: 'ui-lobby/btn-create', inset: 46, s: 0.62 },
-  armor: { key: 'ui-lobby/btn-join', inset: 46, s: 0.62 },
-};
+/** Where each piece sits in the designer's 1672x941 mockup (new_ui/black-boom-wardrobe-parts/layout.json). */
+const box = (b: Box): Box => mockupBox(b, 1672);
+const W = (name: string) => `ui-wardrobe/${name}`;
 
-/** Stat rows: an icon from the painted sets and a bar colour each. */
-const STAT_LOOK: Record<keyof Stats, { icon: string; color: number }> = {
-  hp: { icon: 'art-icon-heal', color: 0xff4d5e },
-  atk: { icon: 'ui-ranked/ico-match', color: 0x62e05a },
-  def: { icon: 'art-icon-armor', color: 0xffc23d },
-  move: { icon: 'ui-arrow', color: 0xff8a1f },
+// the drop's plates, nine-sliced (corner size on the exported texture)
+const TAB_GOLD: SliceLook = { key: W('tab-gold'), inset: 34 };
+const TAB_NAVY: SliceLook = { key: W('tab-navy'), inset: 30 };
+const TAB_RED: SliceLook = { key: W('tab-red'), inset: 38 };
+const ROW_ON: SliceLook = { key: W('row-selected'), inset: 18 };
+const TILE: SliceLook = { key: W('tile'), inset: 22 };
+
+const FASHION_ICON: Record<FashionSlot, string> = {
+  hat: 'hat', glasses: 'glasses', hair: 'hair', face: 'face', cloth: 'clothes', eyes: 'eyes', set: 'set-box', back: 'backpack',
 };
+/** Item cards: plate colour and painted icon. */
+const ITEM_LOOK: Record<ItemId, { card: string; icon: string }> = {
+  double: { card: 'card-blue', icon: 'double-shot' },
+  power: { card: 'card-orange', icon: 'power' },
+  warp: { card: 'card-purple', icon: 'warp' },
+  heal: { card: 'card-green', icon: 'heart' },
+  armor: { card: 'card-blue', icon: 'shield' },
+};
+/** Stat rows: icon and bar colour (from the drop's stats/*.svg). */
+const STAT_LOOK: Record<keyof Stats, { icon: string; color: number }> = {
+  hp: { icon: 'heart', color: 0xff464c },
+  atk: { icon: 'sword', color: 0x7cfa27 },
+  def: { icon: 'ico-shield', color: 0xffc900 },
+  move: { icon: 'boot', color: 0xff9200 },
+};
+const MAP_THUMB: Record<MapId, string> = { hills: 'map-hills', islands: 'map-islands', mine: 'map-mine' };
+
+const text = (scene: Phaser.Scene, str: string, size: number, color = '#ffffff', stroke = 5) =>
+  scene.add.text(0, 0, str, { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color, stroke: STROKE, strokeThickness: stroke });
 
 /**
- * Pick character, 3 items, map, format and bot difficulty. No mockup of its own: built
- * from the theme kit (src/ui/plates.ts) so it matches the painted screens around it.
+ * Pick character, 3 items, map, format and bot difficulty. Built to the painted mockup
+ * (new_ui/black-boom-wardrobe-parts): fashion slots, the character on its stage, gear and
+ * stats, the weapon; the items row; map, format and bot strength with the start button on
+ * the right. Dressing for a friend room or ranked (the room decides the rest) leaves the
+ * right column to a cheering fighter and the start button.
  */
 export default class SetupScene extends Phaser.Scene {
   private setup!: MatchSetup;
@@ -64,23 +84,17 @@ export default class SetupScene extends Phaser.Scene {
   }
 
   create(): void {
-    const bg = this.add.image(960, 540, 'ui-lobby/bg');
+    const bg = this.add.image(960, 540, W('bg'));
     bg.setScale(Math.max(1920 / bg.width, 1080 / bg.height));
-    screenChrome(this, { title: 'ตู้เสื้อผ้า', icon: 'ui-lobby/ico-wardrobe', onBack: () => this.scene.start(this.returnTo ?? 'menu') });
-
+    filled(this, W('crate-left'), box([0, 799, 574, 142]));
+    this.chrome();
     this.wardrobe();
     this.itemPicker();
-    if (!this.online) this.rightColumn();
-    else this.cheer();
-
-    this.hint = label(this, 960, 1040, '', 28, '#ffd166').setOrigin(0.5).setDepth(10);
-    // the green plate is the call to action; it breathes so the eye finds it
-    const go = new PlateButton(this, 'ui-lobby/btn-create', [1420, 940, 440, 126], () => this.start());
-    const t = this.add.text(0, 0, this.online ? 'ตกลง' : 'เริ่มเล่น!', {
-      fontFamily: FONT, fontSize: '54px', fontStyle: 'bold', color: '#ffffff', stroke: STROKE, strokeThickness: 9,
-    }).setOrigin(0.5);
-    go.put(fit(t, go.w * 0.7, go.h * 0.6), 0.5, 0.48);
-    this.tweens.add({ targets: go, scale: 1.04, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    if (this.online) this.cheer();
+    else this.rightColumn();
+    this.startButton();
+    filled(this, W('crate-right'), box([1492, 853, 180, 88]));
+    this.hint = label(this, 960, 1030, '', 28, '#ffd166').setOrigin(0.5).setDepth(10);
     this.refresh();
   }
 
@@ -97,98 +111,129 @@ export default class SetupScene extends Phaser.Scene {
     this.scene.start(this.returnTo ?? 'battle');
   }
 
+  private back(): void {
+    this.scene.start(this.returnTo ?? 'menu');
+  }
+
   private say(msg: string): void {
     this.hint.setText(msg).setAlpha(1);
     this.tweens.killTweensOf(this.hint);
     this.tweens.add({ targets: this.hint, alpha: 0, delay: 1800, duration: 400 });
   }
 
+  // ---------------------------------------------------------------- frame
+
+  /** Back buttons (top and bottom), the title plate with the hanger, wallet and settings. */
+  private chrome(): void {
+    const back = new PlateButton(this, 'ui-ranked/btn-back', box([20, 14, 92, 76]), () => this.back());
+    back.put(fitted(this, 'ui-ranked/ico-back', back.w * 0.52, back.h * 0.56), 0.5, 0.5);
+    filled(this, W('header'), box([142, 14, 556, 88]));
+    placed(this, W('logo'), box([138, 8, 171, 94]));
+    const [dx, dy, , dh] = box([327, 30, 4, 51]);
+    this.add.rectangle(dx, dy, 4, dh, 0xd5dbee, 1).setOrigin(0);
+    placed(this, W('ico-hanger'), box([346, 7, 84, 85]));
+    const [tx, ty, tw, th] = box([437, 16, 220, 69]);
+    fit(text(this, 'ตู้เสื้อผ้า', 56, '#ffffff', 8).setOrigin(0, 0.5).setPosition(tx, ty + th / 2), tw, th);
+    walletBar(this);
+
+    const ret = new PlateButton(this, W('btn-return'), box([18, 851, 236, 82]), () => this.back(), [0, 0, 1, 1]);
+    ret.put(fitted(this, 'ui-ranked/ico-back', ret.w * 0.18, ret.h * 0.48), 0.32, 0.5);
+    ret.put(fit(text(this, 'กลับ', 40, '#ffffff', 6).setOrigin(0, 0.5), ret.w * 0.45, ret.h * 0.65), 0.45, 0.5);
+  }
+
+  /** A section tab: a painted plate with an icon and its title. Not a button. */
+  private tab(b: Box, look: SliceLook, icon: string, title: string, size = 28): void {
+    const t = new SliceButton(this, box(b), look);
+    t.put(fitted(this, W(`ico-${icon}`), t.w * 0.2, t.h * 0.7), 0.195, 0.5);
+    t.put(fit(text(this, title, size).setOrigin(0, 0.5), t.w * 0.63, t.h * 0.8), 0.31, 0.5);
+  }
+
   // ---------------------------------------------------------------- wardrobe
 
   /**
-   * Fashion slots on the left (looks only), the chibi on a magic circle in the
-   * middle, equipment slots and stats on the right (numbers only), weapons at the
-   * far right. Tapping a slot opens a picker with every piece for it.
+   * Fashion slots on the left (looks only), the character on its stage in the middle,
+   * equipment slots and stats (numbers only), the weapon at the right. Tapping a slot
+   * opens a picker with every piece for it.
    */
   private wardrobe(): void {
-    // the wardrobe panel spans x 55..1325, y 165..665 (tabs sit on its top edge, clear of the
-    // title plate); the items panel below matches its width
-    panel(this, 690, 415, 1270, 500);
-    accents(this, 55, 165, 1270, 500);
-    // faint dividers between looks, the stage, and stats
-    this.add.rectangle(318, 420, 3, 400, 0x8991b6, 0.3);
-    this.add.rectangle(1075, 420, 3, 400, 0x8991b6, 0.3);
+    filled(this, W('panel'), box([48, 132, 1145, 469]));
+    this.tab([63, 117, 155, 51], TAB_GOLD, 'shirt', 'แฟชั่น');
+    this.tab([201, 118, 159, 50], TAB_NAVY, 'face', 'แค่หน้าตา');
+    this.tab([629, 115, 278, 53], TAB_GOLD, 'tools', 'อุปกรณ์ · ค่าสถานะ');
+    this.tab([945, 115, 151, 52], TAB_RED, 'target', 'อาวุธ');
 
-    this.stage(540, 392);
-    const zoom = 2.4;
-    const feet = 522;
-    const avatar = this.add.image(540, feet, '__DEFAULT').setOrigin(0.5, 1);
-    const hand = this.add.image(578, feet - 45, '__DEFAULT');
+    // the character, in the outfit being picked, on the lit stage
+    filled(this, W('showcase'), box([301, 154, 350, 362]));
+    const [ax, ay, aw, ah] = box([383, 236, 238, 236]);
+    const feet = ay + ah;
+    const cx = ax + aw / 2 - 18;
+    const zoom = 3.5;
+    const avatar = this.add.image(cx, feet, '__DEFAULT').setOrigin(0.5, 1);
+    const hand = this.add.image(cx + 38, feet - 58, '__DEFAULT');
     this.refreshers.push(() => {
       const l = this.setup.loadout;
       avatar.setTexture(lookTexture(this, l)).setScale(ART_SCALE * zoom * lookRes());
       const fist = lookHand();
-      if (fist) hand.setPosition(540 + fist.x * ART_SCALE * zoom, feet + fist.y * ART_SCALE * zoom);
+      if (fist) hand.setPosition(cx + fist.x * ART_SCALE * zoom, feet + fist.y * ART_SCALE * zoom);
       const g = gunLook(this, l.weapon);
       hand.setTexture(g.key).setOrigin(g.ox, g.oy).setScale(g.scale * (fist ? zoom : 1.7)).setRotation(-0.3);
     });
-    (['hat', 'glasses'] as const).forEach((k, i) => {
-      const btn = new Chip(this, 465 + i * 152, 622, 142, 46, k === 'hat' ? 'ซ่อนหมวก' : 'ซ่อนแว่น', {
-        size: 22, onClick: () => { this.setup.loadout.hide[k] = !this.setup.loadout.hide[k]; this.refresh(); },
-      });
-      // a tick box on the left of the label
-      const box = this.add.graphics();
-      btn.add(box);
-      btn.placeText(14, 0, 90, 36);
-      this.refreshers.push(() => {
-        const on = this.setup.loadout.hide[k];
-        btn.setSelected(on);
-        box.clear();
-        box.fillStyle(0x091024, 1).fillRoundedRect(-62, -12, 24, 24, 5);
-        box.lineStyle(3, on ? 0xffc23d : 0x8991b6, 1).strokeRoundedRect(-62, -12, 24, 24, 5);
-        if (on) box.lineStyle(4, 0xffc23d, 1).strokePoints([{ x: -57, y: 0 }, { x: -52, y: 6 }, { x: -43, y: -6 }] as unknown as Phaser.Math.Vector2[]);
-      });
-    });
+    this.toggle([325, 521, 157, 53], 'ซ่อนหมวก', 'hat');
+    this.toggle([482, 521, 146, 53], 'ซ่อนแว่น', 'glasses');
 
-    tab(this, 70, 165, 'แฟชั่น · แค่หน้าตา', { icon: 'ui-lobby/ico-wardrobe' });
     FASHION_SLOTS.forEach((slot, i) => {
-      const sample = fashionIn(slot).find((f) => f.id !== 'none')?.id;
-      this.tile(135 + (i % 2) * 112, 240 + Math.floor(i / 2) * 98, FASHION_SLOT_NAME[slot], () => {
+      this.slot([82 + (i % 2) * 112, 176 + Math.floor(i / 2) * 98, 109, 97], FASHION_ICON[slot], FASHION_SLOT_NAME[slot], () => {
         const id = this.setup.loadout.look[slot];
-        return { key: pieceTexture(this, slot, id), name: id === 'none' ? '' : fashionDef(slot, id)!.name };
-      }, () => this.pickFashion(slot), sample ? pieceTexture(this, slot, sample) : null);
+        return id === 'none' ? null : { key: pieceTexture(this, slot, id), name: fashionDef(slot, id)!.name };
+      }, () => this.pickFashion(slot));
     });
-
-    tab(this, 745, 165, 'อุปกรณ์ · ค่าสถานะ', { icon: 'art-icon-wall' });
     EQUIP_SLOTS.forEach((slot, i) => {
-      const sample = equipIn(slot).find((e) => e.id !== 'none')?.id;
-      this.tile(840 + (i % 2) * 124, 244 + Math.floor(i / 2) * 100, EQUIP_SLOT_NAME[slot], () => {
+      this.slot([650 + (i % 2) * 126, 177 + Math.floor(i / 2) * 99, 123, 101], slot, EQUIP_SLOT_NAME[slot], () => {
         const id = this.setup.loadout.equip[slot];
-        return { key: equipTexture(this, slot, id), name: id === 'none' ? '' : equipDef(slot, id)!.name };
-      }, () => this.pickEquip(slot), sample ? equipTexture(this, slot, sample) : null, 112);
+        return id === 'none' ? null : { key: equipTexture(this, slot, id), name: equipDef(slot, id)!.name };
+      }, () => this.pickEquip(slot));
     });
-    this.stats(760, 450);
+    this.stats();
+    this.weapon();
+  }
 
-    tab(this, 1095, 165, 'อาวุธ', { color: 0xe8333a, icon: 'ui-ranked/ico-match' });
-    this.weaponCard(1200, 292);
-    const skill = this.add.text(1200, 392, '', {
-      fontFamily: FONT, fontSize: '20px', fontStyle: 'bold', color: '#8ef0ff', align: 'center', wordWrap: { width: 220 }, lineSpacing: 2,
-      stroke: STROKE, strokeThickness: 3,
-    }).setOrigin(0.5, 0);
+  /**
+   * A slot: the piece being worn (picture and name), or, when empty, the painted icon of
+   * what goes there over the slot's name.
+   */
+  private slot(b: Box, icon: string, slotName: string, current: () => { key: string | null; name: string } | null, onClick: (() => void) | null): SliceButton {
+    const btn = new SliceButton(this, box(b), TILE, { onClick: onClick ?? undefined });
+    const [, , w, h] = box(b);
+    const iconBox = { x: w * 0.5, y: h * 0.32, w: w * 0.62, h: h * 0.5 };
+    const art = this.add.image(0, 0, '__DEFAULT');
+    btn.putAt(art, iconBox.x, iconBox.y);
+    const name = label(this, 0, 0, '', 22).setOrigin(0.5);
+    btn.putAt(name, w / 2, h * 0.76);
     this.refreshers.push(() => {
-      const sk = WEAPONS[this.setup.loadout.weapon].skill!;
-      skill.setText(`สกิล E: ${SKILLS[sk].name}\n${SKILLS[sk].desc}`);
+      const got = current();
+      const c = got?.key ? { key: got.key, name: got.name } : null;
+      art.setTexture(c ? c.key : W(`ico-${icon}`)).setAlpha(c ? 1 : 0.9);
+      art.setScale(Math.min(iconBox.w / art.width, iconBox.h / art.height));
+      name.setText(c ? c.name : slotName).setColor(c ? '#ffffff' : '#c9d2f2');
+      fit(name.setScale(1), w * 0.9, h * 0.34);
     });
-    this.tile(1146, 588, 'อาวุธรอง', () => ({ key: gunLook(this, 'drill').key, name: 'สว่าน ×2' }), null, null, 98);
-    const special = new Chip(this, 1254, 588, 98, 92, '', {});
-    special.setAlpha(0.75);
-    const plus = this.add.graphics();
-    plus.fillStyle(0x8991b6, 0.9).fillRoundedRect(-4, -30, 8, 32, 3).fillRoundedRect(-16, -18, 32, 8, 3);
-    special.add([plus, label(this, 0, 30, 'พิเศษ', 17, '#9aa6cf').setOrigin(0.5)]);
+    return btn;
+  }
+
+  /** Hide hat / hide glasses: a navy plate with a tick box. */
+  private toggle(b: Box, title: string, k: 'hat' | 'glasses'): void {
+    const btn = new SliceButton(this, box(b), TAB_NAVY, {
+      onClick: () => { this.setup.loadout.hide[k] = !this.setup.loadout.hide[k]; this.refresh(); },
+    });
+    const boxImg = fitted(this, W('checkbox'), btn.h * 0.56, btn.h * 0.56);
+    const tick = fitted(this, W('tick'), btn.h * 0.6, btn.h * 0.6);
+    btn.put(boxImg, 0.2, 0.5).put(tick, 0.21, 0.46);
+    btn.put(fit(text(this, title, 24).setOrigin(0, 0.5), btn.w * 0.6, btn.h * 0.72), 0.34, 0.5);
+    this.refreshers.push(() => tick.setVisible(this.setup.loadout.hide[k]));
   }
 
   /** Stat rows under the gear: icon, name, a coloured bar (100% two thirds along) and the value with its change. */
-  private stats(x: number, y0: number): void {
+  private stats(): void {
     // 100% sits two thirds along, so gear that raises a stat visibly pushes past it
     const ROWS: { k: keyof Stats; value: (ts: ReturnType<typeof tankStats>) => number; text: (v: number) => string }[] = [
       { k: 'hp', value: (ts) => ts.maxHp / 1000, text: (v) => `${Math.round(v * 1000)}` },
@@ -196,133 +241,161 @@ export default class SetupScene extends Phaser.Scene {
       { k: 'def', value: (ts) => 2 - ts.def, text: (v) => `${Math.round(v * 100)}%` },
       { k: 'move', value: (ts) => ts.move, text: (v) => `${Math.round(v * 100)}%` },
     ];
-    const rowY = (i: number) => y0 + i * 42;
-    const barX = x + 118;
-    const barW = 112;
     const g = this.add.graphics();
-    const texts = ROWS.map((r, i) => {
-      if (this.textures.exists(STAT_LOOK[r.k].icon)) {
-        const icon = this.add.image(x + 14, rowY(i), STAT_LOOK[r.k].icon);
-        icon.setScale(Math.min(30 / icon.width, 30 / icon.height));
-      }
-      return {
-        name: label(this, x + 38, rowY(i), STAT_NAME[r.k], 21, '#ffffff').setOrigin(0, 0.5),
-        value: label(this, barX + barW + 10, rowY(i), '', 20).setOrigin(0, 0.5),
-      };
+    const rows = ROWS.map((r, i) => {
+      const dy = i * 35;
+      placed(this, W(STAT_LOOK[r.k].icon), box([645, 416 + dy, 32, 31]));
+      const [nx, ny, , nh] = box([682, 416 + dy, 63, 29]);
+      fit(text(this, STAT_NAME[r.k], 24).setOrigin(0, 0.5).setPosition(nx, ny + nh / 2), box([0, 0, 63, 0])[2], 34);
+      const [vx, vy, , vh] = box([872, 415 + dy, 108, 31]);
+      return { rail: box([746, 421 + dy, 118, 22]), value: text(this, '', 24, '#ffffff', 4).setOrigin(0, 0.5).setPosition(vx, vy + vh / 2) };
     });
     this.refreshers.push(() => {
       const ts = tankStats(this.setup.loadout);
       const sum = sumStats(this.setup.loadout);
       g.clear();
       ROWS.forEach((r, i) => {
-        const y = rowY(i);
+        const [x, y, w, h] = rows[i].rail;
         const v = r.value(ts);
         const up = sum[r.k] > 0;
         const down = sum[r.k] < 0;
-        const fill = Math.min(1, v / 1.5);
-        g.fillStyle(0x091024, 1).fillRoundedRect(barX, y - 9, barW, 18, 9);
-        g.fillStyle(STAT_LOOK[r.k].color, 1).fillRoundedRect(barX + 2, y - 7, Math.max(8, fill * (barW - 4)), 14, 7);
-        g.fillStyle(0xffffff, 0.35).fillRoundedRect(barX + 4, y - 6, Math.max(4, fill * (barW - 8)), 4, 2);
-        g.fillStyle(0xffffff, 0.7).fillRect(barX + barW * (2 / 3), y - 11, 2, 22); // the 100% mark
-        texts[i].value.setText(`${r.text(v)}${sum[r.k] ? ` (${fmt(r.k, sum[r.k])})` : ''}`)
-          .setColor(up ? '#7dff8a' : down ? '#ff8a80' : '#ffffff');
-        fit(texts[i].value.setScale(1), 1072 - texts[i].value.x - 6, 30);
+        const fill = Math.max(0.06, Math.min(1, v / 1.5));
+        g.fillStyle(0x080b19, 1).fillRoundedRect(x, y, w, h, h / 2);
+        g.fillStyle(0x0c1024, 1).fillRoundedRect(x + 2, y + 2, w - 4, h - 4, (h - 4) / 2);
+        g.fillStyle(STAT_LOOK[r.k].color, 1).fillRoundedRect(x + 1, y + 1, (w - 2) * fill, h - 2, (h - 2) / 2);
+        g.fillStyle(0xffffff, 0.25).fillRect(x + 10, y + 4, Math.max(0, (w - 2) * fill - 20), 2);
+        rows[i].value.setText(`${r.text(v)}${sum[r.k] ? ` (${fmt(r.k, sum[r.k])})` : ''}`)
+          .setColor(up ? '#80ff37' : down ? '#ff6868' : '#ffffff');
+        fit(rows[i].value.setScale(1), box([0, 0, 120, 0])[2], 36);
       });
     });
   }
 
-  /** The main weapon on a purple plate with gold rays; tap to change it. */
-  private weaponCard(x: number, y: number): void {
-    const rays = this.add.image(x + 96, y - 80, 'ui-lobby/emphasis').setFlipX(true);
-    rays.setScale(64 / rays.height);
-    const card = new Chip(this, x, y, 210, 170, '', { onClick: () => this.pickWeapon() });
-    card.addAt(plate(this, 'ui-btn-pass', 0, 0, 210, 170, 34, 0.8), 2);
-    const img = this.add.image(0, -18, '__DEFAULT');
-    card.add(img);
-    card.text.setFontSize(30);
+  /** The main weapon on its purple card (tap to change it), its skill, and the fixed secondary slots. */
+  private weapon(): void {
+    const card = new PlateButton(this, W('weapon-card'), box([952, 175, 214, 176]), () => this.pickWeapon(), [0, 0, 1, 1]);
+    const gun = this.add.image(0, 0, '__DEFAULT');
+    card.put(gun, 0.5, 0.39);
+    const name = text(this, '', 32, '#ffffff', 6).setOrigin(0.5);
+    card.put(name, 0.5, 0.845);
+    placed(this, W('emphasis'), box([945, 175, 55, 53]));
+    const [sx, sy, sw] = box([955, 349, 218, 57]);
+    const skill = this.add.text(sx + sw / 2, sy, '', {
+      fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: '#72f6ff', align: 'center', stroke: STROKE, strokeThickness: 4, lineSpacing: -2,
+    }).setOrigin(0.5, 0);
     this.refreshers.push(() => {
       const l = this.setup.loadout;
-      img.setTexture(gunLook(this, l.weapon).key);
-      img.setScale(Math.min(170 / img.width, 100 / img.height));
-      card.text.setText(WEAPONS[l.weapon].name);
-      card.placeText(0, 56, 190, 40);
+      gun.setTexture(gunLook(this, l.weapon).key);
+      gun.setScale(Math.min((card.w * 0.84) / gun.width, (card.h * 0.62) / gun.height));
+      name.setText(WEAPONS[l.weapon].name);
+      fit(name.setScale(1), card.w * 0.84, card.h * 0.26);
+      const sk = WEAPONS[l.weapon].skill!;
+      skill.setText(`สกิล E: ${SKILLS[sk].name}\n${SKILLS[sk].desc}`);
+      fit(skill.setScale(1), sw, 72);
     });
+    this.slot([976, 469, 99, 100], 'drill', 'สว่าน ×2', () => ({ key: W('ico-drill'), name: 'สว่าน ×2' }), null);
+    const special = this.slot([1076, 469, 94, 100], 'drill', 'พิเศษ', () => ({ key: W('plus'), name: 'พิเศษ' }), null);
+    special.setAlpha(0.8);
   }
 
-  /**
-   * The stage the character stands on: a round window with a glowing orange rim, a lamp
-   * at the top throwing a cone of light down, and the painted glowing ring at the feet.
-   */
-  private stage(x: number, y: number): void {
-    const r = 168;
-    if (!this.textures.exists('wardrobe-stage')) {
-      const size = r * 2;
-      const tex = this.textures.createCanvas('wardrobe-stage', size, size)!;
-      const c = tex.context;
-      const bg = c.createRadialGradient(r, r * 0.9, 20, r, r, r);
-      bg.addColorStop(0, '#3a3256');
-      bg.addColorStop(0.6, '#211d3a');
-      bg.addColorStop(1, '#100e22');
-      c.fillStyle = bg;
-      c.beginPath();
-      c.arc(r, r, r, 0, Math.PI * 2);
-      c.fill();
-      // the cone from the lamp, fading out toward the floor
-      const cone = c.createLinearGradient(0, 10, 0, size - 30);
-      cone.addColorStop(0, 'rgba(255,214,140,0.55)');
-      cone.addColorStop(1, 'rgba(255,170,60,0.06)');
-      c.fillStyle = cone;
-      c.beginPath();
-      c.moveTo(r - 34, 14);
-      c.lineTo(r + 34, 14);
-      c.lineTo(r + 150, size - 40);
-      c.lineTo(r - 150, size - 40);
-      c.closePath();
-      c.fill();
-      tex.refresh();
-    }
-    this.add.image(x, y, 'wardrobe-stage');
-    const rim = this.add.graphics({ x, y });
-    rim.lineStyle(18, 0xff8a1f, 0.18).strokeCircle(0, 0, r + 6);
-    rim.lineStyle(10, 0x091024, 1).strokeCircle(0, 0, r);
-    rim.lineStyle(7, 0xff9a2e, 1).strokeCircle(0, 0, r);
-    rim.lineStyle(2, 0xffd59a, 0.8).strokeCircle(0, 0, r - 5);
-    // the lamp
-    rim.fillStyle(0x2a2d40, 1).fillRoundedRect(-30, -r + 4, 60, 16, 6);
-    rim.fillStyle(0xfff1c4, 1).fillEllipse(0, -r + 20, 46, 10);
-    // glowing floor under the feet
-    const ring = this.add.image(x, y + 128, 'ui-lobby/avatar-ring');
-    ring.setScale(240 / ring.width);
-    this.tweens.add({ targets: ring, alpha: 0.65, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-  }
+  // ---------------------------------------------------------------- items
 
-  /**
-   * A slot: the piece's picture and name, or (empty) a white outline of a sample piece
-   * over the slot name, so every slot says what goes in it.
-   */
-  private tile(
-    x: number, y: number, slotName: string, current: () => { key: string | null; name: string },
-    onClick: (() => void) | null, ghostKey: string | null = null, w = 100, h = 92,
-  ): void {
-    const btn = new Chip(this, x, y, w, h, '', { onClick: onClick ?? undefined });
-    if (!onClick) btn.setAlpha(0.8);
-    const img = this.add.image(0, -12, '__DEFAULT');
-    const ghost = ghostKey ? this.add.image(0, -12, ghostKey).setTint(0xffffff).setTintMode(Phaser.TintModes.FILL).setAlpha(0.85) : null;
-    if (ghost) ghost.setScale(Math.min((w - 46) / ghost.width, (h - 46) / ghost.height));
-    const name = label(this, 0, h / 2 - 8, '', 17).setOrigin(0.5, 1);
-    btn.add([img, name]);
-    if (ghost) btn.add(ghost);
+  /** The items for the match: a coloured card each (icon, name, what it does); tap to take or put back. */
+  private itemPicker(): void {
+    filled(this, W('items-panel'), box([82, 590, 1108, 261]));
+    this.tab([104, 582, 160, 53], TAB_GOLD, 'bag', 'ไอเท็ม');
+    const [cx, cy, , ch] = box([287, 595, 106, 37]);
+    const count = text(this, '', 31, '#ffff4c', 5).setOrigin(0, 0.5).setPosition(cx, cy + ch / 2);
+    const dots = [0, 1, 2].map((i) => placed(this, W('dot'), box([408 + i * 29, 604, 23, 23])));
+    const cards: Box[] = [[112, 641, 210, 178], [330, 641, 210, 178], [548, 641, 205, 178], [757, 641, 205, 178], [966, 641, 204, 178]];
+    ITEM_IDS.forEach((id, i) => {
+      const look = ITEM_LOOK[id];
+      const card = new PlateButton(this, W(look.card), box(cards[i]), () => {
+        const s = this.setup.items;
+        const at = s.indexOf(id);
+        if (at >= 0) s.splice(at, 1);
+        else if (s.length < LIMITS.itemsPerMatch) s.push(id);
+        else this.say(`เลือกได้ ${LIMITS.itemsPerMatch} ชิ้น กดชิ้นที่เลือกแล้วเพื่อเอาออก`);
+        this.refresh();
+      }, [0, 0, 1, 1]);
+      card.put(fitted(this, W(`ico-${look.icon}`), card.w * 0.37, card.h * 0.41), 0.255, 0.275);
+      if (id === 'power') card.put(text(this, '+30%', 22, '#fff737', 5).setOrigin(0.5), 0.245, 0.39);
+      card.put(fit(text(this, ITEMS[id].name, 31, '#ffffff', 6).setOrigin(0.5), card.w * 0.54, card.h * 0.36), 0.7, 0.27);
+      const desc = this.add.text(0, 0, ITEMS[id].desc, {
+        fontFamily: FONT, fontSize: '23px', fontStyle: 'bold', color: '#ffffff', align: 'center', stroke: STROKE, strokeThickness: 4,
+        wordWrap: { width: card.w * 0.86 }, lineSpacing: -4,
+      }).setOrigin(0.5);
+      card.put(fit(desc, card.w * 0.88, card.h * 0.42), 0.5, 0.72);
+      const tick = fitted(this, W('check'), 44, 44);
+      card.putAt(tick, card.w - 14, 14);
+      this.refreshers.push(() => {
+        const on = this.setup.items.includes(id);
+        tick.setVisible(on);
+        card.base.setTint(on ? 0xffffff : 0x9097b0);
+        card.setAlpha(on ? 1 : 0.78);
+      });
+    });
     this.refreshers.push(() => {
-      const c = current();
-      img.setVisible(!!c.key);
-      ghost?.setVisible(!c.key);
-      name.setText(c.key ? c.name : slotName).setColor(c.key ? '#ffffff' : '#c9d2f2');
-      fit(name.setScale(1), w - 12, 24);
-      if (c.key) {
-        img.setTexture(c.key);
-        img.setScale(Math.min((w - 30) / img.width, (h - 36) / img.height));
-      }
+      const n = this.setup.items.length;
+      count.setText(`เลือก ${n}/${LIMITS.itemsPerMatch}`).setColor(n === LIMITS.itemsPerMatch ? '#ffff4c' : '#ffffff');
+      dots.forEach((d, i) => d.setTint(i < n ? 0xffffff : 0x4a5070));
     });
+  }
+
+  // ---------------------------------------------------------------- right column
+
+  /** Map, format and bot strength (offline only: a friend room or ranked decides these). */
+  private rightColumn(): void {
+    filled(this, W('setup-panel'), box([1204, 129, 424, 748]));
+    this.tab([1215, 109, 158, 53], TAB_GOLD, 'map-pin', 'ด่าน');
+    MAP_IDS.forEach((id, i) => {
+      const row = this.choice([1233, 169 + i * 69, 370, 65], () => { this.setup.map = id; this.refresh(); }, () => this.setup.map === id, 0.92);
+      row.put(fitted(this, W(MAP_THUMB[id]), row.w * 0.33, row.h * 0.78), 0.195, 0.5);
+      row.put(fit(text(this, MAPS[id].name, 32).setOrigin(0.5), row.w * 0.42, row.h * 0.72), 0.6, 0.5);
+    });
+    this.tab([1214, 379, 166, 51], TAB_GOLD, 'swords', 'รูปแบบ');
+    FORMATS.forEach((f, i) => {
+      const row = this.choice([1235, 435 + i * 55, 368, 51], () => { this.setup.format = f; this.refresh(); }, () => this.setup.format === f, 0.93);
+      row.put(fit(text(this, FORMAT_LABEL[f], 31).setOrigin(0.5), row.w * 0.76, row.h * 0.8), 0.5, 0.5);
+    });
+    this.tab([1214, 604, 260, 49], TAB_GOLD, 'robot', 'ความเก่งของบอท', 26);
+    DIFFICULTIES.forEach((d, i) => {
+      const row = this.choice([1234 + i * 125, 657, 118, 62], () => { this.setup.difficulty = d; this.refresh(); }, () => this.setup.difficulty === d, 0.92, 0.12);
+      row.put(fit(text(this, DIFF_LABEL[d], 33).setOrigin(0.5), row.w * 0.84, row.h * 0.8), 0.5, 0.5);
+    });
+  }
+
+  /** A row you pick one of: navy plate, gold when picked, with a green tick at (tx, ty). */
+  private choice(b: Box, pick: () => void, on: () => boolean, tx: number, ty = 0.5): SliceButton {
+    const row = new SliceButton(this, box(b), TAB_NAVY, { selected: ROW_ON, onClick: pick });
+    const tick = fitted(this, W('check'), 40, 40);
+    // the corner badge sits out on the edge; the row ones inside its right end
+    row.put(tick, tx, ty);
+    this.refreshers.push(() => {
+      row.setSelected(on());
+      tick.setVisible(on());
+      row.bringToTop(tick);
+    });
+    return row;
+  }
+
+  /** The start button (play mark, gold rays), and for a friend room a cheering fighter above it. */
+  private startButton(): void {
+    const go = new PlateButton(this, W('btn-start'), box([1216, 739, 402, 118]), () => this.start(), [0, 0, 1, 1]);
+    go.put(fitted(this, W('play'), go.w * 0.16, go.h * 0.49), 0.27, 0.5);
+    go.put(fit(text(this, this.online ? 'ตกลง' : 'เริ่มเล่น!', 58, '#ffffff', 9).setOrigin(0.5), go.w * 0.54, go.h * 0.72), 0.63, 0.48);
+    placed(this, W('emphasis'), box([1556, 721, 67, 57]));
+    this.tweens.add({ targets: go, scale: 1.03, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** Dressing for a friend room or ranked has no map picks: a painted fighter cheers there instead. */
+  private cheer(): void {
+    // stands right of the wardrobe panel (which ends at x 1373), feet on the start button
+    const scout = this.add.image(1650, 860, 'ui-lobby/scout').setOrigin(0.5, 1);
+    scout.setScale(Math.min(600 / scout.height, 500 / scout.width));
+    this.tweens.add({ targets: scout, scaleY: scout.scaleY * 1.025, duration: 850, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const rays = this.add.image(1440, 400, 'ui-lobby/emphasis').setFlipX(true);
+    rays.setScale(90 / rays.height);
   }
 
   // ---------------------------------------------------------------- pickers
@@ -445,121 +518,6 @@ export default class SetupScene extends Phaser.Scene {
     this.picker = [];
   }
 
-  /** The items for the match: a coloured card each (icon, name, what it does); tap to take or put back. */
-  private itemPicker(): void {
-    const top = 700; // panel y 700..935
-    panel(this, 690, top + 117, 1270, 235);
-    accents(this, 55, top, 1270, 235);
-    const tw = tab(this, 70, top, 'ไอเท็ม', { icon: 'ui-ico-shop' });
-    const count = label(this, 70 + tw + 22, top, '', 26).setOrigin(0, 0.5);
-    const pips = this.add.graphics();
-    const w = 232;
-    ITEM_IDS.forEach((id, i) => {
-      const x = 85 + w / 2 + i * (w + 12.5);
-      const look = ITEM_PLATE[id];
-      const card = new Chip(this, x, top + 122, w, 170, '', {
-        onClick: () => {
-          const s = this.setup.items;
-          const at = s.indexOf(id);
-          if (at >= 0) s.splice(at, 1);
-          else if (s.length < LIMITS.itemsPerMatch) s.push(id);
-          else this.say(`เลือกได้ ${LIMITS.itemsPerMatch} ชิ้น กดชิ้นที่เลือกแล้วเพื่อเอาออก`);
-          this.refresh();
-        },
-      });
-      const face = plate(this, look.key, 0, 0, w, 170, look.inset, look.s);
-      card.addAt(face, 2);
-      const icon = iconTexture(this, id);
-      if (icon) {
-        const img = this.add.image(-62, -44, icon);
-        card.add(img.setScale(68 / Math.max(img.width, img.height)));
-      }
-      card.text.setText(ITEMS[id].name).setOrigin(0, 0.5).setFontSize(30);
-      card.placeText(-22, -44, 122, 44);
-      const desc = this.add.text(0, 22, ITEMS[id].desc, {
-        fontFamily: FONT, fontSize: '19px', fontStyle: 'bold', color: '#ffffff', align: 'center', wordWrap: { width: 200 }, lineSpacing: 0,
-        stroke: STROKE, strokeThickness: 3,
-      }).setOrigin(0.5, 0);
-      card.add(fit(desc, 204, 66));
-      // picked: full colour with a gold rim and a tick; not picked: dimmed
-      const rim = this.add.graphics();
-      rim.lineStyle(10, 0xffc23d, 0.35).strokeRoundedRect(-w / 2 + 2, -83, w - 4, 166, 20);
-      rim.lineStyle(4, 0xffd166, 1).strokeRoundedRect(-w / 2 + 4, -81, w - 8, 162, 18);
-      rim.fillStyle(0x091024, 1).fillCircle(w / 2 - 20, -66, 15);
-      rim.fillStyle(0xffc23d, 1).fillCircle(w / 2 - 20, -66, 12);
-      rim.lineStyle(4, 0x091024, 1).strokePoints([{ x: w / 2 - 26, y: -66 }, { x: w / 2 - 21, y: -61 }, { x: w / 2 - 13, y: -71 }] as unknown as Phaser.Math.Vector2[]);
-      card.add(rim);
-      this.refreshers.push(() => {
-        const on = this.setup.items.includes(id);
-        rim.setVisible(on);
-        face.setTint(on ? 0xffffff : 0x8a8fa8);
-        card.setAlpha(on ? 1 : 0.85);
-      });
-    });
-    this.refreshers.push(() => {
-      const n = this.setup.items.length;
-      count.setText(`เลือก ${n}/${LIMITS.itemsPerMatch}`).setColor(n === LIMITS.itemsPerMatch ? '#ffd166' : '#ffffff');
-      pips.clear();
-      for (let i = 0; i < LIMITS.itemsPerMatch; i++) {
-        const px = count.x + count.width + 24 + i * 28;
-        pips.fillStyle(0x091024, 1).fillCircle(px, top, 11);
-        pips.fillStyle(i < n ? 0xffa21f : 0x3a4370, 1).fillCircle(px, top, 8);
-      }
-    });
-  }
-
-  /** Dressing for a friend room or ranked has no map picks: a painted fighter cheers there instead. */
-  private cheer(): void {
-    const scout = this.add.image(1640, 905, 'ui-lobby/scout').setOrigin(0.5, 1);
-    scout.setScale(560 / scout.height);
-    this.tweens.add({ targets: scout, scaleY: scout.scaleY * 1.025, duration: 850, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const rays = this.add.image(1420, 520, 'ui-lobby/emphasis').setFlipX(true);
-    rays.setScale(90 / rays.height);
-    const crate = this.add.image(1690, 1080, 'ui-lobby/crate-right').setOrigin(0.5, 1);
-    crate.setScale(420 / crate.width);
-  }
-
-  /** Map, format and bot strength (offline only: a friend room or ranked decides these). */
-  private rightColumn(): void {
-    const cx = 1615;
-    panel(this, cx, 547, 500, 764); // y 165..929
-    accents(this, cx - 250, 165, 500, 764);
-    tab(this, cx - 235, 165, 'ด่าน');
-    const mapDesc = label(this, cx, 452, '', 22, '#cfd8ff').setOrigin(0.5, 0.5);
-    MAP_IDS.forEach((id, i) => {
-      const btn = new Chip(this, cx, 252 + i * 64, 420, 58, MAPS[id].name, {
-        size: 30, onClick: () => { this.setup.map = id; this.refresh(); },
-      });
-      // a strip of the map's painted backdrop on the left of its button
-      const art = `art-bg-${id}`;
-      if (this.textures.exists(art)) {
-        const thumb = this.add.image(-148, 0, art);
-        const k = 40 / thumb.height;
-        const cropW = 104 / k;
-        thumb.setScale(k).setCrop((thumb.width - cropW) / 2, 0, cropW, thumb.height);
-        btn.addAt(thumb, 2);
-        btn.placeText(45, 0, 300, 52);
-      }
-      this.refreshers.push(() => btn.setSelected(this.setup.map === id));
-    });
-    this.refreshers.push(() => mapDesc.setText(MAPS[this.setup.map].desc));
-
-    tab(this, cx - 235, 522, 'รูปแบบ');
-    FORMATS.forEach((f, i) => {
-      const btn = new Chip(this, cx, 578 + i * 62, 420, 54, FORMAT_LABEL[f], {
-        size: 28, onClick: () => { this.setup.format = f; this.refresh(); },
-      });
-      this.refreshers.push(() => btn.setSelected(this.setup.format === f));
-    });
-
-    tab(this, cx - 235, 780, 'ความเก่งของบอท');
-    DIFFICULTIES.forEach((d, i) => {
-      const btn = new Chip(this, cx - 142 + i * 142, 852, 132, 56, DIFF_LABEL[d], {
-        size: 28, onClick: () => { this.setup.difficulty = d; this.refresh(); },
-      });
-      this.refreshers.push(() => btn.setSelected(this.setup.difficulty === d));
-    });
-  }
 }
 
 function fmt(k: keyof Stats, v: number): string {

@@ -362,3 +362,86 @@ export function accents(scene: Phaser.Scene, x: number, y: number, w: number, h:
 export function plate(scene: Phaser.Scene, key: string, x: number, y: number, w: number, h: number, inset: number, s: number): Phaser.GameObjects.NineSlice {
   return sliced(scene, key, w, h, inset, s).setPosition(x, y);
 }
+
+export interface SliceLook {
+  key: string;
+  /** Corner size on the texture, in its own px. */
+  inset: number;
+}
+
+/**
+ * A painted plate nine-sliced to fill a box exactly (so one plate serves every size and
+ * keeps its bevel), with an optional second plate shown while selected. Works as a button
+ * when given onClick; children go in local space (centre 0,0), `putAt` by px from the
+ * top-left, `put` by fractions of the box.
+ */
+export class SliceButton extends Phaser.GameObjects.Container {
+  readonly w: number;
+  readonly h: number;
+  private normal: Phaser.GameObjects.NineSlice;
+  private picked: Phaser.GameObjects.NineSlice | null = null;
+  selected = false;
+
+  constructor(scene: Phaser.Scene, [x, y, w, h]: Box, look: SliceLook, opts: { selected?: SliceLook; onClick?: () => void } = {}) {
+    super(scene, x + w / 2, y + h / 2);
+    this.w = w;
+    this.h = h;
+    const make = (l: SliceLook) => {
+      // draw the bevel at the size the plate was painted for this height
+      const s = h / scene.textures.get(l.key).getSourceImage().height;
+      return sliced(scene, l.key, w, h, l.inset, s);
+    };
+    this.normal = make(look);
+    this.add(this.normal);
+    if (opts.selected) {
+      this.picked = make(opts.selected).setVisible(false);
+      this.add(this.picked);
+    }
+    scene.add.existing(this);
+    if (!opts.onClick) return;
+    const zone = scene.add.zone(0, 0, w, h).setInteractive({ useHandCursor: true });
+    this.add(zone);
+    let held = false;
+    zone.on('pointerdown', () => {
+      held = true;
+      this.setScale(0.96);
+      sfx.click();
+    });
+    zone.on('pointerout', () => {
+      held = false;
+      this.setScale(1);
+    });
+    zone.on('pointerup', () => {
+      if (!held) return;
+      held = false;
+      this.setScale(1);
+      opts.onClick!();
+    });
+    zone.on('pointerover', () => this.setScale(1.03));
+  }
+
+  /** The base plate (to tint it). */
+  get plate(): Phaser.GameObjects.NineSlice {
+    return this.selected && this.picked ? this.picked : this.normal;
+  }
+
+  setSelected(on: boolean): this {
+    this.selected = on;
+    if (this.picked) {
+      this.picked.setVisible(on);
+      this.normal.setVisible(!on);
+    }
+    return this;
+  }
+
+  /** Add `o` with its origin at (fx, fy) of the box, 0..1 from the top-left. */
+  put(o: Phaser.GameObjects.Components.Transform & Phaser.GameObjects.GameObject, fx: number, fy: number): this {
+    return this.putAt(o, fx * this.w, fy * this.h);
+  }
+
+  putAt(o: Phaser.GameObjects.Components.Transform & Phaser.GameObjects.GameObject, px: number, py: number): this {
+    o.setPosition(-this.w / 2 + px, -this.h / 2 + py);
+    this.add(o);
+    return this;
+  }
+}

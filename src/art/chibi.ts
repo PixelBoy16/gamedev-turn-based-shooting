@@ -368,7 +368,25 @@ export function loadArt(scene: Phaser.Scene): void {
   for (const f of LOBBY_UI) scene.load.image(`ui-lobby/${f}`, `art/ui/lobby/${f}.webp`);
   // theme kit (nine-sliced panel and slot) for screens without their own mockup
   for (const f of ['panel', 'slot']) scene.load.image(`ui-kit/${f}`, `art/ui/kit/${f}.webp`);
+  scene.load.image('ui-wardrobe/bg', 'art/ui/wardrobe/bg.jpg');
+  for (const f of WARDROBE_UI) scene.load.image(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.webp`);
+  // simple shapes shipped as SVG, rasterised at the size they are drawn largest
+  for (const [f, px] of [['checkbox', 48], ['tick', 48], ['dot', 40], ['play', 80], ['plus', 80], ['heart', 48], ['sword', 48], ['boot', 48]] as const) {
+    scene.load.svg(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.svg`, { width: px, height: px });
+  }
 }
+
+/** Pieces of the wardrobe / bot setup screen in public/art/ui/wardrobe/, loaded as `ui-wardrobe/<name>`. */
+export const WARDROBE_UI = [
+  'panel', 'items-panel', 'setup-panel', 'header', 'logo', 'showcase', 'crate-left', 'crate-right', 'emphasis',
+  'tile', 'tab-gold', 'tab-navy', 'tab-red', 'row-selected', 'check',
+  'card-blue', 'card-orange', 'card-purple', 'card-green', 'weapon-card', 'btn-start', 'btn-return',
+  'map-hills', 'map-islands', 'map-mine',
+  ...['shirt', 'face', 'tools', 'target', 'bag', 'map-pin', 'swords', 'robot', 'hanger',
+    'hat', 'glasses', 'hair', 'clothes', 'eyes', 'set-box', 'backpack',
+    'necklace', 'ring', 'bracelet', 'charm', 'drill',
+    'double-shot', 'power', 'warp', 'heart', 'shield'].map((n) => `ico-${n}`),
+] as const;
 
 /** Pieces of the friends lobby in public/art/ui/lobby/, loaded as `ui-lobby/<name>`. */
 export const LOBBY_UI = [

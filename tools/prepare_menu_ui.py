@@ -14,6 +14,16 @@ BUTTONS = SRC / 'black-boom-button-parts' / 'public' / 'black-boom-button-parts'
 CURRENCY = SRC / 'black-boom-currency-parts' / 'public' / 'black-boom-currency-parts'
 RANKED = SRC / 'black-boom-ranked-parts' / 'public' / 'black-boom-ranked'
 LOBBY = SRC / 'black-boom-lobby-parts' / 'public' / 'black-boom-lobby'
+WARDROBE = SRC / 'black-boom-wardrobe-parts' / 'public' / 'black-boom-wardrobe'
+# wardrobe icons, all exported at one size (shown at 30-110 px)
+WARDROBE_ICONS = [
+    'shirt', 'face', 'tools', 'target', 'bag', 'map-pin', 'swords', 'robot', 'hanger',
+    'hat', 'glasses', 'hair', 'clothes', 'eyes', 'set-box', 'backpack',
+    'necklace', 'ring', 'bracelet', 'charm', 'drill',
+    'double-shot', 'power', 'warp', 'heart', 'shield',
+]
+# simple shapes the drop ships as SVG; copied as they are and rasterised by the browser
+WARDROBE_SVGS = ['shared/checkbox', 'shared/tick', 'shared/dot', 'shared/play', 'shared/plus', 'stats/heart', 'stats/sword', 'stats/boot']
 OUT = PROJECT / 'public' / 'art' / 'ui'
 
 # output file -> (source, width in px on the 1920 canvas, roughly what MenuScene shows it at)
@@ -89,6 +99,33 @@ FILES = {
     'lobby/ico-edit': (LOBBY / 'buttons/edit/icon.png', 60),
     'lobby/input-name': (LOBBY / 'inputs/name/base.png', 650),
     'lobby/input-code': (LOBBY / 'inputs/code/base.png', 670),
+    # wardrobe / bot setup (layout: new_ui/black-boom-wardrobe-parts/layout.json, a 1672x941 mockup)
+    'wardrobe/panel': (WARDROBE / 'panels/wardrobe.png', 1320),
+    'wardrobe/items-panel': (WARDROBE / 'panels/items.png', 1280),
+    'wardrobe/setup-panel': (WARDROBE / 'panels/setup.png', 500),
+    'wardrobe/header': (WARDROBE / 'header/base.png', 650),
+    'wardrobe/logo': (WARDROBE / 'header/logo.png', 210),
+    'wardrobe/showcase': (WARDROBE / 'character/showcase.png', 410),
+    'wardrobe/crate-left': (WARDROBE / 'decorations/crate-left.png', 660),
+    'wardrobe/crate-right': (WARDROBE / 'decorations/crate-right.png', 210),
+    'wardrobe/emphasis': (WARDROBE / 'effects/emphasis.png', 90),
+    'wardrobe/tile': (WARDROBE / 'shared/tile-base.png', 150),
+    'wardrobe/tab-gold': (WARDROBE / 'shared/tab-gold.png', 440),
+    'wardrobe/tab-navy': (WARDROBE / 'shared/tab-navy.png', 440),
+    'wardrobe/tab-red': (WARDROBE / 'shared/tab-red.png', 440),
+    'wardrobe/row-selected': (WARDROBE / 'shared/row-selected.png', 440),
+    'wardrobe/check': (WARDROBE / 'shared/check.png', 64),
+    'wardrobe/card-blue': (WARDROBE / 'cards/blue-base.png', 250),
+    'wardrobe/card-orange': (WARDROBE / 'cards/orange-base.png', 250),
+    'wardrobe/card-purple': (WARDROBE / 'cards/purple-base.png', 250),
+    'wardrobe/card-green': (WARDROBE / 'cards/green-base.png', 250),
+    'wardrobe/weapon-card': (WARDROBE / 'weapons/card-base.png', 250),
+    'wardrobe/btn-start': (WARDROBE / 'buttons/start/base.png', 470),
+    'wardrobe/btn-return': (WARDROBE / 'buttons/return/base.png', 280),
+    'wardrobe/map-hills': (WARDROBE / 'maps/grass.png', 150),
+    'wardrobe/map-islands': (WARDROBE / 'maps/floating.png', 150),
+    'wardrobe/map-mine': (WARDROBE / 'maps/mine.png', 150),
+    **{f'wardrobe/ico-{n}': (WARDROBE / f'icons/{n}.png', 110) for n in WARDROBE_ICONS},
 }
 
 
@@ -153,7 +190,7 @@ def kit_panel() -> Image.Image:
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    for sub in ('ranked', 'lobby', 'kit'):
+    for sub in ('ranked', 'lobby', 'kit', 'wardrobe'):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
@@ -162,8 +199,13 @@ def main() -> None:
     # theme kit for screens without their own mockup: a nine-slice panel and a square slot
     save(kit_panel(), 'kit/panel')
     save(fit(Image.open(BUTTONS / 'settings/base.png').convert('RGBA'), 240), 'kit/slot')
+    for svg in WARDROBE_SVGS:
+        dst = OUT / 'wardrobe' / (svg.split('/')[-1] + '.svg')
+        dst.write_bytes((WARDROBE / f'{svg}.svg').read_bytes())
+        print(f'{dst.relative_to(PROJECT)}  (svg)')
     for src, name in ((ASSETS / 'backgrounds/arena.png', 'menu-bg'), (RANKED / 'backgrounds/ranked-arena.png', 'ranked/bg'),
-                      (LOBBY / 'backgrounds/friends-arena.png', 'lobby/bg')):
+                      (LOBBY / 'backgrounds/friends-arena.png', 'lobby/bg'),
+                      (WARDROBE / 'backgrounds/arena.png', 'wardrobe/bg')):
         bg = Image.open(src).convert('RGB')
         path = OUT / f'{name}.jpg'
         bg.save(path, 'JPEG', quality=86, optimize=True, progressive=True)
