@@ -15,6 +15,15 @@ CURRENCY = SRC / 'black-boom-currency-parts' / 'public' / 'black-boom-currency-p
 RANKED = SRC / 'black-boom-ranked-parts' / 'public' / 'black-boom-ranked'
 LOBBY = SRC / 'black-boom-lobby-parts' / 'public' / 'black-boom-lobby'
 WARDROBE = SRC / 'black-boom-wardrobe-parts' / 'public' / 'black-boom-wardrobe'
+SHOP = SRC / 'black-boom-shop-parts 2' / 'public' / 'black-boom-shop'
+# shop category icons (file in the drop -> our name), shown about 60 px
+SHOP_ICONS = {
+    'hat': 'hat', 'glasses': 'glasses', 'hair': 'hair', 'face': 'face', 'shirt': 'cloth', 'eyes': 'eyes',
+    'set-shirt': 'set', 'backpack': 'back', 'equipment': 'equip', 'coin-stack': 'coin-stack', 'protection': 'protection',
+    'shopping-bag': 'bag',
+}
+# painted pictures of the four clothes in the mockup (drop name -> fashion id)
+SHOP_PRODUCTS = {'steel-armor': 'armor', 'field-coat': 'trench', 'ninja': 'ninja', 'light-armor': 'vest'}
 # wardrobe icons, all exported at one size (shown at 30-110 px)
 WARDROBE_ICONS = [
     'shirt', 'face', 'tools', 'target', 'bag', 'map-pin', 'swords', 'robot', 'hanger',
@@ -126,6 +135,25 @@ FILES = {
     'wardrobe/map-islands': (WARDROBE / 'maps/floating.png', 150),
     'wardrobe/map-mine': (WARDROBE / 'maps/mine.png', 150),
     **{f'wardrobe/ico-{n}': (WARDROBE / f'icons/{n}.png', 110) for n in WARDROBE_ICONS},
+    # shop (layout: new_ui/black-boom-shop-parts 2/layout.json, a 1671x941 mockup)
+    'shop/catalog': (SHOP / 'panels/catalog.png', 1430),
+    'shop/preview': (SHOP / 'panels/preview.png', 470),
+    'shop/nameplate': (SHOP / 'panels/nameplate.png', 410),
+    'shop/showcase': (SHOP / 'character/showcase.png', 400),
+    'shop/header': (SHOP / 'header/base.png', 570),
+    'shop/logo': (SHOP / 'header/logo.png', 200),
+    'shop/emphasis': (SHOP / 'effects/emphasis.png', 80),
+    'shop/crate-left': (SHOP / 'decorations/crate-left.png', 250),
+    'shop/crate-right': (SHOP / 'decorations/crate-right.png', 475),
+    'shop/tab': (SHOP / 'buttons/category-base.png', 160),
+    'shop/tab-on': (SHOP / 'buttons/category-selected.png', 160),
+    'shop/price-coins': (SHOP / 'buttons/price-coins-base.png', 410),
+    'shop/price-gems': (SHOP / 'buttons/price-gems-base.png', 410),
+    'shop/card': (SHOP / 'cards/base.png', 320),
+    'shop/card-on': (SHOP / 'cards/selection-border.png', 320),
+    'shop/check': (SHOP / 'shared/check.png', 80),
+    **{f'shop/ico-{ours}': (SHOP / f'icons/{n}.png', 100) for n, ours in SHOP_ICONS.items()},
+    **{f'shop/product-{ours}': (SHOP / f'products/{n}.png', 240) for n, ours in SHOP_PRODUCTS.items()},
 }
 
 
@@ -190,7 +218,7 @@ def kit_panel() -> Image.Image:
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    for sub in ('ranked', 'lobby', 'kit', 'wardrobe'):
+    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop'):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
@@ -205,7 +233,8 @@ def main() -> None:
         print(f'{dst.relative_to(PROJECT)}  (svg)')
     for src, name in ((ASSETS / 'backgrounds/arena.png', 'menu-bg'), (RANKED / 'backgrounds/ranked-arena.png', 'ranked/bg'),
                       (LOBBY / 'backgrounds/friends-arena.png', 'lobby/bg'),
-                      (WARDROBE / 'backgrounds/arena.png', 'wardrobe/bg')):
+                      (WARDROBE / 'backgrounds/arena.png', 'wardrobe/bg'),
+                      (SHOP / 'backgrounds/shop-arena.png', 'shop/bg')):
         bg = Image.open(src).convert('RGB')
         path = OUT / f'{name}.jpg'
         bg.save(path, 'JPEG', quality=86, optimize=True, progressive=True)

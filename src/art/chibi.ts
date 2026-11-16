@@ -370,11 +370,21 @@ export function loadArt(scene: Phaser.Scene): void {
   for (const f of ['panel', 'slot']) scene.load.image(`ui-kit/${f}`, `art/ui/kit/${f}.webp`);
   scene.load.image('ui-wardrobe/bg', 'art/ui/wardrobe/bg.jpg');
   for (const f of WARDROBE_UI) scene.load.image(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.webp`);
+  scene.load.image('ui-shop/bg', 'art/ui/shop/bg.jpg');
+  for (const f of SHOP_UI) scene.load.image(`ui-shop/${f}`, `art/ui/shop/${f}.webp`);
   // simple shapes shipped as SVG, rasterised at the size they are drawn largest
   for (const [f, px] of [['checkbox', 48], ['tick', 48], ['dot', 40], ['play', 80], ['plus', 80], ['heart', 48], ['sword', 48], ['boot', 48]] as const) {
     scene.load.svg(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.svg`, { width: px, height: px });
   }
 }
+
+/** Pieces of the shop in public/art/ui/shop/, loaded as `ui-shop/<name>`. */
+export const SHOP_UI = [
+  'catalog', 'preview', 'nameplate', 'showcase', 'header', 'logo', 'emphasis', 'crate-left', 'crate-right',
+  'tab', 'tab-on', 'price-coins', 'price-gems', 'card', 'card-on', 'check',
+  ...['hat', 'glasses', 'hair', 'face', 'cloth', 'eyes', 'set', 'back', 'equip', 'coin-stack', 'protection', 'bag'].map((n) => `ico-${n}`),
+  ...['armor', 'trench', 'ninja', 'vest'].map((n) => `product-${n}`),
+] as const;
 
 /** Pieces of the wardrobe / bot setup screen in public/art/ui/wardrobe/, loaded as `ui-wardrobe/<name>`. */
 export const WARDROBE_UI = [
