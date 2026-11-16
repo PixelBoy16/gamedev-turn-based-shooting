@@ -372,11 +372,24 @@ export function loadArt(scene: Phaser.Scene): void {
   for (const f of WARDROBE_UI) scene.load.image(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.webp`);
   scene.load.image('ui-shop/bg', 'art/ui/shop/bg.jpg');
   for (const f of SHOP_UI) scene.load.image(`ui-shop/${f}`, `art/ui/shop/${f}.webp`);
+  scene.load.image('ui-pass/bg', 'art/ui/pass/bg.jpg');
+  for (const f of PASS_UI) scene.load.image(`ui-pass/${f}`, `art/ui/pass/${f}.webp`);
+  for (const [f, w, h] of [['fill', 1000, 40], ['orb', 64, 64], ['hint-base', 900, 48], ['chevron-left', 48, 48], ['chevron-right', 48, 48]] as const) {
+    scene.load.svg(`ui-pass/${f}`, `art/ui/pass/${f}.svg`, { width: w, height: h });
+  }
   // simple shapes shipped as SVG, rasterised at the size they are drawn largest
   for (const [f, px] of [['checkbox', 48], ['tick', 48], ['dot', 40], ['play', 80], ['plus', 80], ['heart', 48], ['sword', 48], ['boot', 48]] as const) {
     scene.load.svg(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.svg`, { width: px, height: px });
   }
 }
+
+/** Pieces of the Battle Pass in public/art/ui/pass/, loaded as `ui-pass/<name>`. */
+export const PASS_UI = [
+  'burst', 'ticket', 'season', 'calendar', 'badge', 'rail', 'xp', 'panel',
+  'track-free', 'track-free-icon', 'track-premium', 'track-premium-icon', 'card-free', 'card-premium',
+  'silver-coins', 'gold-coins', 'sunglasses', 'lock', 'claimed', 'tier', 'btn-menu', 'btn-unlock', 'crown', 'btn-page',
+  'emphasis', 'crate', 'ammo-crate', 'skull-canister',
+] as const;
 
 /** Pieces of the shop in public/art/ui/shop/, loaded as `ui-shop/<name>`. */
 export const SHOP_UI = [

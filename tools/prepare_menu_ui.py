@@ -16,6 +16,9 @@ RANKED = SRC / 'black-boom-ranked-parts' / 'public' / 'black-boom-ranked'
 LOBBY = SRC / 'black-boom-lobby-parts' / 'public' / 'black-boom-lobby'
 WARDROBE = SRC / 'black-boom-wardrobe-parts' / 'public' / 'black-boom-wardrobe'
 SHOP = SRC / 'black-boom-shop-parts 2' / 'public' / 'black-boom-shop'
+PASS = SRC / 'black-boom-pass-parts 2' / 'public' / 'black-boom-pass'
+# Battle Pass shapes shipped as SVG (XP bar fill, its ball, the hint strip, page chevrons)
+PASS_SVGS = ['progress/fill', 'progress/orb', 'progress/hint-base', 'buttons/page/chevron-left', 'buttons/page/chevron-right']
 # shop category icons (file in the drop -> our name), shown about 60 px
 SHOP_ICONS = {
     'hat': 'hat', 'glasses': 'glasses', 'hair': 'hair', 'face': 'face', 'shirt': 'cloth', 'eyes': 'eyes',
@@ -154,6 +157,35 @@ FILES = {
     'shop/check': (SHOP / 'shared/check.png', 80),
     **{f'shop/ico-{ours}': (SHOP / f'icons/{n}.png', 100) for n, ours in SHOP_ICONS.items()},
     **{f'shop/product-{ours}': (SHOP / f'products/{n}.png', 240) for n, ours in SHOP_PRODUCTS.items()},
+    # Battle Pass (layout: new_ui/black-boom-pass-parts 2/layout.json, a 1672x941 mockup)
+    'pass/burst': (PASS / 'header/burst.png', 710),
+    'pass/ticket': (PASS / 'header/ticket.png', 170),
+    'pass/season': (PASS / 'header/season-base.png', 565),
+    'pass/calendar': (PASS / 'icons/calendar.png', 56),
+    'pass/badge': (PASS / 'level/badge-base.png', 240),
+    'pass/rail': (PASS / 'progress/rail.png', 1030),
+    'pass/xp': (PASS / 'icons/xp.png', 56),
+    'pass/panel': (PASS / 'panels/rewards.png', 1870),
+    'pass/track-free': (PASS / 'tracks/free/base.png', 240),
+    'pass/track-free-icon': (PASS / 'tracks/free/icon.png', 160),
+    'pass/track-premium': (PASS / 'tracks/premium/base.png', 240),
+    'pass/track-premium-icon': (PASS / 'tracks/premium/icon.png', 195),
+    'pass/card-free': (PASS / 'cards/free-base.png', 180),
+    'pass/card-premium': (PASS / 'cards/premium-base.png', 180),
+    'pass/silver-coins': (PASS / 'rewards/silver-coins.png', 120),
+    'pass/gold-coins': (PASS / 'rewards/gold-coins.png', 120),
+    'pass/sunglasses': (PASS / 'rewards/sunglasses.png', 150),
+    'pass/lock': (PASS / 'icons/lock.png', 50),
+    'pass/claimed': (PASS / 'shared/claimed.png', 90),
+    'pass/tier': (PASS / 'tiers/base.png', 135),
+    'pass/btn-menu': (PASS / 'buttons/menu/base.png', 310),
+    'pass/btn-unlock': (PASS / 'buttons/unlock/base.png', 525),
+    'pass/crown': (PASS / 'buttons/unlock/icon.png', 110),
+    'pass/btn-page': (PASS / 'buttons/page/base.png', 75),
+    'pass/emphasis': (PASS / 'effects/emphasis.png', 105),
+    'pass/crate': (PASS / 'decorations/crate.png', 225),
+    'pass/ammo-crate': (PASS / 'decorations/ammo-crate.png', 375),
+    'pass/skull-canister': (PASS / 'decorations/skull-canister.png', 195),
 }
 
 
@@ -218,7 +250,7 @@ def kit_panel() -> Image.Image:
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop'):
+    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop', 'pass'):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
@@ -231,10 +263,15 @@ def main() -> None:
         dst = OUT / 'wardrobe' / (svg.split('/')[-1] + '.svg')
         dst.write_bytes((WARDROBE / f'{svg}.svg').read_bytes())
         print(f'{dst.relative_to(PROJECT)}  (svg)')
+    for svg in PASS_SVGS:
+        dst = OUT / 'pass' / (svg.split('/')[-1] + '.svg')
+        dst.write_bytes((PASS / f'{svg}.svg').read_bytes())
+        print(f'{dst.relative_to(PROJECT)}  (svg)')
     for src, name in ((ASSETS / 'backgrounds/arena.png', 'menu-bg'), (RANKED / 'backgrounds/ranked-arena.png', 'ranked/bg'),
                       (LOBBY / 'backgrounds/friends-arena.png', 'lobby/bg'),
                       (WARDROBE / 'backgrounds/arena.png', 'wardrobe/bg'),
-                      (SHOP / 'backgrounds/shop-arena.png', 'shop/bg')):
+                      (SHOP / 'backgrounds/shop-arena.png', 'shop/bg'),
+                      (PASS / 'backgrounds/arena.png', 'pass/bg')):
         bg = Image.open(src).convert('RGB')
         path = OUT / f'{name}.jpg'
         bg.save(path, 'JPEG', quality=86, optimize=True, progressive=True)
