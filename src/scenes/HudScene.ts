@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import { ART_SCALE, gunLook, iconTexture, lookRes, lookTexture } from '../art/chibi';
 import { ITEMS, SKILLS, WEAPONS, WeaponId } from '../core/data';
 import { skillOf } from '../core/Actions';
-import { TUNING, tankCentre } from '../core/World';
-import { Button, FONT, INK, TEAM_COLORS, fit, label } from '../ui/widgets';
+import { TUNING, Tank, tankCentre } from '../core/World';
+import { Button, FONT, TEAM_COLORS, fit, label } from '../ui/widgets';
 import { THEME, drawPlate, drawRibbon, platePoints } from '../ui/theme';
-import BattleScene, { AIM_HOLD_MS, hpColor } from './BattleScene';
+import { Box, PlateButton, STROKE, filled, fitted, mockupBox, placed } from '../ui/plates';
+import BattleScene, { AIM_HOLD_MS } from './BattleScene';
 import { isMuted, setMuted } from '../audio/sfx';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
@@ -13,68 +14,90 @@ import { DIFF_LABEL, FORMAT_LABEL } from './setup';
 
 // Screen-space HUD, run in parallel with BattleScene so it never moves with the camera.
 // Reads the battle's public state each frame and calls its command methods.
+// Built to the painted battle mockup (new_ui/black-boom-battle-parts 2/layout.json, 1672x941).
 
-const POWER = { x: 560, y: 1000, w: 720, h: 34 };
-const WIND = { x: 960, y: 88, r: 36 };
-const DIAL = { x: 430, y: 1002, r: 64 };
+const box = (b: Box): Box => mockupBox(b, 1672);
+const K = 1920 / 1672;
+const U = (name: string) => `ui-battle/${name}`;
 const SLOT_NAME: Record<WeaponId, string> = {
   cannon: 'ปืนใหญ่', hammer: 'ค้อนหิน', splitter: 'จรวดแตก', shovel: 'พลั่ว', drill: 'สว่าน',
   bouncer: 'ลูกเด้ง', beam: 'ลำแสง', mortar: 'ครก', magnet: 'แม่เหล็ก', dirtbomb: 'ระเบิดดิน',
 };
+/** The six slots on the control bar, in mockup px (weapon, drill, three items, skill). */
+const SLOT_BOXES: Box[] = [[380, 733, 164, 94], [554, 733, 156, 94], [720, 733, 154, 94], [882, 733, 146, 94], [1041, 733, 156, 94], [1209, 733, 156, 94]];
+/** Power rail: where 0 and 100 sit (mockup px) and its row. */
+const POWER = { x0: 423, x1: 1269, y: 878, h: 24 };
+/** Angle gauge pivot (mockup px). */
+const DIAL = { x: 283, y: 831, r: 66 };
 
 interface Panel {
-  hp: Phaser.GameObjects.Text;
-  x: number;
-  y: number;
+  tank: Tank;
+  avatar: Phaser.GameObjects.Image;
+  /** The avatar plate's resting scale (x, y): it is stretched to its box. */
+  avatarScale: [number, number];
+  portrait: Phaser.GameObjects.Image;
+  fill: Phaser.GameObjects.Image;
   right: boolean;
+  hp: Phaser.GameObjects.Text;
+  tags: Phaser.GameObjects.Text;
+}
+
+interface Slot {
+  btn: PlateButton;
+  icon: Phaser.GameObjects.Image;
+  caption: Phaser.GameObjects.Text;
+  pick: Phaser.GameObjects.Image;
+}
+
+/** Bold white HUD text with the navy outline. */
+function hudText(scene: Phaser.Scene, size: number, color = '#ffffff', stroke = Math.max(3, Math.round(size / 7))): Phaser.GameObjects.Text {
+  return scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color, stroke: STROKE, strokeThickness: stroke });
+}
+
+/** Swap an image's texture and fit it inside w×h. */
+function refit(img: Phaser.GameObjects.Image, key: string, w: number, h: number): void {
+  if (img.texture.key !== key) img.setTexture(key);
+  img.setScale(Math.min(w / img.width, h / img.height));
 }
 
 export default class HudScene extends Phaser.Scene {
   private battle!: BattleScene;
   private g!: Phaser.GameObjects.Graphics;
-  private panels = new Map<number, Panel>();
-  private t!: Record<'turn' | 'net' | 'wind' | 'windTag' | 'timer' | 'angle' | 'power' | 'shot' | 'help' | 'banner', Phaser.GameObjects.Text>;
-  private slots!: { main: Button; drill: Button; items: Button[]; skill: Button };
+  private panels: Panel[] = [];
+  private t!: Record<'turn' | 'net' | 'timer' | 'windTag' | 'wind' | 'angle' | 'shot' | 'damage' | 'help' | 'banner', Phaser.GameObjects.Text>;
+  private img!: Record<'windArrows' | 'shotStrip' | 'crown' | 'gauge' | 'needle' | 'powerFill' | 'handle' | 'max', Phaser.GameObjects.Image>;
+  private slots: Slot[] = [];
+  private fire!: PlateButton;
+  private surrender!: { btn: PlateButton; caption: Phaser.GameObjects.Text; armed: Phaser.Time.TimerEvent | null };
   private touchUi: Phaser.GameObjects.GameObject[] = [];
   private aimHold = { dir: 0, since: 0 };
-  private soundBtn!: Button;
+  private closeGear: (() => void) | null = null;
 
   constructor() {
     super('hud');
   }
 
   init(): void {
-    this.panels = new Map();
+    this.panels = [];
+    this.slots = [];
     this.touchUi = [];
     this.aimHold = { dir: 0, since: 0 };
+    this.closeGear = null;
   }
 
   create(): void {
     this.battle = this.scene.get('battle') as BattleScene;
+    this.createTop();
+    this.createBar();
     this.g = this.add.graphics();
     this.createPanels();
-    this.t = {
-      turn: label(this, 960, 10, '', 26).setOrigin(0.5, 0),
-      net: label(this, 960, 200, '', 30, '#ff8787').setOrigin(0.5, 0),
-      wind: label(this, WIND.x, WIND.y, '', 32).setOrigin(0.5),
-      windTag: label(this, WIND.x, WIND.y + WIND.r + 6, '', 18).setOrigin(0.5, 0),
-      timer: label(this, WIND.x + 120, WIND.y, '', 34).setOrigin(0.5),
-      angle: label(this, DIAL.x, DIAL.y + 22, '', 30).setOrigin(0.5),
-      power: label(this, POWER.x + POWER.w + 22, POWER.y + POWER.h / 2, '', 34).setOrigin(0, 0.5),
-      shot: label(this, 960, 160, '', 24, '#ffe8a3').setOrigin(0.5, 0),
-      help: label(this, 1900, 1066, '', 17).setOrigin(1, 1).setAlign('right'),
-      banner: label(this, 960, 380, '', 72).setOrigin(0.5).setAlpha(0),
-    };
-    this.t.help.setText('←→ เดิน/หัน  ↑↓ มุม (แตะ=1° ค้าง=เร็ว Shift=ช้า)  Space ค้าง=ชาร์จ\n1-2 อาวุธ  3-5 ไอเท็ม  E สกิล  คลิกขวาลาก=ดูแผนที่  C กล้อง  M เสียง  Esc เมนู');
-    for (let i = 0; i <= 100; i += 10) {
-      this.add.text(POWER.x + (POWER.w * i) / 100, POWER.y - 8, `${i}`, {
-        fontFamily: FONT, fontSize: '15px', color: '#ffffff', stroke: '#1b2030', strokeThickness: 4,
-      }).setOrigin(0.5, 1);
-    }
-    this.createSlots();
     this.createTouch();
-    new Button(this, 1800, 236, 150, 52, 'เมนู', { size: 24, onClick: () => this.battle.toMenu() });
-    this.soundBtn = new Button(this, 1800, 300, 150, 52, '', { size: 22, onClick: () => setMuted(!isMuted()) });
+    const net_ = label(this, 960, 250, '', 30, '#ff8787').setOrigin(0.5, 0);
+    const help = label(this, 1900, 812, '', 17).setOrigin(1, 1).setAlign('right').setAlpha(0.85);
+    help.setText('←→ เดิน/หัน  ↑↓ มุม (แตะ=1° ค้าง=เร็ว Shift=ช้า)  Space ค้าง=ชาร์จ\n1-2 อาวุธ  3-5 ไอเท็ม  E สกิล  คลิกขวาลาก=ดูแผนที่  C กล้อง  M เสียง  Esc เมนู');
+    const banner = hudText(this, 84, '#00baff', 10).setPosition(960, box([0, 311, 0, 0])[1]).setOrigin(0.5).setAlpha(0);
+    Object.assign(this.t, { net: net_, help, banner });
+    this.setTouchVisible(this.sys.game.device.input.touch);
 
     this.battle.events.on('banner', this.showBanner, this);
     this.battle.events.on('over', this.showResult, this);
@@ -86,35 +109,151 @@ export default class HudScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- build
 
+  /** Turn banner, wind panel with the countdown in its middle, last-shot strip, the gear. */
+  private createTop(): void {
+    filled(this, U('banner'), box([642, 1, 397, 59]));
+    const [tx, ty, tw, th] = box([676, 9, 335, 44]);
+    const turn = hudText(this, 36, '#101322', 0).setPosition(tx + tw / 2, ty + th / 2).setOrigin(0.5);
+    filled(this, U('wind-panel'), box([602, 68, 469, 84]));
+    const windArrows = placed(this, U('wind-arrows'), box([636, 83, 65, 54]));
+    filled(this, U('timer'), box([716, 58, 108, 105]));
+    const [cx, cy, cw, ch] = box([738, 75, 62, 66]);
+    const timer = hudText(this, 64, '#ffffff', 7).setPosition(cx + cw / 2, cy + ch / 2).setOrigin(0.5);
+    placed(this, U('wind'), box([880, 80, 63, 54]));
+    const [lx, ly, lw, lh] = box([963, 76, 43, 26]);
+    const windTag = hudText(this, 27, '#b5edff', 4).setPosition(lx + lw / 2, ly + lh / 2).setOrigin(0.5);
+    const [vx, vy, vw, vh] = box([956, 102, 55, 34]);
+    const wind = hudText(this, 36, '#ffffff', 5).setPosition(vx + vw / 2, vy + vh / 2).setOrigin(0.5);
+
+    const shotStrip = filled(this, U('last-shot'), box([625, 169, 422, 35]));
+    const crown = placed(this, U('crown'), box([656, 166, 38, 35]));
+    const [, sy, , sh] = box([0, 170, 0, 32]);
+    const shot = hudText(this, 28, '#ffffff', 4).setPosition(0, sy + sh / 2).setOrigin(0, 0.5);
+    const damage = hudText(this, 30, '#ffe500', 4).setPosition(0, sy + sh / 2).setOrigin(0, 0.5);
+
+    // the gear: sound and camera; sits lower in 2v2, under the second enemy card
+    const two = this.battle.world.tanks.some((t, i, all) => all.findIndex((o) => o.team === t.team) !== i);
+    const gear: PlateButton = new PlateButton(this, U('btn-gear'), box([1564, two ? 262 : 151, 90, 76]), () => {
+      if (this.closeGear) this.closeGear();
+      else this.closeGear = this.gearMenu(gear);
+    }, [0, 0, 1, 1]);
+    gear.put(fitted(this, U('gear'), gear.w * 0.52, gear.h * 0.64), 0.5, 0.5);
+
+    this.t = { turn, timer, windTag, wind, shot, damage } as HudScene['t'];
+    this.img = { windArrows, shotStrip, crown } as HudScene['img'];
+  }
+
+  /** The control bar: surrender, angle gauge, six slots, power rail, fire. */
+  private createBar(): void {
+    const b = this.battle;
+    filled(this, U('bar'), box([24, 715, 1631, 216]));
+
+    // surrender asks twice: the first tap arms it for a few seconds
+    const sBtn = new PlateButton(this, U('btn-surrender'), box([40, 782, 145, 130]), () => this.onSurrender(), [0, 0, 1, 1]);
+    sBtn.put(fitted(this, U('flag'), sBtn.w * 0.45, sBtn.h * 0.46), 0.535, 0.31);
+    const sCap = hudText(this, 29, '#ffffff', 5).setText('ยอมแพ้').setOrigin(0.5);
+    sBtn.put(fit(sCap, sBtn.w * 0.84, sBtn.h * 0.32), 0.5, 0.71);
+    this.surrender = { btn: sBtn, caption: sCap, armed: null };
+
+    // angle: the painted dial, its needle turned by the aim (flipped when facing left)
+    const gauge = filled(this, U('gauge'), box([205, 751, 159, 166]));
+    const [nx, ny] = box([DIAL.x, DIAL.y, 0, 0]);
+    const needle = this.add.image(nx, ny, U('needle')).setOrigin(13 / 90, 0.5).setDisplaySize(90 * K, 36 * K);
+    const [ax, ay, aw, ah] = box([232, 841, 88, 46]);
+    const angle = hudText(this, 42, '#ffffff', 6).setPosition(ax + aw / 2, ay + ah / 2).setOrigin(0.5);
+
+    // six slots
+    SLOT_BOXES.forEach((sb, i) => {
+      const onClick = () => {
+        if (i === 0) b.selectWeapon(false);
+        else if (i === 1) b.selectWeapon(true);
+        else if (i === 5) b.useSkillNow();
+        else b.useItemSlot(i - 2);
+      };
+      const btn = new PlateButton(this, U('item'), box(sb), onClick, [0, 0, 1, 1]);
+      const icon = this.add.image(0, 0, U('lock'));
+      btn.put(icon, 0.325, 0.405);
+      const caption = hudText(this, 27, '#ffffff', 4).setOrigin(0.5);
+      btn.put(caption, 0.625, 0.7);
+      const pick = this.add.image(0, 0, U('selection')).setDisplaySize(btn.w, btn.h);
+      btn.put(pick, 0.5, 0.5);
+      this.slots.push({ btn, icon, caption, pick });
+    });
+
+    // power: rail, gold fill cropped to the charge, ticks, numbers, handle, last shot's power in red
+    filled(this, U('power-rail'), box([414, 868, 872, 48]));
+    const powerFill = filled(this, U('power-fill'), box([POWER.x0, POWER.y, POWER.x1 - POWER.x0, POWER.h]));
+    filled(this, U('power-ticks'), box([427, 867, 848, 42]));
+    for (let i = 0; i <= 10; i++) {
+      const [x, y, w, h] = box([407 + 84.7 * i, 833, 43, 31]);
+      hudText(this, 26, '#ffffff', 4).setText(`${i * 10}`).setPosition(x + w / 2, y + h / 2).setOrigin(0.5);
+    }
+    const max = filled(this, U('power-max'), box([0, 860, 23, 57]));
+    const handle = filled(this, U('power-handle'), box([0, 862, 22, 54]));
+
+    // fire: hold to charge, let go to shoot (same as holding Space)
+    this.fire = new PlateButton(this, U('btn-fire'), box([1382, 750, 268, 170]), () => undefined, [0, 0, 1, 1]);
+    this.fire.put(fitted(this, U('fire-bomb'), this.fire.w * 0.46, this.fire.h * 0.61), 0.6, 0.455);
+    const fireText = hudText(this, 66, '#ffffff', 8).setText('ยิง!').setOrigin(0.5);
+    this.fire.put(fit(fireText, this.fire.w * 0.65, this.fire.h * 0.47), 0.515, 0.645);
+    const zone = this.fire.list[1] as Phaser.GameObjects.Zone;
+    zone.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (!this.fire.enabled) return;
+      b.uiPointers.add(p.id);
+      b.touch.fire = true;
+    });
+    const release = (p: Phaser.Input.Pointer) => {
+      b.uiPointers.delete(p.id);
+      b.touch.fire = false;
+    };
+    zone.on('pointerup', release);
+    zone.on('pointerout', release);
+
+    Object.assign(this.img, { gauge, needle, powerFill, handle, max });
+    this.t.angle = angle;
+  }
+
+  /** One card per character: hexagon portrait, name plate, HP bar with the numbers, queue tags. 2v2's second card is smaller, under the first. */
   private createPanels(): void {
     const count = [0, 0];
     for (const t of this.battle.world.tanks) {
       const right = t.team !== 0;
       const i = count[t.team]++;
-      const x = right ? 1880 : 40;
-      const y = 22 + i * 92;
-      this.add.image(right ? x - 34 : x + 34, y + 76, lookTexture(this, t.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * 1.05 * lookRes()).setFlipX(right);
+      const s = i === 0 ? 1 : 0.72;
+      const ax = right ? 1650 : 32;
+      const ay = 16;
+      const at = (b: Box): Box => box([ax + (b[0] - ax) * s, ay + i * 140 + (b[1] - ay) * s, b[2] * s, b[3] * s]);
+      const side = right ? 'red' : 'blue';
+      filled(this, U(`name-${side}`), at(right ? [1219, 24, 328, 44] : [145, 20, 299, 50]));
+      filled(this, U('hp-rail'), at(right ? [1158, 65, 396, 55] : [112, 64, 398, 56]));
+      const fill = filled(this, U('hp-fill'), at(right ? [1171, 78, 365, 27] : [148, 78, 344, 27]));
+      const avatar = filled(this, U(`avatar-${side}`), at(right ? [1520, 17, 130, 107] : [32, 16, 136, 111]));
+      const portrait = this.portrait(t, at(right ? [1544, 28, 84, 84] : [55, 30, 84, 80]));
+
       const name = t.isBot && (this.battle.net || t.team === 1) ? `${t.name} (${DIFF_LABEL[this.battle.setup.difficulty]})` : t.name;
-      label(this, right ? x - 80 : x + 80, y, `${name} · ${WEAPONS[t.loadout.weapon].name}`, 22).setOrigin(right ? 1 : 0, 0);
-      const hp = label(this, right ? x - 80 : x + 80, y + 52, '', 18).setOrigin(right ? 1 : 0, 0);
-      this.panels.set(t.id, { hp, x, y, right });
+      const [nx, ny, nw, nh] = at(right ? [1242, 23, 285, 39] : [174, 24, 270, 36]);
+      const nameText = hudText(this, Math.round(31 * s), '#ffffff', 4).setText(`${name} · ${WEAPONS[t.loadout.weapon].name}`);
+      fit(nameText.setOrigin(right ? 1 : 0, 0.5).setPosition(right ? nx + nw : nx, ny + nh / 2), nw, nh * 1.2);
+      const [hx, hy, hw, hh] = at(right ? [1348, 74, 180, 33] : [178, 74, 185, 33]);
+      const hp = hudText(this, Math.round(31 * s), '#ffffff', 4).setOrigin(right ? 1 : 0, 0.5).setPosition(right ? hx + hw : hx, hy + hh / 2);
+      const [gx, gy] = at(right ? [1528, 121, 0, 0] : [178, 121, 0, 0]);
+      const tags = hudText(this, Math.round(21 * s), '#ffe8a3', 4).setOrigin(right ? 1 : 0, 0).setPosition(gx, gy);
+      this.panels.push({ tank: t, avatar, avatarScale: [avatar.scaleX, avatar.scaleY], portrait, fill, right, hp, tags });
     }
   }
 
-  private createSlots(): void {
-    const b = this.battle;
-    const y = 912;
-    const mk = (x: number, w: number, onClick: () => void) => {
-      const btn = new Button(this, x, y, w, 72, '', { size: 21, onClick });
-      btn.text.setLineSpacing(-2);
-      return btn;
-    };
-    this.slots = {
-      main: mk(600, 170, () => b.selectWeapon(false)),
-      drill: mk(785, 170, () => b.selectWeapon(true)),
-      items: [0, 1, 2].map((i) => mk(965 + i * 155, 140, () => b.useItemSlot(i))),
-      skill: mk(1445, 170, () => b.useSkillNow()),
-    };
+  /** The head and shoulders of a character's look, cropped into a box. */
+  private portrait(t: Tank, [x, y, w, h]: Box): Phaser.GameObjects.Image {
+    const img = this.add.image(0, 0, lookTexture(this, t.loadout)).setOrigin(0, 0);
+    const W = img.width;
+    const fx = 0.12;
+    const fw = 0.76;
+    const s = w / (fw * W);
+    const cy = img.height * 0.01;
+    img.setCrop(fx * W, cy, fw * W, h / s).setScale(s).setPosition(x - fx * W * s, y - cy * s);
+    // the right-hand fighters face left, toward the middle
+    if (t.team !== 0) img.setFlipX(true);
+    return img;
   }
 
   private createTouch(): void {
@@ -133,16 +272,15 @@ export default class HudScene extends Phaser.Scene {
       this.aimHold.dir = 0;
       b.touch.aim = 0;
     };
+    // above the control bar; the bar's own fire button does the shooting
     this.touchUi = [
-      hold(100, 990, 66, '◀', () => (b.touch.move = -1), () => (b.touch.move = 0)),
-      hold(270, 990, 66, '▶', () => (b.touch.move = 1), () => (b.touch.move = 0)),
-      hold(100, 820, 58, 'มุม+', aimDown(1), aimUp),
-      hold(270, 820, 58, 'มุม−', aimDown(-1), aimUp),
-      hold(1790, 960, 100, 'ยิง', () => (b.touch.fire = true), () => (b.touch.fire = false), 0xd9480f),
-      hold(1790, 790, 46, 'กล้อง', () => b.recenter(), () => {}),
+      hold(100, 730, 62, '◀', () => (b.touch.move = -1), () => (b.touch.move = 0)),
+      hold(260, 730, 62, '▶', () => (b.touch.move = 1), () => (b.touch.move = 0)),
+      hold(100, 580, 54, 'มุม+', aimDown(1), aimUp),
+      hold(260, 580, 54, 'มุม−', aimDown(-1), aimUp),
+      hold(1800, 750, 46, 'กล้อง', () => b.recenter(), () => {}),
     ];
     // Show touch buttons on touch devices; hide them as soon as a mouse moves.
-    this.setTouchVisible(this.sys.game.device.input.touch);
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.wasTouch) this.setTouchVisible(true); });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => { if (!p.wasTouch && !p.isDown) this.setTouchVisible(false); });
   }
@@ -150,6 +288,47 @@ export default class HudScene extends Phaser.Scene {
   private setTouchVisible(v: boolean): void {
     for (const o of this.touchUi) (o as Button).setVisible(v);
     this.t.help.setVisible(!v);
+  }
+
+  /** First tap arms it (the caption asks to confirm); a second tap within 3 s leaves the match. */
+  private onSurrender(): void {
+    const s = this.surrender;
+    if (s.armed) {
+      s.armed.remove();
+      this.battle.toMenu();
+      return;
+    }
+    s.caption.setText('แน่ใจ? กดอีกที');
+    fit(s.caption.setScale(1), s.btn.w * 0.84, s.btn.h * 0.32);
+    s.armed = this.time.delayedCall(3000, () => {
+      s.armed = null;
+      s.caption.setText('ยอมแพ้');
+      fit(s.caption.setScale(1), s.btn.w * 0.84, s.btn.h * 0.32);
+    });
+  }
+
+  /** A small panel under the gear: sound on/off and camera back to the active character. Tap outside to close. */
+  private gearMenu(gear: PlateButton): () => void {
+    const x = gear.x + gear.w / 2 - 150;
+    const y = gear.y + gear.h / 2 + 110;
+    const shield = this.add.zone(960, 540, 1920, 1080).setInteractive();
+    const panel = this.add.graphics({ x, y });
+    drawPlate(panel, 300, 190, THEME.steelDark, { cut: 14 });
+    const soundLabel = () => (isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด');
+    const sound: Button = new Button(this, x, y - 42, 260, 64, soundLabel(), {
+      size: 26,
+      onClick: () => {
+        setMuted(!isMuted());
+        sound.text.setText(soundLabel());
+      },
+    });
+    const cam = new Button(this, x, y + 42, 260, 64, 'กล้องกลับที่ตัวละคร', { size: 24, onClick: () => { close(); this.battle.recenter(); } });
+    const close = () => {
+      for (const o of [shield, panel, sound, cam]) o.destroy();
+      this.closeGear = null;
+    };
+    shield.on('pointerdown', close);
+    return close;
   }
 
   // ---------------------------------------------------------------- events
@@ -305,63 +484,6 @@ export default class HudScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- per frame
 
-  /** Round wind gauge: strength in the middle, chevrons on the side it blows toward. */
-  private drawWind(g: Phaser.GameObjects.Graphics, time: number): void {
-    const b = this.battle;
-    const calm = b.mods.noWind && b.phase !== 'settle' && b.phase !== 'over';
-    const wind = calm ? 0 : b.world.wind;
-    const { x, y, r } = WIND;
-    g.fillStyle(INK, 0.85);
-    g.fillCircle(x, y, r + 6);
-    g.lineStyle(4, calm ? 0x8ef0ff : 0xffffff, 0.9);
-    g.strokeCircle(x, y, r);
-    const dir = Math.sign(wind);
-    const n = Math.abs(wind);
-    const drift = (time / 120) % 8; // chevrons slide in the wind direction
-    for (let i = 0; i < n; i++) {
-      const cx = x + dir * (r + 16 + i * 15 + drift);
-      const alpha = 1 - i * 0.12;
-      g.fillStyle(0x8ecae6, alpha);
-      g.fillTriangle(cx + dir * 9, y, cx - dir * 3, y - 11, cx - dir * 3, y + 11);
-    }
-    this.t.wind.setText(`${n}`);
-    this.t.windTag.setText(calm ? 'ไร้ลม' : 'ลม');
-  }
-
-  /** Angle gauge: a quarter dial mirrored to the facing side, with a needle. */
-  private drawAngleDial(g: Phaser.GameObjects.Graphics): void {
-    const t = this.battle.active;
-    const { x, y, r } = DIAL;
-    const f = t.facing;
-    const at = (deg: number) => (f > 0 ? -deg : 180 + deg) * (Math.PI / 180);
-    g.fillStyle(INK, 0.85);
-    g.fillCircle(x, y, r + 8);
-    g.lineStyle(3, 0xffffff, 0.35);
-    g.strokeCircle(x, y, r);
-    g.lineStyle(10, 0xffd166, 0.25);
-    g.beginPath();
-    g.arc(x, y, r - 8, Math.min(at(0), at(90)), Math.max(at(0), at(90)), false);
-    g.strokePath();
-    for (let d = 0; d <= 90; d += 10) {
-      const long = d % 30 === 0;
-      const a = at(d);
-      g.lineStyle(long ? 3 : 2, 0xffffff, 0.9);
-      g.lineBetween(x + Math.cos(a) * (r - (long ? 18 : 12)), y + Math.sin(a) * (r - (long ? 18 : 12)), x + Math.cos(a) * (r - 4), y + Math.sin(a) * (r - 4));
-    }
-    const last = this.battle.lastAngle.get(t.id);
-    if (last !== undefined) {
-      const a = at(last);
-      g.lineStyle(4, 0xff4d4d, 1);
-      g.lineBetween(x + Math.cos(a) * (r - 20), y + Math.sin(a) * (r - 20), x + Math.cos(a) * (r + 2), y + Math.sin(a) * (r + 2));
-    }
-    const a = at(t.angle);
-    g.lineStyle(5, 0xffd166, 1);
-    g.lineBetween(x, y, x + Math.cos(a) * (r - 10), y + Math.sin(a) * (r - 10));
-    g.fillStyle(0xffd166, 1);
-    g.fillCircle(x, y, 7);
-    this.t.angle.setText(`${Math.round(t.angle)}°`).setX(x - f * 22);
-  }
-
   update(time: number): void {
     const b = this.battle;
     if (!b.turns) return;
@@ -370,119 +492,169 @@ export default class HudScene extends Phaser.Scene {
     const active = b.active;
     const human = b.isLocal(active);
     this.t.net.setText(b.net && !net.connected ? 'หลุดการเชื่อมต่อ กำลังต่อใหม่…' : b.phase === 'wait' && b.isLocal(active) ? 'รอเซิร์ฟเวอร์…' : '');
-
     if (this.aimHold.dir && time - this.aimHold.since > AIM_HOLD_MS) b.touch.aim = this.aimHold.dir;
-    this.soundBtn.setLabel(isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด');
 
-    // HP panels, with each character's place in the delay queue
-    const order = b.turns.order();
-    const waiting = order.filter((t) => t !== active);
-    const base = waiting.length ? Math.min(...waiting.map((t) => t.delay)) : 0;
-    for (const t of b.world.tanks) {
-      const p = this.panels.get(t.id)!;
-      const w = 300;
-      const bx = p.right ? p.x - 80 - w : p.x + 80;
-      g.fillStyle(INK, 0.85);
-      g.fillRoundedRect(bx - 4, p.y + 30, w + 8, 20, 7);
-      g.fillStyle(t.alive ? hpColor(t.hp, t.maxHp) : 0x555555, 1);
-      const fw = (w * t.hp) / t.maxHp;
-      if (fw > 0) g.fillRoundedRect(p.right ? bx + w - fw : bx, p.y + 33, Math.max(fw, 4), 14, 5);
-      if (t === active && b.phase !== 'over') {
-        g.lineStyle(4, 0xffd166, 1);
-        g.strokeRoundedRect(bx - 6, p.y + 28, w + 12, 24, 8);
-      }
-      const pos = waiting.indexOf(t);
-      const queue = !t.alive || b.phase === 'over' ? '' : t === active ? 'ตานี้' : pos === 0 ? 'ตาถัดไป' : `คิว ${pos + 1} (ดีเลย์ +${t.delay - base})`;
-      const tags = [t.alive ? `${t.hp}` : 'ออกแล้ว', queue, t.armored ? 'เกราะ' : '', t.burrowed ? 'มุดดิน' : ''].filter(Boolean);
-      p.hp.setText(tags.join(' · '));
-    }
+    this.updatePanels(time);
 
-    // turn, wind, timer
-    const sd = b.turns.suddenDeath ? '  · Sudden death' : '';
-    this.t.turn.setText(`เทิร์น ${b.turns.turnNumber} — ${human ? 'ตาของคุณ' : `ตาของ${active.name}`}${sd}`);
-    this.drawWind(g, time);
-    const left = Math.ceil(b.turns.timeLeft);
-    this.t.timer.setText(b.phase === 'aim' ? `${left}` : '').setColor(left <= 5 ? '#ff6b6b' : '#ffffff');
-    if (b.phase === 'aim') {
-      g.fillStyle(INK, 0.85);
-      g.fillCircle(WIND.x + 120, WIND.y, 30);
-      g.lineStyle(5, left <= 5 ? 0xff6b6b : 0x8ecae6, 1);
-      g.beginPath();
-      g.arc(WIND.x + 120, WIND.y, 30, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (b.turns.timeLeft / TUNING.turnSeconds), false);
-      g.strokePath();
-    }
-    this.t.shot.setText(b.lastShotText ? `นัดล่าสุด: ${b.lastShotText}` : '');
+    // turn, countdown, wind, last shot
+    const sd = b.turns.suddenDeath ? ' · Sudden death' : '';
+    const [, , tw, th] = box([0, 0, 335, 44]);
+    fit(this.t.turn.setScale(1).setText(`เทิร์น ${b.turns.turnNumber} — ${human ? 'ตาของคุณ' : `ตาของ${active.name}`}${sd}`), tw, th * 1.15);
+    const left = Math.max(0, Math.ceil(b.turns.timeLeft));
+    this.t.timer.setText(b.phase === 'aim' ? `${left}` : '–').setColor(b.phase === 'aim' && left <= 5 ? '#ff6b6b' : '#ffffff');
+    this.drawWind(time);
+    this.drawLastShot();
 
-    this.drawAngleDial(g);
+    this.drawAngle(g);
     this.drawPower(g, active.id);
     this.updateSlots(human);
+    this.fire.setEnabled(human && (b.humanCanAct || b.charging) && b.phase !== 'over');
     this.drawOffscreenArrows(g);
   }
 
-  /** Power bar: green→yellow→red fill, 10-step ticks, bold quarters, a marker for last shot's power. */
-  private drawPower(g: Phaser.GameObjects.Graphics, activeId: number): void {
+  /** HP fill cropped to what is left, the numbers, queue tags; the active character's portrait breathes. */
+  private updatePanels(time: number): void {
     const b = this.battle;
-    const { x, y, w, h } = POWER;
-    g.fillStyle(INK, 0.85);
-    g.fillRoundedRect(x - 6, y - 6, w + 12, h + 12, 10);
-    g.fillStyle(0x0f1424, 1);
-    g.fillRect(x, y, w, h);
-    // fill in three gradient segments so the colour tracks the power
-    const stops = [[0, 0x4ade80], [0.5, 0xfacc15], [1, 0xef4444]] as const;
-    const fw = (w * b.power) / 100;
-    for (let i = 0; i < 2; i++) {
-      const [p0, c0] = stops[i];
-      const [p1, c1] = stops[i + 1];
-      const sx = x + w * p0;
-      const ex = Math.min(x + fw, x + w * p1);
-      if (ex <= sx) break;
-      g.fillGradientStyle(c0, c1, c0, c1, 1);
-      g.fillRect(sx, y, ex - sx, h);
+    const order = b.turns.order();
+    const active = b.active;
+    const waiting = order.filter((t) => t !== active);
+    const base = waiting.length ? Math.min(...waiting.map((t) => t.delay)) : 0;
+    for (const p of this.panels) {
+      const t = p.tank;
+      const k = Phaser.Math.Clamp(t.hp / t.maxHp, 0, 1);
+      const fw = p.fill.width * k;
+      // the bar drains toward the portrait's side
+      p.fill.setCrop(p.right ? p.fill.width - fw : 0, 0, fw, p.fill.height).setVisible(t.alive && fw > 0);
+      p.hp.setText(t.alive ? `${t.hp} / ${t.maxHp}` : 'ออกแล้ว');
+      const pos = waiting.indexOf(t);
+      const queue = !t.alive || b.phase === 'over' ? '' : t === active ? 'ตานี้' : pos === 0 ? 'ตาถัดไป' : `คิว ${pos + 1} (ดีเลย์ +${t.delay - base})`;
+      p.tags.setText([queue, t.armored ? 'เกราะ' : '', t.burrowed ? 'มุดดิน' : ''].filter(Boolean).join(' · '));
+      p.portrait.setAlpha(t.alive ? 1 : 0.4);
+      const live = t === active && b.phase !== 'over';
+      const pulse = live ? 1 + 0.04 * Math.sin(time / 160) : 1;
+      p.avatar.setScale(p.avatarScale[0] * pulse, p.avatarScale[1] * pulse);
     }
-    g.fillStyle(0xffffff, 0.18);
-    g.fillRect(x, y + 3, fw, h * 0.3); // gloss
-    for (let i = 1; i < 10; i++) {
-      g.fillStyle(0xffffff, 0.2);
-      g.fillRect(x + (w * i) / 10 - 1, y, 2, h);
-    }
-    // quarters, for eyeballing a fixed power
-    for (let i = 1; i < 4; i++) {
-      g.fillStyle(0xffffff, 0.65);
-      g.fillRect(x + (w * i) / 4 - 2, y - 3, 4, h + 6);
-    }
-    const last = b.lastPower.get(activeId);
-    if (last !== undefined) {
-      const mx = x + (w * last) / 100;
-      g.fillStyle(0xff4d4d, 1);
-      g.fillRect(mx - 2, y - 4, 4, h + 8);
-      g.fillTriangle(mx - 9, y + h + 14, mx + 9, y + h + 14, mx, y + h + 4);
-    }
-    // fuel, under the power bar
-    g.fillStyle(INK, 0.85);
-    g.fillRoundedRect(x - 6, y + h + 16, w + 12, 12, 6);
-    g.fillStyle(0x8ecae6, 1);
-    g.fillRoundedRect(x - 2, y + h + 18, Math.max(1, ((w + 4) * b.turns.fuel) / (TUNING.fuelPerTurn * b.active.move)), 8, 4);
-    this.t.power.setText(`${Math.round(b.power)}`);
   }
 
+  /** Strength in the right half of the panel; the chevrons on the left point and drift the way it blows. */
+  private drawWind(time: number): void {
+    const b = this.battle;
+    const calm = b.mods.noWind && b.phase !== 'settle' && b.phase !== 'over';
+    const wind = calm ? 0 : b.world.wind;
+    this.t.wind.setText(`${Math.abs(wind)}`);
+    this.t.windTag.setText(calm ? 'ไร้ลม' : 'ลม');
+    const a = this.img.windArrows;
+    const [bx, , bw] = box([636, 0, 65, 0]);
+    const dir = Math.sign(wind);
+    a.setVisible(dir !== 0).setFlipX(dir > 0);
+    a.setX(bx + bw / 2 + dir * ((time / 60) % 10 - 5)).setAlpha(0.65 + 0.35 * Math.abs(Math.sin(time / 300)));
+  }
+
+  /** "Last shot: …" on its strip, the number at the end in yellow; a crown on a hit. */
+  private drawLastShot(): void {
+    const text = this.battle.lastShotText;
+    const show = !!text;
+    for (const o of [this.img.shotStrip, this.t.shot, this.t.damage]) o.setVisible(show);
+    this.img.crown.setVisible(show && text.startsWith('โดน'));
+    if (!show) return;
+    const m = /^(.*?)\s*(\d+(?:px)?)$/.exec(text);
+    const head = `นัดล่าสุด: ${m ? m[1] : text}`;
+    this.t.shot.setScale(1).setText(head);
+    this.t.damage.setScale(1).setText(m ? m[2] : '');
+    const [x0, , w] = box([701, 0, 330, 0]);
+    const gap = m ? 8 : 0;
+    const total = this.t.shot.width + gap + this.t.damage.width;
+    const k = Math.min(1, w / total);
+    this.t.shot.setScale(k);
+    this.t.damage.setScale(k);
+    const start = x0 + (w - total * k) / 2;
+    this.t.shot.setX(start);
+    this.t.damage.setX(start + (this.t.shot.width + gap) * k);
+  }
+
+  /** The painted dial turned toward the facing side, its needle at the aim, last turn's angle in red. */
+  private drawAngle(g: Phaser.GameObjects.Graphics): void {
+    const t = this.battle.active;
+    const f = t.facing;
+    this.img.gauge.setFlipX(f < 0);
+    const rad = (deg: number) => (f > 0 ? -deg : 180 + deg) * (Math.PI / 180);
+    this.img.needle.setRotation(rad(t.angle)).setFlipY(f < 0);
+    const [cx, cy] = box([DIAL.x, DIAL.y, 0, 0]);
+    const r = DIAL.r * K;
+    const last = this.battle.lastAngle.get(t.id);
+    if (last !== undefined) {
+      const a = rad(last);
+      g.lineStyle(5, 0xff3858, 1);
+      g.lineBetween(cx + Math.cos(a) * (r - 18), cy + Math.sin(a) * (r - 18), cx + Math.cos(a) * (r + 2), cy + Math.sin(a) * (r + 2));
+    }
+    this.t.angle.setText(`${Math.round(t.angle)}°`);
+  }
+
+  /** Gold fill and the white handle at the charge; the red marker at last turn's power; fuel as a thin line under the rail. */
+  private drawPower(g: Phaser.GameObjects.Graphics, activeId: number): void {
+    const b = this.battle;
+    const fill = this.img.powerFill;
+    const k = Phaser.Math.Clamp(b.power / 100, 0, 1);
+    fill.setCrop(0, 0, fill.width * k, fill.height).setVisible(k > 0);
+    const xAt = (p: number) => (POWER.x0 + ((POWER.x1 - POWER.x0) * p) / 100) * K;
+    this.img.handle.setX(xAt(b.power));
+    const last = b.lastPower.get(activeId);
+    this.img.max.setVisible(last !== undefined);
+    if (last !== undefined) this.img.max.setX(xAt(last));
+    const fuel = Phaser.Math.Clamp(b.turns.fuel / (TUNING.fuelPerTurn * b.active.move), 0, 1);
+    const y = (POWER.y + POWER.h + 14) * K;
+    g.fillStyle(0x0a0f22, 0.9);
+    g.fillRoundedRect(xAt(0), y, xAt(100) - xAt(0), 7, 3);
+    if (fuel > 0) {
+      g.fillStyle(0x5fd4ff, 1);
+      g.fillRoundedRect(xAt(0), y, (xAt(100) - xAt(0)) * fuel, 7, 3);
+    }
+  }
+
+  /**
+   * Weapon, drill, three items and the skill for whoever plays from this screen: the active
+   * character on your turn, else your own (greyed while someone else plays). Empty slots get
+   * the padlock.
+   */
   private updateSlots(human: boolean): void {
     const b = this.battle;
-    const t = b.active;
+    const t = human ? b.active : b.world.tanks.find((o) => b.isLocal(o) && o.alive) ?? b.active;
     const can = human && b.humanCanAct;
-    const s = this.slots;
     const main = WEAPONS[t.loadout.weapon];
-    s.main.setLabel(`1 ${SLOT_NAME[main.id]}`).setIcon(this.gunIcon(main.id)).setSelected(!b.useDrill).setEnabled(can);
-    s.drill.setLabel(`2 สว่าน ×${t.drillLeft}`).setIcon(this.gunIcon('drill')).setSelected(b.useDrill).setEnabled(can && t.drillLeft > 0);
-    s.items.forEach((btn, i) => {
-      const item = t.items[i];
-      btn.setLabel(`${i + 3} ${item ? ITEMS[item].name : '—'}`).setIcon(item ? iconTexture(this, item) : null).setSelected(false).setEnabled(can && !!item && !b.mods.itemUsed);
-    });
     const skillId = skillOf(t);
     const cd = t.skillCooldown;
-    s.skill.setLabel(!skillId ? 'E —' : cd > 0 ? `E รอ ${cd} ตา` : `E ${SKILLS[skillId].name}`)
-      .setIcon(skillId ? iconTexture(this, skillId) : null)
-      .setEnabled(can && !!skillId && cd === 0 && !b.mods.skillUsed);
-    for (const btn of [s.main, s.drill, ...s.items, s.skill]) btn.setVisible(human && b.phase !== 'over');
+    const rows: { icon: string | null; text: string; on: boolean; ok: boolean }[] = [
+      { icon: this.gunIcon(main.id), text: `1 ${SLOT_NAME[main.id]}`, on: human && !b.useDrill, ok: true },
+      { icon: this.gunIcon('drill'), text: `2 สว่าน x${t.drillLeft}`, on: human && b.useDrill, ok: t.drillLeft > 0 },
+      ...[0, 1, 2].map((i) => {
+        const item = t.items[i];
+        return { icon: item ? iconTexture(this, item) : null, text: `${i + 3} ${item ? ITEMS[item].name : '—'}`, on: false, ok: !!item && !b.mods.itemUsed };
+      }),
+      {
+        icon: skillId ? iconTexture(this, skillId) : null,
+        text: !skillId ? 'E —' : cd > 0 ? `E รอ ${cd} ตา` : `E ${SKILLS[skillId].name}`,
+        on: false, ok: !!skillId && cd === 0 && !b.mods.skillUsed,
+      },
+    ];
+    rows.forEach((r, i) => {
+      const s = this.slots[i];
+      const w = s.btn.w;
+      const h = s.btn.h;
+      if (r.icon) {
+        refit(s.icon, r.icon, w * 0.47, h * 0.57);
+        s.icon.setPosition(-w / 2 + w * 0.325, -h / 2 + h * 0.405);
+        s.caption.setX(-w / 2 + w * 0.625);
+      } else {
+        refit(s.icon, U('lock'), w * 0.22, h * 0.34);
+        s.icon.setPosition(0, -h / 2 + h * 0.34);
+        s.caption.setX(0);
+      }
+      if (s.caption.text !== r.text) fit(s.caption.setScale(1).setText(r.text), w * (r.icon ? 0.62 : 0.6), h * 0.36);
+      s.pick.setVisible(r.on);
+      s.btn.setEnabled(can && r.ok);
+      // your loadout stays readable while someone else plays
+      if (!can && r.icon) s.btn.setAlpha(human ? 0.55 : 0.8);
+    });
   }
 
   private gunIcon(id: WeaponId): string | null {

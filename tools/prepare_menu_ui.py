@@ -21,6 +21,14 @@ PASS = SRC / 'black-boom-pass-parts 2' / 'public' / 'black-boom-pass'
 ACCOUNT = SRC / 'black-boom-account-parts 2' / 'public' / 'black-boom-account'
 MODAL = SRC / 'black-boom-modal-parts 2' / 'public' / 'black-boom-modals'
 MODAL_SVGS = ['effects/sparkle', 'buttons/close/icon', 'faces/none']
+BATTLE = SRC / 'black-boom-battle-parts 2' / 'public' / 'black-boom-battle'
+# battle HUD shapes shipped as SVG (drop path -> our name)
+BATTLE_SVGS = {
+    'turn/wind-panel': 'wind-panel', 'turn/last-shot-base': 'last-shot', 'hud/health-fill': 'hp-fill',
+    'power/rail': 'power-rail', 'power/fill': 'power-fill', 'power/ticks': 'power-ticks', 'power/handle': 'power-handle',
+    'power/max-marker': 'power-max', 'angle/needle': 'needle', 'buttons/item/selection': 'selection',
+    'icons/wind-left': 'wind-arrows', 'icons/wind': 'wind', 'icons/surrender': 'flag', 'icons/lock': 'lock', 'icons/crown': 'crown',
+}
 ROOM = SRC / 'black-boom-room-parts 2' / 'public' / 'black-boom-room'
 # room shapes shipped as SVG (drop path -> our name)
 ROOM_SVGS = {
@@ -246,6 +254,22 @@ FILES = {
     'modal/card': (MODAL / 'cards/base.png', 305),
     'modal/selection': (MODAL / 'cards/selection.png', 330),
     'modal/check': (MODAL / 'icons/check.png', 70),
+    # battle HUD (layout: new_ui/black-boom-battle-parts 2/layout.json, a 1672x941 mockup)
+    'battle/bar': (BATTLE / 'panels/control-bar.png', 1880),
+    'battle/gauge': (BATTLE / 'angle/gauge-base.png', 200),
+    'battle/timer': (BATTLE / 'turn/timer-base.png', 130),
+    'battle/avatar-blue': (BATTLE / 'hud/avatar-player-base.png', 160),
+    'battle/avatar-red': (BATTLE / 'hud/avatar-enemy-base.png', 160),
+    'battle/name-blue': (BATTLE / 'hud/name-player-base.png', 380),
+    'battle/name-red': (BATTLE / 'hud/name-enemy-base.png', 380),
+    'battle/hp-rail': (BATTLE / 'hud/health-rail.png', 460),
+    'battle/banner': (BATTLE / 'turn/banner-base.png', 460),
+    'battle/item': (BATTLE / 'buttons/item/base.png', 190),
+    'battle/btn-surrender': (BATTLE / 'buttons/surrender/base.png', 170),
+    'battle/btn-fire': (BATTLE / 'buttons/fire/base.png', 310),
+    'battle/fire-bomb': (BATTLE / 'icons/fire-bomb.png', 140),
+    'battle/btn-gear': (BATTLE / 'buttons/settings/base.png', 110),
+    'battle/gear': (BATTLE / 'buttons/settings/icon.png', 70),
     # friend room (layout: new_ui/black-boom-room-parts 2/layout.json, a 1681x936 mockup)
     'room/panel-blue': (ROOM / 'teams/blue/panel.png', 830),
     'room/tab-blue': (ROOM / 'teams/blue/tab-base.png', 440),
@@ -350,7 +374,7 @@ def red_panel() -> Image.Image:
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop', 'pass', 'account', 'modal', 'room'):
+    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop', 'pass', 'account', 'modal', 'room', 'battle'):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
@@ -368,6 +392,10 @@ def main() -> None:
         dst.write_bytes((MODAL / f'{svg}.svg').read_bytes())
         print(f'{dst.relative_to(PROJECT)}  (svg)')
     save(fit(red_panel(), 830), 'room/panel-red')
+    for svg, name in BATTLE_SVGS.items():
+        dst = OUT / 'battle' / f'{name}.svg'
+        dst.write_bytes((BATTLE / f'{svg}.svg').read_bytes())
+        print(f'{dst.relative_to(PROJECT)}  (svg)')
     for svg, name in ROOM_SVGS.items():
         dst = OUT / 'room' / f'{name}.svg'
         dst.write_bytes((ROOM / f'{svg}.svg').read_bytes())

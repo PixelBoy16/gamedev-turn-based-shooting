@@ -383,6 +383,14 @@ export function loadArt(scene: Phaser.Scene): void {
     scene.load.svg(`ui-account/${f}`, `art/ui/account/${f}.svg`, { width: w, height: h });
   }
   for (const f of MODAL_UI) scene.load.image(`ui-modal/${f}`, `art/ui/modal/${f}.webp`);
+  for (const f of BATTLE_UI) scene.load.image(`ui-battle/${f}`, `art/ui/battle/${f}.webp`);
+  for (const [f, w, h] of [
+    ['wind-panel', 540, 97], ['last-shot', 486, 40], ['hp-fill', 420, 32], ['power-rail', 1000, 55], ['power-fill', 972, 28],
+    ['power-ticks', 974, 48], ['power-handle', 26, 62], ['power-max', 27, 66], ['needle', 104, 42], ['selection', 190, 108],
+    ['wind-arrows', 76, 76], ['wind', 72, 72], ['flag', 64, 64], ['lock', 48, 48], ['crown', 44, 44],
+  ] as const) {
+    scene.load.svg(`ui-battle/${f}`, `art/ui/battle/${f}.svg`, { width: w, height: h });
+  }
   scene.load.image('ui-room/bg', 'art/ui/room/bg.jpg');
   for (const f of ROOM_UI) scene.load.image(`ui-room/${f}`, `art/ui/room/${f}.webp`);
   for (const [f, w, h] of [
@@ -399,6 +407,12 @@ export function loadArt(scene: Phaser.Scene): void {
     scene.load.svg(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.svg`, { width: px, height: px });
   }
 }
+
+/** Pieces of the battle HUD in public/art/ui/battle/, loaded as `ui-battle/<name>`. */
+export const BATTLE_UI = [
+  'bar', 'gauge', 'timer', 'avatar-blue', 'avatar-red', 'name-blue', 'name-red', 'hp-rail', 'banner', 'item',
+  'btn-surrender', 'btn-fire', 'fire-bomb', 'btn-gear', 'gear',
+] as const;
 
 /** Pieces of the friend room in public/art/ui/room/, loaded as `ui-room/<name>`. */
 export const ROOM_UI = [
