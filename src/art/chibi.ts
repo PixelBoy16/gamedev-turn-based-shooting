@@ -383,6 +383,14 @@ export function loadArt(scene: Phaser.Scene): void {
     scene.load.svg(`ui-account/${f}`, `art/ui/account/${f}.svg`, { width: w, height: h });
   }
   for (const f of MODAL_UI) scene.load.image(`ui-modal/${f}`, `art/ui/modal/${f}.webp`);
+  scene.load.image('ui-room/bg', 'art/ui/room/bg.jpg');
+  for (const f of ROOM_UI) scene.load.image(`ui-room/${f}`, `art/ui/room/${f}.webp`);
+  for (const [f, w, h] of [
+    ['slot-blue', 740, 186], ['slot-red', 740, 186], ['avatar', 160, 160], ['badge', 220, 58], ['mark', 60, 54],
+    ['divider', 4, 62], ['down', 48, 48], ['crown', 64, 64], ['star', 40, 40], ['pin', 40, 40], ['exit', 72, 72],
+  ] as const) {
+    scene.load.svg(`ui-room/${f}`, `art/ui/room/${f}.svg`, { width: w, height: h });
+  }
   scene.load.svg('ui-modal/sparkle', 'art/ui/modal/sparkle.svg', { width: 48, height: 48 });
   scene.load.svg('ui-modal/x', 'art/ui/modal/icon.svg', { width: 64, height: 64 });
   scene.load.svg('ui-modal/none', 'art/ui/modal/none.svg', { width: 100, height: 100 });
@@ -391,6 +399,13 @@ export function loadArt(scene: Phaser.Scene): void {
     scene.load.svg(`ui-wardrobe/${f}`, `art/ui/wardrobe/${f}.svg`, { width: px, height: px });
   }
 }
+
+/** Pieces of the friend room in public/art/ui/room/, loaded as `ui-room/<name>`. */
+export const ROOM_UI = [
+  'panel-blue', 'panel-red', 'tab-blue', 'tab-red', 'flag-blue', 'flag-red', 'bar', 'option', 'option-on',
+  'map', 'map-hills', 'map-islands', 'map-mine', 'btn-action', 'btn-leave', 'btn-start',
+  'gear', 'move', 'gamepad', 'empty', 'crate',
+] as const;
 
 /** Pieces of the pop-up windows in public/art/ui/modal/, loaded as `ui-modal/<name>`. */
 export const MODAL_UI = [

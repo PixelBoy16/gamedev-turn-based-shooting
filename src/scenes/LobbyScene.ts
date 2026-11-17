@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
-import { ART_SCALE, lookRes, lookTexture } from '../art/chibi';
+import { lookTexture } from '../art/chibi';
 import { Difficulty } from '../core/BotAI';
 import { WEAPONS } from '../core/data';
-import { MAPS, MAP_IDS } from '../core/Maps';
+import { MAPS, MAP_IDS, MapId } from '../core/Maps';
 import { account } from '../net/account';
 import { net } from '../net/NetClient';
-import { OnlineFormat, Profile, RoomConfig, ServerMsg, TEAM_SIZE } from '../net/protocol';
+import { OnlineFormat, PlayerView, Profile, RoomConfig, ServerMsg, TEAM_SIZE } from '../net/protocol';
 import { Box, PlateButton, STROKE, filled, fitted, mockupBox, placed, screenChrome } from '../ui/plates';
-import { Button, FONT, INK, TEAM_COLORS, fit, label } from '../ui/widgets';
+import { FONT, fit, label } from '../ui/widgets';
 import { DIFF_LABEL, loadSetup } from './setup';
 
 const NAME_KEY = 'crater-clash:name';
@@ -17,19 +17,25 @@ const FORMATS: OnlineFormat[] = ['1v1', '2v2'];
 /** Where each piece sits in the designer's 1672x941 mockup (new_ui/black-boom-lobby-parts/layout.json). */
 const box = (b: Box): Box => mockupBox(b, 1672);
 const L = (name: string) => `ui-lobby/${name}`;
+/** The room view's own mockup (new_ui/black-boom-room-parts 2/layout.json) is 1681x936. */
+const rbox = (b: Box): Box => mockupBox(b, 1681);
+const R = (name: string) => `ui-room/${name}`;
 const WIFI_HINT = 'เล่นด้วยกันผ่าน Wi-Fi วงเดียวกัน หรืออินเทอร์เน็ตก็ได้';
 const DIVIDER = 0x8991b6;
 
 /**
  * Friend rooms: create or join by 6-digit code, pick teams, host picks the rules.
  * The entry view is built to the painted mockup (name box, wardrobe, create / join, code
- * box, two fighters either side); the room view keeps its team cards on the same arena.
+ * box, two fighters either side); the room view is built to the room mockup on its own arena.
  * Back, title plate and wallet are built once; render() rebuilds the view under them.
  */
 export default class LobbyScene extends Phaser.Scene {
   private ui: Phaser.GameObjects.GameObject[] = [];
   /** The line that says whether the server is reachable (wifi hint, or the room's subtitle). */
   private status: Phaser.GameObjects.Text | null = null;
+  /** The yellow marks either side of the room's status line. */
+  private marks: [Phaser.GameObjects.Image, Phaser.GameObjects.Image] | null = null;
+  private bg!: Phaser.GameObjects.Image;
   private statusIdle = '';
   private setTitle: (title: string) => void = () => undefined;
   private hint!: Phaser.GameObjects.Text;
@@ -49,8 +55,7 @@ export default class LobbyScene extends Phaser.Scene {
     // the battle's key bindings (W, A, S, D, E, R...) stay captured game-wide and would eat letters typed here
     this.input.keyboard?.clearCaptures();
     inputStyle();
-    const bg = this.add.image(960, 540, L('bg'));
-    bg.setScale(Math.max(1920 / bg.width, 1080 / bg.height));
+    this.bg = this.add.image(960, 540, L('bg'));
     this.chrome();
     this.hint = label(this, 960, 1030, '', 28, '#ffd166').setOrigin(0.5).setDepth(10);
 
@@ -87,7 +92,10 @@ export default class LobbyScene extends Phaser.Scene {
   private showStatus(): void {
     this.failTimer?.remove();
     this.failTimer = null;
-    const set = (t: string, color: string) => this.status?.setText(t).setColor(color);
+    const set = (t: string, color: string) => {
+      this.status?.setText(t).setColor(color);
+      this.placeMarks();
+    };
     if (net.connected) return void set(this.statusIdle, '#ffffff');
     set('กำลังต่อเซิร์ฟเวอร์…', '#ffd166');
     this.failTimer = this.time.delayedCall(3000, () => {
@@ -154,6 +162,9 @@ export default class LobbyScene extends Phaser.Scene {
     if (!this.live) return;
     this.clear();
     this.status = null;
+    this.marks = null;
+    this.bg.setTexture(L('bg'));
+    this.bg.setScale(Math.max(1920 / this.bg.width, 1080 / this.bg.height));
     if (net.room) this.roomView();
     else if (!net.inRoom) this.entryView();
     this.showStatus();
@@ -315,81 +326,236 @@ export default class LobbyScene extends Phaser.Scene {
     this.scene.start('setup');
   }
 
+  /**
+   * Inside a room, built to the room mockup: the two team frames with a slot per seat (a
+   * fighter card, or an empty seat a bot fills with a "move here" button), the rules strip
+   * (map list, format, bot skill: only the host can change them) and wardrobe / leave / start.
+   * 1v1 matches the mockup; 2v2 stretches the frames for two shorter slots and moves the
+   * strip down under them.
+   */
   private roomView(): void {
     const room = net.room!;
     const me = room.players.find((p) => p.id === net.you);
     const host = room.hostId === net.you;
     const per = TEAM_SIZE[room.config.format];
 
-    // the code goes on the title plate, where it is easy to read out to a friend
-    this.setTitle(`ห้อง ${room.code.replace(/(\d{3})(\d{3})/, '$1 $2')}`);
-    this.statusIdle = room.playing ? 'กำลังเล่นอยู่' : 'ส่งรหัสห้องให้เพื่อน แล้วรอเข้าห้อง';
-    this.status = this.add_(label(this, 960, 190, '', 28).setOrigin(0.5, 0));
+    this.bg.setTexture('ui-room/bg');
+    this.bg.setScale(Math.max(1920 / this.bg.width, 1080 / this.bg.height));
+    this.add_(placed(this, R('crate'), rbox([-1, 764, 190, 183])));
+    this.setTitle(`ห้อง ${room.code}`);
 
-    // teams
-    [0, 1].forEach((team) => {
-      const cx = team === 0 ? 560 : 1360;
-      const g = this.add_(this.add.graphics());
-      g.fillStyle(INK, 0.85);
-      g.fillRoundedRect(cx - 360, 250, 720, 120 + per * 150, 26);
-      g.lineStyle(5, TEAM_COLORS[team], 1);
-      g.strokeRoundedRect(cx - 360, 250, 720, 120 + per * 150, 26);
-      this.add_(label(this, cx, 266, `ทีม ${team === 0 ? 'น้ำเงิน' : 'แดง'}`, 34, team === 0 ? '#8ab4ff' : '#ff9a9a').setOrigin(0.5, 0));
+    // the line under the title, between two yellow marks
+    this.statusIdle = room.playing ? 'กำลังเล่นอยู่ กดกลับเข้าเกมได้เลย' : 'ส่งรหัสห้องให้เพื่อน แล้วรอเข้าห้อง';
+    const [hx, hy, hw, hh] = rbox([606, 159, 450, 45]);
+    this.status = this.add_(this.rtext('', 37, '#ffffff', 6).setPosition(hx + hw / 2, hy + hh / 2).setOrigin(0.5));
+    const [, , mw, mh] = rbox([0, 0, 52, 47]);
+    this.marks = [
+      this.add_(this.add.image(0, hy + hh / 2, R('mark')).setDisplaySize(mw, mh)),
+      this.add_(this.add.image(0, hy + hh / 2, R('mark')).setDisplaySize(mw, mh).setFlipX(true)),
+    ];
+
+    // team frames: 1v1 is the mockup; 2v2 starts a little higher and fits two shorter slots
+    const top = per === 1 ? 255 : 246;
+    const slotH = per === 1 ? 162 : 124;
+    const gap = 10;
+    const panelH = 76 + per * slotH + (per - 1) * gap + 44;
+    ([0, 1] as const).forEach((team) => {
+      const dx = team === 0 ? 0 : 721;
+      const side = team === 0 ? 'blue' : 'red';
+      const [px, py, pw, ph] = rbox([125 + dx, top, 709, panelH]);
+      const tex = this.textures.getFrame(R(`panel-${side}`));
+      const s = pw / tex.width;
+      this.add_(this.add.nineslice(px, py, R(`panel-${side}`), undefined, tex.width, ph / s, 80, 80, 75, 55).setOrigin(0).setScale(s));
+      this.add_(filled(this, R(`tab-${side}`), rbox([158 + dx, top - 21, 372, 69])));
+      this.add_(placed(this, R(`flag-${side}`), rbox([186 + dx, top - 41, 94, 96])));
+      const [tx, ty, tw, th] = rbox([294 + dx, top - 15, 205, 51]);
+      const name = this.rtext(team === 0 ? 'ทีม น้ำเงิน' : 'ทีม แดง', 46, '#ffffff', 7).setPosition(tx + tw / 2, ty + th / 2).setOrigin(0.5);
+      this.add_(fit(name, tw + 30, th));
+
       const members = room.players.filter((p) => p.team === team);
+      let offered = false;
       for (let i = 0; i < per; i++) {
-        const y = 330 + i * 150;
+        const b = rbox([158 + dx, top + 76 + i * (slotH + gap), 644, slotH]);
+        this.add_(filled(this, R(`slot-${side}`), b));
         const p = members[i];
-        if (!p) {
-          this.add_(label(this, cx, y + 60, `ว่าง: บอท${DIFF_LABEL[room.config.difficulty]}จะเล่นแทน`, 26, '#8899aa').setOrigin(0.5));
-          continue;
+        if (p) {
+          this.fighterSlot(b, p, room.hostId);
+        } else {
+          // one "move here" per team, on its first open seat
+          const canMove: boolean = !!me && me.team !== team && !room.playing && !offered;
+          offered ||= canMove;
+          this.emptySlot(b, `ว่าง: บอท${DIFF_LABEL[room.config.difficulty]}จะเล่นแทน`, canMove ? () => net.send({ t: 'team', team }) : null);
         }
-        this.add_(this.add.image(cx - 270, y + 130, lookTexture(this, p.loadout)).setOrigin(0.5, 1).setScale(ART_SCALE * 1.15 * lookRes()).setFlipX(team === 1));
-        const tags = [p.id === room.hostId ? 'หัวห้อง' : '', p.id === net.you ? 'คุณ' : '', p.connected ? '' : 'หลุด'].filter(Boolean).join(' · ');
-        this.add_(label(this, cx - 180, y + 24, p.name, 38, p.id === net.you ? '#ffd166' : '#ffffff'));
-        this.add_(label(this, cx - 180, y + 76, `${WEAPONS[p.loadout.weapon].name}${tags ? `  ·  ${tags}` : ''}`, 24, p.connected ? '#cfd8ff' : '#ff8787'));
-      }
-      if (me && me.team !== team && !room.playing && members.length < per) {
-        this.add_(new Button(this, cx, 330 + per * 150 + 10, 280, 60, 'ย้ายมาทีมนี้', { size: 26, onClick: () => net.send({ t: 'team', team }) }));
       }
     });
 
-    // rules
-    const y0 = 330 + per * 150 + 90;
-    // a dark strip so the small labels read on the bright arena
-    const strip = this.add_(this.add.graphics());
-    strip.fillStyle(INK, 0.85);
-    strip.fillRoundedRect(170, y0 - 42, 1580, 84, 24);
-    this.rules(room.config, host && !room.playing, y0);
+    this.rules(room.config, host && !room.playing, top + panelH + 21 - 558);
 
-    // actions
-    this.add_(new Button(this, 760, 990, 300, 90, 'แต่งตัว/ไอเท็ม', { size: 30, onClick: () => this.toSetup() }).setEnabled(!room.playing));
-    if (room.playing) {
-      this.add_(new Button(this, 1640, 985, 440, 110, 'กลับเข้าเกม', { fill: 0x2f9e44, size: 44, onClick: () => net.send({ t: 'resume' }) }));
-    } else if (host) {
-      this.add_(new Button(this, 1640, 985, 440, 110, 'เริ่มเกม!', { fill: 0x2f9e44, size: 48, onClick: () => net.send({ t: 'start' }) }));
-    } else {
-      this.add_(label(this, 1640, 985, 'รอหัวห้องกดเริ่ม…', 34).setOrigin(0.5));
-    }
-    this.add_(new Button(this, 1180, 990, 260, 90, 'ออกจากห้อง', {
-      size: 30, fill: 0x9b2c2c, onClick: () => {
-        net.leave();
-        this.render();
-      },
-    }));
+    // wardrobe, leave, start
+    const wardrobe = this.add_(new PlateButton(this, R('btn-action'), rbox([314, 779, 331, 99]), () => this.toSetup(), [0, 0, 1, 1]));
+    this.plateLabel(wardrobe, R('gear'), [0.12, 0.2, 0.17, 0.6], 'แต่งตัว/ไอเท็ม', [0.33, 0.61], 34);
+    wardrobe.setEnabled(!room.playing);
+    const leave = this.add_(new PlateButton(this, R('btn-leave'), rbox([686, 779, 333, 99]), () => {
+      net.leave();
+      this.render();
+    }, [0, 0, 1, 1]));
+    this.plateLabel(leave, R('exit'), [0.13, 0.2, 0.18, 0.6], 'ออกจากห้อง', [0.34, 0.59], 36);
+    const start = this.add_(new PlateButton(this, R('btn-start'), rbox([1050, 758, 484, 133]), () => {
+      net.send({ t: room.playing ? 'resume' : 'start' });
+    }, [0, 0, 1, 1]));
+    const startText = room.playing ? 'กลับเข้าเกม' : host ? 'เริ่มเกม!' : 'รอหัวห้องกดเริ่ม…';
+    this.plateLabel(start, R('gamepad'), [0.14, 0.18, 0.22, 0.67], startText, [0.38, 0.55], 62);
+    start.setEnabled(room.playing || host);
+    if (room.playing || host) start.glint(600);
   }
 
-  private rules(c: RoomConfig, host: boolean, y: number): void {
-    const set = (patch: Partial<RoomConfig>) => net.send({ t: 'config', config: { ...c, ...patch } });
-    const row = (x: number, title: string, opts: { text: string; on: boolean; pick: () => void }[], w: number) => {
-      this.add_(label(this, x, y, title, 26, '#cfd8ff').setOrigin(0, 0.5));
-      opts.forEach((o, i) => {
-        const b = this.add_(new Button(this, x + 130 + w / 2 + i * (w + 12), y, w, 56, o.text, { size: 24, onClick: o.pick }));
-        b.setSelected(o.on).setEnabled(host || o.on);
-      });
+  /** Text in the room's style: bold, white, the navy outline. */
+  private rtext(str: string, size: number, color = '#ffffff', stroke = 5): Phaser.GameObjects.Text {
+    return this.add.text(0, 0, str, { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color, stroke: STROKE, strokeThickness: stroke });
+  }
+
+  /** An icon and a label on a plate button: `icon` is [x, y, w, h] and `text` [left, width], fractions of the plate. */
+  private plateLabel(b: PlateButton, icon: string, [ix, iy, iw, ih]: Box, str: string, [tx, tw]: [number, number], size: number): void {
+    b.put(fitted(this, icon, b.w * iw, b.h * ih), ix + iw / 2, iy + ih / 2);
+    const t = this.rtext(str, size, '#ffffff', Math.round(size / 6)).setOrigin(0.5);
+    b.put(fit(t, b.w * tw, b.h * 0.66), tx + tw / 2, 0.5);
+  }
+
+  /**
+   * A seated player: portrait, name (crown for the host), a badge with their weapon and one
+   * saying host / player / you / dropped. Sizes follow the slot's height (u), so the shorter
+   * 2v2 slots get the same card, smaller.
+   */
+  private fighterSlot([x, y, , h]: Box, p: PlayerView, hostId: number): void {
+    const u = h / 162;
+    const at = (bx: number, by: number, bw: number, bh: number): Box => [x + bx * u, y + by * u, bw * u, bh * u];
+    this.add_(filled(this, R('avatar'), at(22, 12, 137, 136)));
+    this.add_(this.portrait(lookTexture(this, p.loadout), at(31, 17, 119, 122))).setAlpha(p.connected ? 1 : 0.45);
+
+    const [nx, ny, nw, nh] = at(178, 18, 300, 52);
+    const name = this.add_(fit(this.rtext(p.name, Math.round(44 * u), '#ffffff', 6).setPosition(nx, ny + nh / 2).setOrigin(0, 0.5), nw, nh));
+    if (p.id === hostId) {
+      const [, , cw, ch] = at(0, 0, 52, 37);
+      this.add_(placed(this, R('crown'), [nx + name.displayWidth + 10 * u, ny + (nh - ch) / 2, cw, ch]));
+    }
+
+    // badges grow with their text
+    const badge = (bx: number, icon: string, str: string, color: string): number => {
+      const [, by, , bh] = at(0, 78, 0, 49);
+      const t = this.rtext(str, Math.round(27 * u), color, 0).setOrigin(0, 0.5);
+      const w = 52 * u + t.width + 16 * u;
+      this.add_(filled(this, R('badge'), [bx, by, w, bh]));
+      this.add_(placed(this, R(icon), [bx + 15 * u, by + bh * 0.22, 28 * u, bh * 0.56]));
+      this.add_(t.setPosition(bx + 50 * u, by + bh / 2));
+      this.children.bringToTop(t); // made first to measure it: lift it over its plate
+      return bx + w;
     };
-    row(200, 'ด่าน', MAP_IDS.map((m) => ({ text: MAPS[m].name, on: c.map === m, pick: () => set({ map: m }) })), 170);
-    row(950, 'แบบ', FORMATS.map((f) => ({ text: f, on: c.format === f, pick: () => set({ format: f }) })), 110);
-    row(1340, 'บอท', DIFFICULTIES.map((d) => ({ text: DIFF_LABEL[d], on: c.difficulty === d, pick: () => set({ difficulty: d }) })), 100);
+    const you = p.id === net.you;
+    const tags = [p.id === hostId ? 'หัวห้อง' : 'ผู้เล่น', you ? 'คุณ' : '', p.connected ? '' : 'หลุด'].filter(Boolean).join(' · ');
+    const end = badge(x + 179 * u, 'star', WEAPONS[p.loadout.weapon].name, '#cfdef6');
+    badge(end + 19 * u, 'pin', tags, p.connected ? '#cfdef6' : '#ff9a9a');
+  }
+
+  /** An open seat: the people icon, who plays it, and (when you can) a button to move here. */
+  private emptySlot([x, y, w, h]: Box, hint: string, move: (() => void) | null): void {
+    const u = h / 162;
+    const lift = move ? 0 : 0.12; // without the button the icon and hint sit lower, in the middle
+    const [, , iw, ih] = rbox([0, 0, 98, 48]);
+    this.add_(placed(this, R('empty'), [x + w / 2 - (iw * u) / 2, y + h * (0.07 + lift), iw * u, ih * u]));
+    const t = this.rtext(hint, Math.round(29 * u), '#9996a9', 0).setPosition(x + w / 2, y + h * (0.5 + lift)).setOrigin(0.5);
+    this.add_(fit(t, w * 0.9, h * 0.25));
+    if (!move) return;
+    const bw = w * 0.5;
+    const bh = rbox([0, 0, 0, 71])[3] * u;
+    const b = this.add_(new PlateButton(this, R('btn-action'), [x + (w - bw) / 2, y + h * 0.65, bw, bh], move, [0, 0, 1, 1]));
+    this.plateLabel(b, R('move'), [0.22, 0.16, 0.15, 0.66], 'ย้ายมาทันที', [0.4, 0.45], Math.round(34 * u));
+  }
+
+  /** The head and chest of a fighter's look, cropped into a box. */
+  private portrait(key: string, [x, y, w, h]: Box): Phaser.GameObjects.Image {
+    const img = this.add.image(0, 0, key).setOrigin(0, 0);
+    const W = img.width;
+    const fx = 0.1;
+    const fw = 0.8;
+    const s = w / (fw * W);
+    const cy = img.height * 0.01;
+    return img.setCrop(fx * W, cy, fw * W, h / s).setScale(s).setPosition(x - fx * W * s, y - cy * s);
+  }
+
+  /** Keep the two yellow marks either side of the status line, whatever it says. */
+  private placeMarks(): void {
+    if (!this.marks || !this.status) return;
+    const half = this.status.displayWidth / 2 + this.marks[0].displayWidth / 2 + 14;
+    this.marks[0].setX(this.status.x - half);
+    this.marks[1].setX(this.status.x + half);
+  }
+
+  /** The rules strip, `dy` below where the mockup has it: map dropdown, format, bot skill. */
+  private rules(c: RoomConfig, host: boolean, dy: number): void {
+    const set = (patch: Partial<RoomConfig>) => net.send({ t: 'config', config: { ...c, ...patch } });
+    const at = (b: Box): Box => rbox([b[0], b[1] + dy, b[2], b[3]]);
+    this.add_(filled(this, R('bar'), at([124, 558, 1434, 97])));
+    for (const x of [604, 1041]) this.add_(filled(this, R('divider'), at([x, 578, 4, 54])));
+    const title = (str: string, b: Box) => {
+      const [x, y, w, h] = at(b);
+      this.add_(fit(this.rtext(str, 31, '#ffffff', 5).setPosition(x, y + h / 2).setOrigin(0, 0.5), w, h));
+    };
+    title('ด่าน', [160, 584, 55, 41]);
+    title('แบบ', [629, 584, 52, 41]);
+    title('ความเก่งบอท', [1065, 584, 132, 41]);
+
+    const option = (b: Box, str: string, on: boolean, pick: () => void) => {
+      const o = this.add_(new PlateButton(this, R(on ? 'option-on' : 'option'), at(b), () => {
+        if (!on) pick();
+      }, [0, 0, 1, 1]));
+      o.put(fit(this.rtext(str, 33, '#ffffff', 5).setOrigin(0.5), o.w * 0.8, o.h * 0.7), 0.5, 0.5);
+      o.setEnabled(host || on);
+      // the chosen one stays bright for guests too; it just ignores taps
+      if (!host) o.setAlpha(on ? 1 : 0.55);
+    };
+    // the mockup has three formats; the room server plays 1v1 and 2v2, so two wider buttons fill the row
+    FORMATS.forEach((f, i) => option([696 + i * 164, 576, 160, 59], f, c.format === f, () => set({ format: f })));
+    DIFFICULTIES.forEach((d, i) => option([[1207, 1317, 1427][i], 576, 111, 59], DIFF_LABEL[d], c.difficulty === d, () => set({ difficulty: d })));
+
+    // the map: a picture-and-name box; the host taps it for the list
+    const mapBox = at([238, 574, 346, 64]);
+    const map = this.add_(new PlateButton(this, R('map'), mapBox, () => this.mapList(mapBox, c.map, (m) => set({ map: m })), [0, 0, 1, 1]));
+    this.mapFace(map, c.map, host);
+    map.setEnabled(host);
+    if (!host) map.setAlpha(1);
+  }
+
+  /** Thumbnail, name and (for the host) the down arrow on a map plate. */
+  private mapFace(b: PlateButton, id: MapId, arrow: boolean): void {
+    const thumb = this.add.image(0, 0, R(`map-${id}`)).setOrigin(0, 0);
+    // cover the left 36% of the plate: crop the picture to that shape
+    const tw = b.w * 0.36;
+    const th = b.h * 0.94;
+    const s = Math.max(tw / thumb.width, th / thumb.height);
+    const cw = tw / s;
+    const ch = th / s;
+    thumb.setCrop((thumb.width - cw) / 2, (thumb.height - ch) / 2, cw, ch).setScale(s);
+    b.putAt(thumb, -((thumb.width - cw) / 2) * s + b.w * 0.01, -((thumb.height - ch) / 2) * s + b.h * 0.03);
+    b.put(fit(this.rtext(MAPS[id].name, 31, '#ffffff', 5).setOrigin(0.5), b.w * 0.45, b.h * 0.76), 0.615, 0.5);
+    if (arrow) b.put(fitted(this, R('down'), b.w * 0.09, b.h * 0.44), 0.915, 0.5);
+  }
+
+  /** The host's map list, opening under the map box; a tap anywhere else closes it. */
+  private mapList([x, y, w, h]: Box, current: MapId, pick: (m: MapId) => void): void {
+    const parts: Phaser.GameObjects.GameObject[] = [];
+    const close = () => parts.forEach((p) => p.destroy());
+    const shade = this.add_(this.add.zone(960, 540, 1920, 1080).setInteractive());
+    shade.on('pointerup', close);
+    parts.push(shade);
+    MAP_IDS.forEach((m, i) => {
+      const row = this.add_(new PlateButton(this, R('map'), [x, y + h + 8 + i * (h + 6), w, h], () => {
+        close();
+        if (m !== current) pick(m);
+      }, [0, 0, 1, 1]));
+      if (m === current) row.base.setTint(0xfff1a8);
+      this.mapFace(row, m, false);
+      parts.push(row);
+    });
   }
 }
 

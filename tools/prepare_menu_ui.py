@@ -21,6 +21,17 @@ PASS = SRC / 'black-boom-pass-parts 2' / 'public' / 'black-boom-pass'
 ACCOUNT = SRC / 'black-boom-account-parts 2' / 'public' / 'black-boom-account'
 MODAL = SRC / 'black-boom-modal-parts 2' / 'public' / 'black-boom-modals'
 MODAL_SVGS = ['effects/sparkle', 'buttons/close/icon', 'faces/none']
+ROOM = SRC / 'black-boom-room-parts 2' / 'public' / 'black-boom-room'
+# room shapes shipped as SVG (drop path -> our name)
+ROOM_SVGS = {
+    'slots/blue': 'slot-blue', 'avatar/base': 'avatar', 'badges/base': 'badge', 'shared/invite-mark': 'mark',
+    'shared/divider': 'divider', 'icons/down': 'down', 'icons/crown': 'crown', 'icons/star': 'star',
+    'icons/pin': 'pin', 'icons/exit': 'exit',
+}
+# the red team's slot: the drop paints it into the red panel, so it is drawn here in the panel's own colours
+SLOT_RED = ('<svg xmlns="http://www.w3.org/2000/svg" width="644" height="162" viewBox="0 0 644 162">'
+            '<rect x="2" y="2" width="640" height="158" rx="19" fill="#4a1a3c" fill-opacity=".45" '
+            'stroke="#8a4a7a" stroke-opacity=".75" stroke-width="3"/></svg>')
 ACCOUNT_SVGS = ['avatar/fill', 'panels/divider', 'header/divider']
 PASS_SVGS = ['progress/fill', 'progress/orb', 'progress/hint-base', 'buttons/page/chevron-left', 'buttons/page/chevron-right']
 # shop category icons (file in the drop -> our name), shown about 60 px
@@ -235,6 +246,27 @@ FILES = {
     'modal/card': (MODAL / 'cards/base.png', 305),
     'modal/selection': (MODAL / 'cards/selection.png', 330),
     'modal/check': (MODAL / 'icons/check.png', 70),
+    # friend room (layout: new_ui/black-boom-room-parts 2/layout.json, a 1681x936 mockup)
+    'room/panel-blue': (ROOM / 'teams/blue/panel.png', 830),
+    'room/tab-blue': (ROOM / 'teams/blue/tab-base.png', 440),
+    'room/tab-red': (ROOM / 'teams/red/tab-base.png', 440),
+    'room/flag-blue': (ROOM / 'teams/blue/flag.png', 120),
+    'room/flag-red': (ROOM / 'teams/red/flag.png', 120),
+    'room/bar': (ROOM / 'panels/settings-bar.png', 1640),
+    'room/option': (ROOM / 'buttons/option/base.png', 140),
+    'room/option-on': (ROOM / 'buttons/option/selected-base.png', 140),
+    'room/map': (ROOM / 'buttons/map/base.png', 400),
+    'room/map-hills': (ROOM / 'maps/grass.png', 170),
+    'room/map-islands': (ROOM / 'maps/floating.png', 170),
+    'room/map-mine': (ROOM / 'maps/mine.png', 170),
+    'room/btn-action': (ROOM / 'buttons/action/base.png', 390),
+    'room/btn-leave': (ROOM / 'buttons/leave/base.png', 390),
+    'room/btn-start': (ROOM / 'buttons/start/base.png', 560),
+    'room/gear': (ROOM / 'buttons/settings/icon.png', 80),
+    'room/move': (ROOM / 'icons/move-team.png', 80),
+    'room/gamepad': (ROOM / 'icons/gamepad.png', 140),
+    'room/empty': (ROOM / 'icons/empty-team.png', 120),
+    'room/crate': (ROOM / 'decorations/crate.png', 230),
 }
 
 
@@ -296,10 +328,29 @@ def kit_panel() -> Image.Image:
     return im
 
 
+def red_panel() -> Image.Image:
+    """The red team frame with the slot outline the drop painted into it wiped, so the slots can be
+    drawn over it (one or two) and it can be nine-sliced taller like the blue one: each outline
+    pixel takes the colour of the nearest plain pixel beside it."""
+    im = Image.open(ROOM / 'teams/red/panel.png').convert('RGBA')
+    px = im.load()
+    x0, x1, y0, y1 = 66, 1790, 168, 624  # around the outline, on the 1850x723 source
+    line = {(x, y) for x in range(x0, x1) for y in range(y0, y1) if px[x, y][0] > 56}
+    line |= {(x + dx, y + dy) for x, y in line for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+    for x, y in line:
+        for d in range(1, 20):
+            near = [(x + d, y), (x - d, y), (x, y + d), (x, y - d)]
+            clean = [q for q in near if q not in line and x0 <= q[0] < x1 and y0 <= q[1] < y1]
+            if clean:
+                px[x, y] = px[clean[0]]
+                break
+    return im
+
+
 def main() -> None:
     if not SRC.exists():
         raise SystemExit('new_ui/ not found: put the designer drop at the project root first')
-    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop', 'pass', 'account', 'modal'):
+    for sub in ('ranked', 'lobby', 'kit', 'wardrobe', 'shop', 'pass', 'account', 'modal', 'room'):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
     for name, (src, width) in FILES.items():
         save(fit(Image.open(src).convert('RGBA'), width), name)
@@ -316,6 +367,12 @@ def main() -> None:
         dst = OUT / 'modal' / (svg.split('/')[-1] + '.svg')
         dst.write_bytes((MODAL / f'{svg}.svg').read_bytes())
         print(f'{dst.relative_to(PROJECT)}  (svg)')
+    save(fit(red_panel(), 830), 'room/panel-red')
+    for svg, name in ROOM_SVGS.items():
+        dst = OUT / 'room' / f'{name}.svg'
+        dst.write_bytes((ROOM / f'{svg}.svg').read_bytes())
+        print(f'{dst.relative_to(PROJECT)}  (svg)')
+    (OUT / 'room' / 'slot-red.svg').write_text(SLOT_RED)
     for svg in ACCOUNT_SVGS:
         dst = OUT / 'account' / (svg.replace('/', '-') + '.svg')
         dst.write_bytes((ACCOUNT / f'{svg}.svg').read_bytes())
@@ -329,7 +386,8 @@ def main() -> None:
                       (WARDROBE / 'backgrounds/arena.png', 'wardrobe/bg'),
                       (SHOP / 'backgrounds/shop-arena.png', 'shop/bg'),
                       (PASS / 'backgrounds/arena.png', 'pass/bg'),
-                      (ACCOUNT / 'backgrounds/arena.png', 'account/bg')):
+                      (ACCOUNT / 'backgrounds/arena.png', 'account/bg'),
+                      (ROOM / 'backgrounds/arena.png', 'room/bg')):
         bg = Image.open(src).convert('RGB')
         path = OUT / f'{name}.jpg'
         bg.save(path, 'JPEG', quality=86, optimize=True, progressive=True)
